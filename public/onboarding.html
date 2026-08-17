@@ -57,6 +57,11 @@
   }
 
   * { box-sizing: border-box; }
+
+  /* Regra de autor com `display` vence o `[hidden]` do navegador; sem isto,
+     avisos marcados como hidden aparecem assim que a pagina carrega. */
+  [hidden] { display: none !important; }
+
   body {
     margin: 0; background: var(--bg-app); color: var(--text-primary);
     font-family: "DM Sans Variable", ui-sans-serif, system-ui, sans-serif;

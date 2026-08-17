@@ -149,6 +149,11 @@
 
   * { box-sizing: border-box; }
 
+  /* Sem isto, qualquer regra de autor com `display` (como .barra-sync abaixo)
+     vence o `[hidden] { display:none }` do navegador e o elemento aparece
+     mesmo com o atributo hidden. */
+  [hidden] { display: none !important; }
+
   body {
     margin: 0;
     background: var(--bg-app);
