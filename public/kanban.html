@@ -296,15 +296,31 @@
     padding: 20px 12px; text-align: center;
     color: var(--text-muted); font-size: 12.5px;
   }
+
+  /* Card fora de alcance: saiu das ~20 mensagens que a API devolve, entao o
+     Teams nao conta mais nada sobre ele. Borda tracejada para diferenciar de um
+     card vivo, e os botoes de mover a mao aparecem so aqui. */
+  .card.fora { border-style: dashed; }
+  .mover {
+    display: flex; gap: 5px; margin-top: 9px; padding-top: 9px;
+    border-top: 1px dashed var(--border-default);
+  }
+  .mover button {
+    flex: 1; padding: 4px 6px; font-size: 11px; font-weight: 500;
+    border-radius: 6px; color: var(--text-muted);
+  }
+  .mover button[aria-pressed="true"] {
+    background: var(--bg-surface-3); color: var(--text-primary); font-weight: 600;
+  }
 </style>
 </head>
 <body>
 
 <header>
+  <button id="voltar" class="icone" title="Voltar para meus murais">←</button>
   <span class="marca"><span class="ponto-marca"></span><h1 id="titulo">Mural</h1></span>
   <span class="sync-info" id="info">carregando…</span>
   <span class="espaco"></span>
-  <button id="trocar" title="Escolher outra conversa">Trocar conversa</button>
   <button id="tema" class="icone" title="Alternar tema">◐</button>
   <button id="visto" title="Zera as marcas NOVO e MUDOU">Marcar como visto</button>
   <button id="atualizar" class="primario">Atualizar</button>
@@ -320,7 +336,7 @@
 <main>
   <section class="coluna">
     <header>
-      <span class="selo"><span class="ponto" style="background:var(--marca-aberto)"></span>Ninguém pegou</span>
+      <span class="selo"><span class="ponto" style="background:var(--marca-aberto)"></span><span id="rot-aberto">Sem reação</span></span>
       <span class="contagem" id="c-aberto">0</span>
     </header>
     <div class="lista" id="col-aberto"></div>
@@ -342,12 +358,19 @@
 </main>
 
 <script>
-const CHAVE_VISTO = 'tasks-board:ultima-visita';
-const CHAVE_TEMA = 'tasks-board:tema';
+// O id do mural vem da URL (/m/<id>) — cada quadro tem historico proprio, entao
+// tudo daqui pra frente e por mural, inclusive a marca de "ja vi".
+const MURAL_ID = location.pathname.split('/').pop();
+const CHAVE_VISTO = 'mural:ultima-visita:' + MURAL_ID;
+const CHAVE_TEMA = 'mural:tema';
+
 let ultimaVisita = localStorage.getItem(CHAVE_VISTO) || null;
 let cache = [];
+let muralAtual = null;
 
 const $ = (id) => document.getElementById(id);
+
+$('voltar').addEventListener('click', () => { location.href = '/'; });
 
 // ---- tema (data-color-mode, igual ao apps/status: o modo resolvido manda,
 // nao o OS — mas o OS define o padrao na primeira visita) ----
@@ -393,10 +416,13 @@ function montarCard(t) {
   // O href fica para o hover mostrar o destino e permitir "copiar link", mas quem
   // abre de fato e o servidor: o navegador ignora msteams:// em silencio.
   a.href = linkDesktop(t.webUrl);
+  if (t.foraDeAlcance) a.classList.add('fora');
   a.addEventListener('click', async (ev) => {
     ev.preventDefault();
     try {
-      const r = await fetch('/api/abrir?id=' + encodeURIComponent(t.id), { method: 'POST' });
+      const r = await fetch(
+        `/api/abrir?mural=${MURAL_ID}&id=${encodeURIComponent(t.id)}`, { method: 'POST' }
+      );
       const d = await r.json();
       if (!d.ok) throw new Error(d.erro);
       mostrarErro(null);
@@ -419,6 +445,13 @@ function montarCard(t) {
   if (ehNovo) rodape.appendChild(badge('info', 'novo'));
   if (mudou) rodape.appendChild(badge('warning', 'mudou'));
   if (t.kind === 'bug') rodape.appendChild(badge('danger', 'bug'));
+  if (t.foraDeAlcance) {
+    const b = badge('neutral', 'fora de alcance');
+    b.title = 'Saiu das mensagens que a API devolve. O Teams não atualiza mais ' +
+              'este card — mova à mão se o status mudar por lá.';
+    rodape.appendChild(b);
+  }
+  if (t.movidoAMao) rodape.appendChild(badge('neutral', 'movido à mão'));
   // Sem emoji fixo para "peguei", ver a reacao usada e a unica forma de saber
   // o que aconteceu na mensagem.
   for (const e of (t.emojis || [])) rodape.appendChild(badge('reacao', e));
@@ -444,11 +477,61 @@ function montarCard(t) {
   }
 
   a.appendChild(rodape);
+
+  // Mover a mao so existe para card fora de alcance. Enquanto a mensagem ainda
+  // aparece no Teams, quem manda e a reacao de la — mover aqui criaria um quadro
+  // que mente ate a proxima atualizacao desfazer.
+  if (t.foraDeAlcance) a.appendChild(montarControlesDeMover(t));
+
   return a;
+}
+
+function montarControlesDeMover(t) {
+  const barra = document.createElement('div');
+  barra.className = 'mover';
+  for (const [status, rotulo] of [
+    ['aberto', rotuloDaPrimeiraColuna()],
+    ['interagido', 'Interagido'],
+    ['feito', 'Concluído'],
+  ]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = rotulo;
+    b.setAttribute('aria-pressed', String(t.status === status));
+    b.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (t.status === status) return;
+      try {
+        const r = await fetch('/api/mover?mural=' + MURAL_ID, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: t.id, status }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.erro);
+        mostrarErro(null);
+        desenhar(d.tasks);
+      } catch (e) {
+        mostrarErro(e.message);
+      }
+    });
+    barra.appendChild(b);
+  }
+  return barra;
 }
 
 // ---- render ----
 const COLUNAS = ['aberto', 'interagido', 'feito'];
+
+// "Ninguem pegou" pressupoe um time dividindo trabalho — numa conversa de duas
+// pessoas isso nao quer dizer nada.
+function rotuloDaPrimeiraColuna() {
+  if (muralAtual && muralAtual.tipo === 'chat' && muralAtual.subtipo === 'oneOnOne') {
+    return 'Sem reação';
+  }
+  return 'Ninguém pegou';
+}
 
 function desenhar(tasks) {
   cache = tasks;
@@ -491,26 +574,25 @@ function atualizarInfo(lastSync) {
 }
 
 async function carregar() {
-  const [d, cfg] = await Promise.all([
-    (await fetch('/api/tasks')).json(),
-    (await fetch('/api/setup/config')).json(),
+  const [tarefas, info] = await Promise.all([
+    fetch('/api/tasks?mural=' + MURAL_ID).then((r) => r.json()),
+    fetch('/api/mural?id=' + MURAL_ID).then((r) => r.json()),
   ]);
-  if (cfg.fonte) {
-    $('titulo').textContent = cfg.fonte.nome;
-    document.title = cfg.fonte.nome + ' · Mural';
-  }
-  atualizarInfo(d.lastSync);
-  desenhar(d.tasks);
-}
 
-// Trocar de conversa arquiva o historico atual em vez de misturar — quem confirma
-// e o servidor, aqui so avisamos que isso vai acontecer.
-$('trocar').addEventListener('click', () => {
-  if (confirm(
-    'Escolher outra conversa?\n\n' +
-    'O histórico desta fica arquivado em data/ e o quadro recomeça vazio.'
-  )) location.href = '/onboarding';
-});
+  if (!info.ok) {
+    mostrarErro('Este mural não existe mais. Voltando para a lista…');
+    setTimeout(() => (location.href = '/'), 1500);
+    return;
+  }
+
+  muralAtual = info.mural;
+  $('titulo').textContent = muralAtual.nome;
+  document.title = muralAtual.nome + ' · Mural';
+  $('rot-aberto').textContent = rotuloDaPrimeiraColuna();
+
+  atualizarInfo(tarefas.lastSync);
+  desenhar(tarefas.tasks);
+}
 
 // ---- sync com progresso ----
 let timerProgresso = null;
@@ -551,13 +633,18 @@ $('atualizar').addEventListener('click', async () => {
   timerProgresso = setInterval(tickProgresso, 1000);
 
   try {
-    const d = await (await fetch('/api/sync', { method: 'POST' })).json();
+    const d = await (await fetch('/api/sync?mural=' + MURAL_ID, { method: 'POST' })).json();
     if (!d.ok) throw new Error(d.erro);
     atualizarInfo(d.lastSync);
     desenhar(d.tasks);
     const partes = [];
     if (d.novos.length) partes.push(`${d.novos.length} nova(s)`);
     if (d.mudaram.length) partes.push(`${d.mudaram.length} mudou/mudaram de status`);
+    // Uma task movida a mao que reapareceu no Teams volta a obedecer a reacao
+    // real; avisar evita a impressao de que o quadro desfez a acao sozinho.
+    if (d.retomadas && d.retomadas.length) {
+      partes.push(`${d.retomadas.length} voltou ao Teams e teve o status corrigido`);
+    }
     $('info').textContent += partes.length ? '  —  ' + partes.join(', ') : '  —  nada mudou';
   } catch (e) {
     mostrarErro('Falhou: ' + e.message);

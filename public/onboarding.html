@@ -350,7 +350,7 @@ function lerLinkDoTeams(bruto) {
   const nomeTime = u.searchParams.get('teamName');
   const nome = [nomeTime, nomeCanal].filter(Boolean).join(' › ') || 'Canal do Teams';
 
-  return { tipo: 'canal', teamId, channelId, nome };
+  return { tipo: 'canal', subtipo: 'canal', teamId, channelId, nome };
 }
 
 $('link').addEventListener('input', () => {
@@ -409,7 +409,9 @@ $('btn-chats').addEventListener('click', async () => {
       item.addEventListener('click', () => {
         for (const outro of lista.children) outro.setAttribute('aria-selected', 'false');
         item.setAttribute('aria-selected', 'true');
-        escolha = { tipo: 'chat', chatId: c.id, nome: c.nome };
+        // subtipo define o rotulo da 1a coluna: "ninguem pegou" nao faz sentido
+        // numa conversa de duas pessoas.
+        escolha = { tipo: 'chat', subtipo: c.tipo, chatId: c.id, nome: c.nome };
         $('btn-salvar').disabled = false;
       });
       lista.appendChild(item);
@@ -430,13 +432,15 @@ $('btn-salvar').addEventListener('click', async () => {
   const b = $('btn-salvar');
   b.disabled = true; b.textContent = 'Criando…';
   try {
-    const d = await (await fetch('/api/setup/salvar', {
+    const d = await (await fetch('/api/murais', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(escolha),
     })).json();
     if (!d.ok) throw new Error(d.erro);
-    location.href = '/';
+    // Mapear a mesma conversa de novo reabre o mural existente, com o historico
+    // dela intacto, em vez de criar um quadro duplicado e vazio.
+    location.href = '/m/' + d.id;
   } catch (e) {
     $('erro-3').hidden = false;
     $('erro-3').textContent = e.message;

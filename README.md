@@ -50,6 +50,31 @@ convenção fixa é a única forma de saber o que aconteceu ali.
 A fonte da verdade é sempre o Teams. Os cards não se arrastam de propósito:
 para mover uma task, reaja na mensagem lá e clique em Atualizar.
 
+Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
+"ninguém pegou" pressupõe um time dividindo trabalho.
+
+## Tasks fora de alcance
+
+A API devolve só as ~20 mensagens mais recentes. Quando uma task sai dessa
+janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
+check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
+"em aberto" para sempre.
+
+Esses cards ganham borda tracejada e a etiqueta **fora de alcance** — e são os
+únicos que você pode mover à mão, com botões no próprio card. Nas tasks que
+ainda estão na janela mover é bloqueado de propósito: a próxima atualização
+desfaria a mudança, e um quadro que mente por dois minutos é pior que um quadro
+que recusa a ação.
+
+Se uma task movida à mão voltar a aparecer na janela, a reação real volta a
+mandar e o resumo da atualização avisa que o status foi corrigido.
+
+## Vários murais
+
+Cada conversa vira um mural com histórico próprio, e a home lista todos com as
+contagens de cada coluna. Mapear a mesma conversa duas vezes reabre o mural
+existente em vez de duplicar — o id vem da própria conversa.
+
 ## Requisitos
 
 - **Node.js 18+** — sem dependências, nenhum `npm install`
@@ -94,7 +119,7 @@ Vale saber antes de adotar:
   é invisível aqui — só a reação na mensagem principal conta.
 - **20 mensagens por leitura.** É o teto da API. O histórico acumulado no disco
   compensa isso ao longo do tempo, mas na primeira execução você só verá as 20
-  mais recentes.
+  mais recentes — e o que sai dessa janela vira "fora de alcance" (veja acima).
 - **Um sync leva 1 a 2 minutos.** São ~21 chamadas ao Graph mais o resumo de
   cada mensagem. A barra de progresso mostra a etapa real.
 - **Listar chats no onboarding leva 2 a 3 minutos**, porque o Teams entrega os
@@ -108,10 +133,10 @@ Tudo em `data/`, que está no `.gitignore`:
 
 | arquivo | o que é |
 | --- | --- |
-| `config.json` | a conversa escolhida |
-| `tasks.json` | o histórico acumulado — o único arquivo insubstituível |
-| `tasks.json.bak` | cópia do sync anterior |
-| `snapshot.json` | última leitura crua; descartável |
+| `murais.json` | índice dos murais e suas conversas |
+| `murais/<id>/tasks.json` | o histórico daquele mural — o insubstituível |
+| `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
+| `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `conta.json`, `chats.json` | cache do onboarding |
 
 Nada sai da sua máquina além das chamadas que o Claude Code já faz ao Graph.

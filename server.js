@@ -1,9 +1,10 @@
-// Mural — um kanban montado a partir das reacoes de uma conversa do Teams.
+// Mural — kanbans montados a partir das reacoes de conversas do Microsoft Teams.
 //
-// O botao "Atualizar" chama POST /api/sync, que roda o Claude Code em modo
-// headless. O Claude apenas LE as mensagens e grava data/snapshot.json cru.
-// O merge com o historico acumulado e feito aqui, em JS deterministico — o LLM
-// nunca toca no tasks.json, para o historico nao poder ser inventado nem perdido.
+// Cada mural aponta para uma conversa (canal ou chat) e tem historico proprio.
+// O botao "Atualizar" roda o Claude Code headless, que apenas LE as mensagens e
+// grava um snapshot cru. O merge com o historico e feito aqui, em JS
+// deterministico — o LLM nunca toca no historico, para o acumulado nao poder
+// ser inventado nem perdido.
 //
 // Nao ha login proprio: a autenticacao com a Microsoft e a do Claude Code e do
 // conector Microsoft 365. Este servidor nunca ve nem guarda credencial.
@@ -11,64 +12,22 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, 'data');
+const MURAIS_DIR = path.join(DATA_DIR, 'murais');
 const PROMPTS_DIR = path.join(ROOT, 'prompts');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 
-const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
-const SNAPSHOT_FILE = path.join(DATA_DIR, 'snapshot.json');
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const INDICE_FILE = path.join(DATA_DIR, 'murais.json');
 const CONTA_FILE = path.join(DATA_DIR, 'conta.json');
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
 
 const PORT = Number(process.env.MURAL_PORT) || 4317;
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-// ------------------------------------------------------------------- config
-
-// Sem config.json o servidor sobe em modo onboarding: a raiz serve a tela de
-// configuracao em vez do quadro.
-function lerConfig() {
-  try {
-    const bruto = fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^﻿/, '');
-    const c = JSON.parse(bruto);
-    return c && c.fonte ? c : null;
-  } catch {
-    return null;
-  }
-}
-
-// A URI que o Claude vai ler. Canal e chat tem formatos diferentes no Graph.
-function uriDasMensagens(fonte) {
-  if (fonte.tipo === 'chat') {
-    return `teams:///chats/${encodeURIComponent(fonte.chatId)}/messages`;
-  }
-  return (
-    `teams:///teams/${fonte.teamId}` +
-    `/channels/${encodeURIComponent(fonte.channelId)}/messages`
-  );
-}
-
-// Mensagem de chat volta com webUrl null, entao o link precisa ser montado.
-// Em canal o proprio Graph devolve o webUrl pronto.
-function moldeDeWebUrl(fonte) {
-  if (fonte.tipo === 'chat') {
-    return (
-      'https://teams.microsoft.com/l/message/' +
-      encodeURIComponent(fonte.chatId) +
-      '/{id}?context=%7B%22contextType%22%3A%22chat%22%7D'
-    );
-  }
-  return (
-    'https://teams.microsoft.com/l/message/' +
-    encodeURIComponent(fonte.channelId) +
-    `/{id}?groupId=${fonte.teamId}&parentMessageId={id}`
-  );
-}
+fs.mkdirSync(MURAIS_DIR, { recursive: true });
 
 // ---------------------------------------------------------------- classificacao
 
@@ -97,22 +56,106 @@ function emojisDoCard(reactions) {
   return (reactions || []).filter((e) => !ehCheck(e));
 }
 
-// ---------------------------------------------------------------------- estado
+const STATUS_VALIDOS = ['aberto', 'interagido', 'feito'];
 
-// Ler o historico NAO pode falhar em silencio. Se o arquivo existe mas esta
-// corrompido, um `catch` que devolve {} faria o proximo sync tratar todas as
-// tasks como novas e sobrescrever o acumulado — perda invisivel de historico.
-// Entao: arquivo ausente = comeco legitimo; arquivo ilegivel = erro que aborta.
-function lerTasks() {
+// ------------------------------------------------------------------ indice
+
+// Um mural por conversa: o id vem da propria fonte, entao mapear a mesma
+// conversa duas vezes reabre o mural existente em vez de duplicar historico.
+function chaveDaFonte(f) {
+  return f.tipo === 'chat' ? 'chat:' + f.chatId : 'canal:' + f.teamId + '/' + f.channelId;
+}
+
+function idDaFonte(f) {
+  return crypto.createHash('sha1').update(chaveDaFonte(f)).digest('hex').slice(0, 10);
+}
+
+function lerJson(arquivo, padrao) {
+  try {
+    const bruto = fs.readFileSync(arquivo, 'utf8').replace(/^﻿/, '');
+    return bruto.trim() ? JSON.parse(bruto) : padrao;
+  } catch (e) {
+    if (e.code === 'ENOENT') return padrao;
+    throw new Error(`${path.basename(arquivo)} esta ilegivel: ${e.message}`);
+  }
+}
+
+function gravarJsonAtomico(arquivo, dados) {
+  const tmp = arquivo + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(dados, null, 2), 'utf8');
+  fs.renameSync(tmp, arquivo);
+}
+
+function lerIndice() {
+  const i = lerJson(INDICE_FILE, { murais: [] });
+  return Array.isArray(i.murais) ? i : { murais: [] };
+}
+
+function gravarIndice(indice) {
+  gravarJsonAtomico(INDICE_FILE, indice);
+}
+
+function acharMural(id) {
+  return lerIndice().murais.find((m) => m.id === id) || null;
+}
+
+function pastaDoMural(id) {
+  return path.join(MURAIS_DIR, id);
+}
+
+function arquivoTasks(id) {
+  return path.join(pastaDoMural(id), 'tasks.json');
+}
+
+function arquivoSnapshot(id) {
+  return path.join(pastaDoMural(id), 'snapshot.json');
+}
+
+// ------------------------------------------------------------------ migracao
+
+// Versao antiga guardava um unico mural em data/config.json + data/tasks.json.
+// Migra uma vez, sem perder o historico acumulado.
+function migrarFormatoAntigo() {
+  const configAntigo = path.join(DATA_DIR, 'config.json');
+  const tasksAntigo = path.join(DATA_DIR, 'tasks.json');
+  if (!fs.existsSync(configAntigo) || fs.existsSync(INDICE_FILE)) return;
+
+  const cfg = lerJson(configAntigo, null);
+  if (!cfg || !cfg.fonte) return;
+
+  const id = idDaFonte(cfg.fonte);
+  fs.mkdirSync(pastaDoMural(id), { recursive: true });
+  if (fs.existsSync(tasksAntigo)) fs.renameSync(tasksAntigo, arquivoTasks(id));
+
+  gravarIndice({
+    murais: [{
+      id,
+      ...cfg.fonte,
+      criadoEm: cfg.criadoEm || new Date().toISOString(),
+    }],
+  });
+
+  fs.renameSync(configAntigo, configAntigo + '.migrado');
+  console.log(`  Mural existente migrado para murais/${id}`);
+}
+
+migrarFormatoAntigo();
+
+// ---------------------------------------------------------------------- tasks
+
+// Ler o historico NAO pode falhar em silencio: se o arquivo existe mas esta
+// corrompido, tratar como vazio faria o proximo sync sobrescrever tudo.
+function lerTasks(muralId) {
+  const arquivo = arquivoTasks(muralId);
   let bruto;
   try {
-    bruto = fs.readFileSync(TASKS_FILE, 'utf8');
+    bruto = fs.readFileSync(arquivo, 'utf8');
   } catch (e) {
     if (e.code === 'ENOENT') return { lastSync: null, tasks: {} };
-    throw new Error('Nao consegui ler tasks.json: ' + e.message);
+    throw new Error('Nao consegui ler o historico: ' + e.message);
   }
 
-  if (bruto.charCodeAt(0) === 0xfeff) bruto = bruto.slice(1); // BOM (o PowerShell poe)
+  if (bruto.charCodeAt(0) === 0xfeff) bruto = bruto.slice(1);
   if (!bruto.trim()) return { lastSync: null, tasks: {} };
 
   let db;
@@ -120,33 +163,51 @@ function lerTasks() {
     db = JSON.parse(bruto);
   } catch (e) {
     throw new Error(
-      'tasks.json esta corrompido (' + e.message + '). O historico NAO foi tocado. ' +
-      'Ha uma copia em tasks.json.bak — conserte ou apague o arquivo para recomecar do zero.'
+      'O historico deste mural esta corrompido (' + e.message + '). Nada foi tocado. ' +
+      'Ha uma copia em tasks.json.bak dentro da pasta do mural.'
     );
   }
   if (!db || typeof db.tasks !== 'object' || db.tasks === null) {
-    throw new Error('tasks.json tem formato inesperado. O historico NAO foi tocado.');
+    throw new Error('O historico deste mural tem formato inesperado. Nada foi tocado.');
   }
   return db;
 }
 
-// Gravacao atomica + backup: um crash no meio da escrita nao deixa o historico
-// pela metade.
-function gravarTasks(db) {
-  const tmp = TASKS_FILE + '.tmp';
+function gravarTasks(muralId, db) {
+  const arquivo = arquivoTasks(muralId);
+  fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
+  const tmp = arquivo + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), 'utf8');
-  try { fs.copyFileSync(TASKS_FILE, TASKS_FILE + '.bak'); } catch {}
-  fs.renameSync(tmp, TASKS_FILE);
+  try { fs.copyFileSync(arquivo, arquivo + '.bak'); } catch {}
+  fs.renameSync(tmp, arquivo);
+}
+
+// Uma task esta "fora de alcance" quando nao veio no ultimo sync: saiu das ~20
+// mensagens que a API devolve. Dali em diante o Teams nao conta mais nada sobre
+// ela, entao o quadro para de receber atualizacoes automaticas desse card.
+function foraDeAlcance(t, lastSync) {
+  return !!lastSync && t.lastSeen !== lastSync;
+}
+
+function tasksParaTela(muralId) {
+  const db = lerTasks(muralId);
+  const lista = Object.values(db.tasks).map((t) => ({
+    ...t,
+    emojis: emojisDoCard(t.reactions),
+    foraDeAlcance: foraDeAlcance(t, db.lastSync),
+  }));
+  return { lastSync: db.lastSync, tasks: lista };
 }
 
 // ----------------------------------------------------------------------- merge
 
-// Mescla o snapshot (janela de ~20) sobre o historico acumulado.
-// Tasks que sairam da janela do Teams PERMANECEM no arquivo — e esse o ganho
-// principal: o Teams so devolve 20, o arquivo lembra de tudo que ja passou.
+// Mescla o snapshot (janela de ~20) sobre o historico acumulado. Tasks que
+// sairam da janela PERMANECEM no arquivo — e esse o ganho principal: a API so
+// devolve 20, o arquivo lembra de tudo que ja passou.
 function merge(db, snapshot, agora) {
   const novos = [];
   const mudaram = [];
+  const retomadas = [];
 
   for (const m of snapshot) {
     if (!m || !m.id) continue;
@@ -168,18 +229,27 @@ function merge(db, snapshot, agora) {
         statusChangedAt: agora,
         statusAnterior: null,
         lastSeen: agora,
+        movidoAMao: false,
       };
       novos.push(m.id);
       continue;
     }
 
-    // Campos que o Teams pode ter editado depois — texto e reacoes sao voláteis.
+    // Campos que o Teams pode ter editado depois.
     antigo.summary = m.summary || antigo.summary;
     antigo.reactions = m.reactions || [];
     antigo.author = m.author || antigo.author;
     antigo.webUrl = m.webUrl || antigo.webUrl;
     antigo.kind = m.kind === 'bug' ? 'bug' : antigo.kind;
     antigo.lastSeen = agora;
+
+    // A task voltou a aparecer na janela: o Teams volta a mandar. Se ela tinha
+    // sido movida a mao enquanto estava fora de alcance, a reacao real vence —
+    // a fonte da verdade e sempre o Teams.
+    if (antigo.movidoAMao) {
+      antigo.movidoAMao = false;
+      if (antigo.status !== status) retomadas.push(m.id);
+    }
 
     if (antigo.status !== status) {
       antigo.statusAnterior = antigo.status;
@@ -190,18 +260,15 @@ function merge(db, snapshot, agora) {
   }
 
   db.lastSync = agora;
-  return { novos, mudaram, total: snapshot.length };
+  return { novos, mudaram, retomadas, total: snapshot.length };
 }
 
 // ------------------------------------------------------------------ claude run
 
-let syncEmAndamento = false;
-
-// Progresso ao vivo, alimentado pelos eventos do Claude. O painel le isso em
-// /api/status: um sync leva 1-2 minutos e sem esse retorno a tela parece travada.
+let syncEmAndamento = null; // id do mural sincronizando, ou null
 let progresso = null;
 
-const ESTIMATIVA_MENSAGENS = 20; // o Teams devolve no maximo 20 por leitura
+const ESTIMATIVA_MENSAGENS = 20;
 
 function zerarProgresso(etapa) {
   progresso = {
@@ -210,9 +277,8 @@ function zerarProgresso(etapa) {
   };
 }
 
-// Depois de ler tudo, o Claude passa ~1 minuto resumindo e classificando sem
-// chamar nenhuma tool. Sem nomear essa fase, o contador congela em 20/20 e a
-// tela volta a parecer travada — que era o problema original.
+// Depois de ler tudo, o Claude passa ~1 minuto resumindo sem chamar tool
+// nenhuma. Sem nomear essa fase, o contador congela e a tela parece travada.
 function etapaVisivel(p) {
   const paradoHa = Date.now() - p.ultimaAtividade;
   if (p.lidas > 0 && paradoHa > 7000 && p.etapa === 'lendo mensagens') {
@@ -222,11 +288,11 @@ function etapaVisivel(p) {
 }
 
 // Cada evento do stream-json vem como uma linha JSON. So interessam os tool_use:
-// a 1a leitura e a listagem do canal, as seguintes sao as mensagens uma a uma.
+// a 1a leitura e a listagem, as seguintes sao as mensagens uma a uma.
 function processarEvento(linha) {
   if (!linha.trim() || !progresso) return;
   let ev;
-  try { ev = JSON.parse(linha); } catch { return; } // linha partida ou ruido: ignora
+  try { ev = JSON.parse(linha); } catch { return; }
 
   if (ev.type !== 'assistant') return;
   const partes = ev.message && ev.message.content;
@@ -238,20 +304,14 @@ function processarEvento(linha) {
     const nome = p.name || '';
     if (nome.includes('read_resource')) {
       const uri = (p.input && p.input.uri) || '';
-      // URI que termina em /messages e a listagem; com /{id} no fim e uma mensagem
-      if (/\/messages\/?$/.test(uri)) {
-        progresso.etapa = 'listando o canal';
-      } else {
-        progresso.lidas++;
-        progresso.etapa = 'lendo mensagens';
-      }
+      if (/\/messages\/?$/.test(uri)) progresso.etapa = 'listando as mensagens';
+      else { progresso.lidas++; progresso.etapa = 'lendo mensagens'; }
     } else if (nome === 'Write') {
       progresso.etapa = 'gravando';
     }
   }
 }
 
-// Monta um prompt a partir do template, trocando os {{PLACEHOLDERS}}.
 function montarPrompt(nome, valores) {
   let txt = fs.readFileSync(path.join(PROMPTS_DIR, nome), 'utf8');
   for (const [chave, valor] of Object.entries(valores)) {
@@ -260,10 +320,25 @@ function montarPrompt(nome, valores) {
   return txt;
 }
 
-// Roda o Claude headless com um prompt e espera que ele grave `arquivoSaida`.
-// Usado pelos passos do onboarding (verificar conta, listar chats), que sao
-// curtos e nao precisam de barra de progresso.
-function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 3 * 60 * 1000) {
+// A URI que o Claude vai ler. Canal e chat tem formatos diferentes no Graph.
+function uriDasMensagens(f) {
+  if (f.tipo === 'chat') return `teams:///chats/${encodeURIComponent(f.chatId)}/messages`;
+  return `teams:///teams/${f.teamId}/channels/${encodeURIComponent(f.channelId)}/messages`;
+}
+
+// Mensagem de chat volta com webUrl null, entao o link precisa ser montado.
+function moldeDeWebUrl(f) {
+  if (f.tipo === 'chat') {
+    return 'https://teams.microsoft.com/l/message/' + encodeURIComponent(f.chatId) +
+      '/{id}?context=%7B%22contextType%22%3A%22chat%22%7D';
+  }
+  return 'https://teams.microsoft.com/l/message/' + encodeURIComponent(f.channelId) +
+    `/{id}?groupId=${f.teamId}&parentMessageId={id}`;
+}
+
+// Roda o Claude headless e espera que ele grave `arquivoSaida`. Usado pelos
+// passos curtos do onboarding, que nao precisam de barra de progresso.
+function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
   return new Promise((resolve, reject) => {
     try { fs.unlinkSync(arquivoSaida); } catch {}
 
@@ -293,11 +368,8 @@ function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 3 * 60 * 1000) {
           'O Claude Code saiu com erro (codigo ' + code + '). ' + stderr.slice(0, 300)
         ));
       }
-      try {
-        resolve(JSON.parse(fs.readFileSync(arquivoSaida, 'utf8')));
-      } catch {
-        reject(new Error('O Claude rodou mas nao gravou um resultado legivel.'));
-      }
+      try { resolve(JSON.parse(fs.readFileSync(arquivoSaida, 'utf8'))); }
+      catch { reject(new Error('O Claude rodou mas nao gravou um resultado legivel.')); }
     });
 
     proc.on('error', (e) => {
@@ -307,54 +379,49 @@ function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 3 * 60 * 1000) {
   });
 }
 
-function rodarSync() {
+function rodarSync(muralId) {
   return new Promise((resolve, reject) => {
-    if (syncEmAndamento) return reject(new Error('Ja existe um sync em andamento.'));
-
-    const config = lerConfig();
-    if (!config) {
-      return reject(new Error('Nenhuma conversa configurada. Refaca o onboarding.'));
+    if (syncEmAndamento) {
+      return reject(new Error('Ja existe uma atualizacao em andamento.'));
     }
+    const mural = acharMural(muralId);
+    if (!mural) return reject(new Error('Mural nao encontrado.'));
 
-    syncEmAndamento = true;
+    syncEmAndamento = muralId;
     zerarProgresso('iniciando');
+
+    const snapshotFile = arquivoSnapshot(muralId);
+    fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
 
     let prompt;
     try {
       prompt = montarPrompt('sincronizar.md', {
-        URI_MENSAGENS: uriDasMensagens(config.fonte),
-        ARQUIVO_SNAPSHOT: SNAPSHOT_FILE,
-        WEBURL_MOLDE: moldeDeWebUrl(config.fonte),
+        URI_MENSAGENS: uriDasMensagens(mural),
+        ARQUIVO_SNAPSHOT: snapshotFile,
+        WEBURL_MOLDE: moldeDeWebUrl(mural),
       });
-    } catch (e) {
-      syncEmAndamento = false;
+    } catch {
+      syncEmAndamento = null; progresso = null;
       return reject(new Error('prompts/sincronizar.md nao encontrado.'));
     }
 
-    // snapshot antigo sai da frente para nao mascarar uma falha silenciosa
-    try { fs.unlinkSync(SNAPSHOT_FILE); } catch {}
+    try { fs.unlinkSync(snapshotFile); } catch {}
 
     // O prompt vai por STDIN, nao como argumento: e multi-linha, e no Windows o
-    // shell mutila argumentos assim — o Claude recebia texto truncado e respondia
-    // outra coisa em vez de ler o canal.
-    const args = [
+    // shell mutila argumentos assim — o Claude recebia texto truncado.
+    const proc = spawn('claude', [
       '-p',
       '--output-format', 'stream-json', '--verbose',
       '--allowedTools', 'mcp__claude_ai_Microsoft_365__read_resource,Write',
       '--permission-mode', 'acceptEdits',
-    ];
+    ], { cwd: ROOT, shell: true });
 
-    const proc = spawn('claude', args, { cwd: ROOT, shell: true });
     proc.stdin.write(prompt);
     proc.stdin.end();
 
-    let stdout = '';
-    let stderr = '';
-    let buffer = '';
-
+    let stdout = '', stderr = '', buffer = '';
     proc.stdout.on('data', (d) => {
       stdout += d;
-      // Um chunk pode cortar uma linha no meio; guarda o resto para o proximo.
       buffer += d;
       const linhas = buffer.split('\n');
       buffer = linhas.pop();
@@ -364,53 +431,52 @@ function rodarSync() {
 
     const timer = setTimeout(() => {
       proc.kill();
-      syncEmAndamento = false;
-      progresso = null;
-      reject(new Error('Timeout: o sync passou de 5 minutos sem terminar.'));
+      syncEmAndamento = null; progresso = null;
+      reject(new Error('A atualizacao passou de 5 minutos sem terminar.'));
     }, 5 * 60 * 1000);
 
     proc.on('close', (code) => {
       clearTimeout(timer);
-      syncEmAndamento = false;
-      progresso = null;
+      syncEmAndamento = null; progresso = null;
 
       if (code !== 0) {
-        return reject(new Error(`claude saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
+        return reject(new Error(`O Claude saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
       }
 
       let snapshot;
-      try {
-        snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8'));
-      } catch {
+      try { snapshot = JSON.parse(fs.readFileSync(snapshotFile, 'utf8')); }
+      catch {
         return reject(new Error(
-          'O Claude rodou mas nao gravou um snapshot.json valido. ' + resumoDoResultado(stdout)
+          'O Claude rodou mas nao gravou um snapshot valido. ' + resumoDoResultado(stdout)
         ));
       }
-      if (!Array.isArray(snapshot)) {
-        return reject(new Error('snapshot.json nao e um array.'));
-      }
+      if (!Array.isArray(snapshot)) return reject(new Error('O snapshot nao e um array.'));
 
       try {
-        const db = lerTasks();
+        const db = lerTasks(muralId);
         const r = merge(db, snapshot, new Date().toISOString());
-        gravarTasks(db);
+        gravarTasks(muralId, db);
+
+        const indice = lerIndice();
+        const m = indice.murais.find((x) => x.id === muralId);
+        if (m) { m.ultimoSync = db.lastSync; gravarIndice(indice); }
+
         resolve(r);
       } catch (e) {
-        reject(e); // historico ilegivel: aborta sem gravar nada por cima
+        reject(e); // historico ilegivel: aborta sem gravar por cima
       }
     });
 
     proc.on('error', (e) => {
       clearTimeout(timer);
-      syncEmAndamento = false;
-      progresso = null;
+      syncEmAndamento = null; progresso = null;
       reject(new Error('Nao consegui executar `claude`: ' + e.message));
     });
   });
 }
 
-// Com stream-json o stdout e um monte de evento; para a mensagem de erro so
-// interessa o texto final que o Claude respondeu.
+// Com stream-json o stdout e um monte de evento; para o erro so interessa o
+// texto final que o Claude respondeu.
 function resumoDoResultado(stdout) {
   const linhas = stdout.split('\n').filter(Boolean);
   for (let i = linhas.length - 1; i >= 0; i--) {
@@ -426,17 +492,17 @@ function resumoDoResultado(stdout) {
 
 // ------------------------------------------------------------------ abrir teams
 
-// Abrir o app pelo servidor, e nao pelo href do navegador: o Chrome/Edge engolem
-// protocolos customizados em silencio (sem permissao previa, o clique nao faz nada
-// e nenhum erro aparece). Aqui o processo e chamado direto e a falha e visivel.
+// Abrir o app pelo servidor, e nao pelo href do navegador: Chrome e Edge engolem
+// protocolos customizados em silencio (sem permissao previa o clique nao faz
+// nada e nenhum erro aparece). Aqui a falha e visivel.
 //
-// A URL NUNCA vem do cliente — o navegador manda so o id, e o servidor busca o
-// webUrl no proprio tasks.json. Assim nao ha como injetar comando pelo request.
-function abrirNoTeams(id) {
+// A URL NUNCA vem do cliente — o navegador manda so os ids, e o servidor busca o
+// webUrl no proprio historico. Assim nao ha como injetar comando pelo request.
+function abrirNoTeams(muralId, tarefaId) {
   return new Promise((resolve, reject) => {
-    const db = lerTasks();
-    const t = db.tasks[id];
-    if (!t || !t.webUrl) return reject(new Error('Task desconhecida: ' + id));
+    const db = lerTasks(muralId);
+    const t = db.tasks[tarefaId];
+    if (!t || !t.webUrl) return reject(new Error('Task desconhecida.'));
 
     if (!/^https:\/\/teams\.microsoft\.com\//.test(t.webUrl)) {
       return reject(new Error('Link inesperado nesta task, nao vou abrir.'));
@@ -449,7 +515,6 @@ function abrirNoTeams(id) {
     // execFile sem shell: o link vai como argumento literal, nunca interpretado.
     execFile('ms-teams.exe', [deep], (erro) => {
       if (!erro) return resolve({ via: 'ms-teams.exe' });
-      // Teams classico ou instalacao diferente: deixa o Windows resolver o protocolo.
       execFile('cmd', ['/c', 'start', '', deep], (erro2) => {
         if (!erro2) return resolve({ via: 'protocolo do Windows' });
         reject(new Error('Nao consegui abrir o Teams: ' + erro2.message));
@@ -461,16 +526,17 @@ function abrirNoTeams(id) {
 // ---------------------------------------------------------------------- server
 
 function json(res, code, body) {
-  const s = JSON.stringify(body);
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
   });
-  res.end(s);
+  res.end(JSON.stringify(body));
 }
 
-function chaveDaFonte(f) {
-  return f.tipo === 'chat' ? 'chat:' + f.chatId : 'canal:' + f.teamId + '/' + f.channelId;
+function servirHtml(res, arquivo) {
+  const html = fs.readFileSync(path.join(PUBLIC_DIR, arquivo), 'utf8');
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(html);
 }
 
 function lerCorpoJson(req) {
@@ -487,7 +553,7 @@ function lerCorpoJson(req) {
   });
 }
 
-// Valida a escolha do onboarding antes de gravar. Os ids entram na URI que o
+// Valida a escolha do onboarding antes de gravar: os ids entram na URI que o
 // Claude vai ler, entao formato solto aqui vira erro confuso la na frente.
 function validarFonte(corpo) {
   const nome = String(corpo.nome || '').slice(0, 200).trim();
@@ -496,7 +562,8 @@ function validarFonte(corpo) {
   if (corpo.tipo === 'chat') {
     const chatId = String(corpo.chatId || '').trim();
     if (!/^19:[\w\-.@]+$/.test(chatId)) throw new Error('chatId invalido.');
-    return { tipo: 'chat', chatId, nome };
+    const sub = ['oneOnOne', 'group', 'meeting'].includes(corpo.subtipo) ? corpo.subtipo : 'group';
+    return { tipo: 'chat', subtipo: sub, chatId, nome };
   }
 
   if (corpo.tipo === 'canal') {
@@ -504,10 +571,15 @@ function validarFonte(corpo) {
     const channelId = String(corpo.channelId || '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(teamId)) throw new Error('teamId invalido.');
     if (!/^19:[\w\-.@]+$/.test(channelId)) throw new Error('channelId invalido.');
-    return { tipo: 'canal', teamId, channelId, nome };
+    return { tipo: 'canal', subtipo: 'canal', teamId, channelId, nome };
   }
 
   throw new Error('Tipo de conversa desconhecido.');
+}
+
+// Remove recursivamente a pasta de um mural. Usado so no descarte explicito.
+function apagarPasta(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -520,33 +592,157 @@ const server = http.createServer(async (req, res) => {
 
 async function rotear(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  const p = url.pathname;
 
-  // Sem conversa configurada, a raiz e o onboarding. Assim quem clona o repo
-  // cai direto na configuracao em vez de um quadro vazio sem explicacao.
-  if (url.pathname === '/' || url.pathname === '/index.html') {
-    const config = lerConfig();
-    const pagina = config ? 'kanban.html' : 'onboarding.html';
-    const html = fs.readFileSync(path.join(PUBLIC_DIR, pagina), 'utf8');
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-    return res.end(html);
+  // ---- paginas ----
+
+  // Sem nenhum mural, a raiz e o onboarding: quem clona o repo cai direto na
+  // configuracao em vez de uma lista vazia sem explicacao.
+  if (p === '/' || p === '/index.html') {
+    return servirHtml(res, lerIndice().murais.length ? 'home.html' : 'onboarding.html');
+  }
+  if (p === '/onboarding') return servirHtml(res, 'onboarding.html');
+  if (/^\/m\/[0-9a-f]{10}$/.test(p)) return servirHtml(res, 'kanban.html');
+
+  // ---- murais ----
+
+  if (p === '/api/murais' && req.method === 'GET') {
+    const indice = lerIndice();
+    const murais = indice.murais.map((m) => {
+      let totais = { aberto: 0, interagido: 0, feito: 0 };
+      let foraDeAlcance = 0;
+      try {
+        const db = lerTasks(m.id);
+        for (const t of Object.values(db.tasks)) {
+          if (totais[t.status] !== undefined) totais[t.status]++;
+          if (foraDeAlcance_(t, db.lastSync)) foraDeAlcance++;
+        }
+      } catch { /* historico ilegivel nao pode derrubar a lista inteira */ }
+      return { ...m, totais, foraDeAlcance };
+    });
+    return json(res, 200, { murais });
+  }
+
+  if (p === '/api/murais' && req.method === 'POST') {
+    try {
+      const fonte = validarFonte(await lerCorpoJson(req));
+      const id = idDaFonte(fonte);
+      const indice = lerIndice();
+      const existente = indice.murais.find((m) => m.id === id);
+
+      // Mapear a mesma conversa de novo apenas reabre o mural — o historico
+      // acumulado dela nunca e descartado por engano.
+      if (existente) return json(res, 200, { ok: true, id, jaExistia: true });
+
+      indice.murais.push({ id, ...fonte, criadoEm: new Date().toISOString(), ultimoSync: null });
+      gravarIndice(indice);
+      fs.mkdirSync(pastaDoMural(id), { recursive: true });
+      return json(res, 200, { ok: true, id, jaExistia: false });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/murais' && req.method === 'DELETE') {
+    const id = url.searchParams.get('id') || '';
+    const indice = lerIndice();
+    const antes = indice.murais.length;
+    indice.murais = indice.murais.filter((m) => m.id !== id);
+    if (indice.murais.length === antes) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    gravarIndice(indice);
+    apagarPasta(pastaDoMural(id));
+    return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/mural') {
+    const m = acharMural(url.searchParams.get('id') || '');
+    if (!m) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    return json(res, 200, { ok: true, mural: m });
+  }
+
+  // ---- quadro ----
+
+  if (p === '/api/tasks') {
+    const id = url.searchParams.get('mural') || '';
+    if (!acharMural(id)) return json(res, 404, { erro: 'Mural nao encontrado.' });
+    return json(res, 200, tasksParaTela(id));
+  }
+
+  if (p === '/api/sync' && req.method === 'POST') {
+    const id = url.searchParams.get('mural') || '';
+    try {
+      const r = await rodarSync(id);
+      return json(res, 200, { ok: true, ...r, ...tasksParaTela(id) });
+    } catch (e) {
+      return json(res, 500, { ok: false, erro: e.message });
+    }
+  }
+
+  // Mover a mao so vale para task fora de alcance. Se ela ainda esta na janela,
+  // o proximo sync desfaria a mudanca — deixar mover ali criaria um quadro que
+  // mente por 2 minutos e depois se corrige sozinho.
+  if (p === '/api/mover' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+
+      const corpo = await lerCorpoJson(req);
+      const tarefaId = String(corpo.id || '');
+      const novo = String(corpo.status || '');
+      if (!STATUS_VALIDOS.includes(novo)) throw new Error('Status invalido.');
+
+      const db = lerTasks(muralId);
+      const t = db.tasks[tarefaId];
+      if (!t) throw new Error('Task desconhecida.');
+      if (!foraDeAlcance_(t, db.lastSync)) {
+        throw new Error(
+          'Esta task ainda aparece no Teams — reaja na mensagem de la e atualize. ' +
+          'Mover a mao so vale para as que sairam do alcance.'
+        );
+      }
+
+      if (t.status !== novo) {
+        t.statusAnterior = t.status;
+        t.status = novo;
+        t.statusChangedAt = new Date().toISOString();
+      }
+      t.movidoAMao = true;
+      gravarTasks(muralId, db);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/abrir' && req.method === 'POST') {
+    try {
+      const r = await abrirNoTeams(
+        url.searchParams.get('mural') || '',
+        url.searchParams.get('id') || ''
+      );
+      return json(res, 200, { ok: true, ...r });
+    } catch (e) {
+      return json(res, 500, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/status') {
+    return json(res, 200, {
+      syncing: !!syncEmAndamento,
+      muralSincronizando: syncEmAndamento,
+      progresso: progresso
+        ? {
+            ...progresso,
+            etapa: etapaVisivel(progresso),
+            segundos: Math.round((Date.now() - progresso.inicio) / 1000),
+          }
+        : null,
+    });
   }
 
   // ---- onboarding ----
 
-  // Rota explicita para reconfigurar sem apagar nada a mao.
-  if (url.pathname === '/onboarding') {
-    const html = fs.readFileSync(path.join(PUBLIC_DIR, 'onboarding.html'), 'utf8');
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-    return res.end(html);
-  }
-
-  if (url.pathname === '/api/setup/config') {
-    const config = lerConfig();
-    return json(res, 200, { configurado: !!config, fonte: config ? config.fonte : null });
-  }
-
-  // Passo 1: existe Claude Code nesta maquina?
-  if (url.pathname === '/api/setup/claude') {
+  if (p === '/api/setup/claude') {
     return new Promise((resolve) => {
       execFile('claude', ['--version'], { shell: true }, (erro, stdout) => {
         if (erro) {
@@ -562,8 +758,7 @@ async function rotear(req, res) {
     });
   }
 
-  // Passo 2: o conector Microsoft 365 esta ligado? Quem esta logado?
-  if (url.pathname === '/api/setup/conta' && req.method === 'POST') {
+  if (p === '/api/setup/conta' && req.method === 'POST') {
     try {
       const conta = await rodarClaudeSimples(
         montarPrompt('verificar-conta.md', { ARQUIVO_SAIDA: CONTA_FILE }),
@@ -576,12 +771,9 @@ async function rotear(req, res) {
     }
   }
 
-  // Passo 3a: listar os chats para escolher na tela.
-  if (url.pathname === '/api/setup/chats' && req.method === 'POST') {
+  if (p === '/api/setup/chats' && req.method === 'POST') {
     try {
-      const conta = fs.existsSync(CONTA_FILE)
-        ? JSON.parse(fs.readFileSync(CONTA_FILE, 'utf8'))
-        : {};
+      const conta = lerJson(CONTA_FILE, {});
       const chats = await rodarClaudeSimples(
         montarPrompt('listar-chats.md', {
           ARQUIVO_SAIDA: CHATS_FILE,
@@ -596,82 +788,11 @@ async function rotear(req, res) {
     }
   }
 
-  // Passo 3b: gravar a escolha.
-  if (url.pathname === '/api/setup/salvar' && req.method === 'POST') {
-    try {
-      const corpo = await lerCorpoJson(req);
-      const fonte = validarFonte(corpo);
+  // ---- assets ----
 
-      // Trocar de conversa nao pode misturar historicos: as tasks da conversa
-      // anterior sao arquivadas, nao apagadas nem reaproveitadas.
-      const anterior = lerConfig();
-      const mudou = anterior && chaveDaFonte(anterior.fonte) !== chaveDaFonte(fonte);
-      if (mudou && fs.existsSync(TASKS_FILE)) {
-        const carimbo = new Date().toISOString().replace(/[:.]/g, '-');
-        fs.renameSync(TASKS_FILE, path.join(DATA_DIR, `tasks-${carimbo}.json`));
-      }
-
-      fs.writeFileSync(
-        CONFIG_FILE,
-        JSON.stringify({ fonte, criadoEm: new Date().toISOString() }, null, 2),
-        'utf8'
-      );
-      return json(res, 200, { ok: true, fonte, historicoArquivado: !!mudou });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (url.pathname === '/api/abrir' && req.method === 'POST') {
-    const id = url.searchParams.get('id') || '';
-    try {
-      const r = await abrirNoTeams(id);
-      return json(res, 200, { ok: true, ...r });
-    } catch (e) {
-      return json(res, 500, { ok: false, erro: e.message });
-    }
-  }
-
-  if (url.pathname === '/api/status') {
-    return json(res, 200, {
-      syncing: syncEmAndamento,
-      progresso: progresso
-        ? {
-            ...progresso,
-            etapa: etapaVisivel(progresso),
-            segundos: Math.round((Date.now() - progresso.inicio) / 1000),
-          }
-        : null,
-    });
-  }
-
-  if (url.pathname === '/api/tasks') {
-    const db = lerTasks();
-    const lista = Object.values(db.tasks).map((t) => ({
-      ...t,
-      emojis: emojisDoCard(t.reactions),
-    }));
-    return json(res, 200, { lastSync: db.lastSync, tasks: lista, syncing: syncEmAndamento });
-  }
-
-  if (url.pathname === '/api/sync' && req.method === 'POST') {
-    try {
-      const r = await rodarSync();
-      const db = lerTasks();
-      const lista = Object.values(db.tasks).map((t) => ({
-        ...t,
-        emojis: emojisDoCard(t.reactions),
-      }));
-      return json(res, 200, { ok: true, ...r, lastSync: db.lastSync, tasks: lista });
-    } catch (e) {
-      return json(res, 500, { ok: false, erro: e.message });
-    }
-  }
-
-  // DM Sans servida localmente (copiada de apps/status): a mesma fonte do design
-  // system, sem depender de CDN nem de internet.
-  if (url.pathname.startsWith('/assets/') && url.pathname.endsWith('.woff2')) {
-    const arquivo = path.join(ROOT, 'assets', path.basename(url.pathname));
+  // DM Sans servida localmente: mesma fonte do design system, sem CDN.
+  if (p.startsWith('/assets/') && p.endsWith('.woff2')) {
+    const arquivo = path.join(ROOT, 'assets', path.basename(p));
     if (fs.existsSync(arquivo)) {
       res.writeHead(200, {
         'Content-Type': 'font/woff2',
@@ -685,7 +806,13 @@ async function rotear(req, res) {
   res.end('nao encontrado');
 }
 
+// Alias interno para uso dentro de rotear (mesma regra de foraDeAlcance).
+function foraDeAlcance_(t, lastSync) {
+  return foraDeAlcance(t, lastSync);
+}
+
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n  Painel de tasks rodando em  http://localhost:${PORT}\n`);
-  console.log(`  Ctrl+C para parar.\n`);
+  const n = lerIndice().murais.length;
+  console.log(`\n  Mural em  http://localhost:${PORT}`);
+  console.log(`  ${n} mural(is) configurado(s). Ctrl+C para parar.\n`);
 });
