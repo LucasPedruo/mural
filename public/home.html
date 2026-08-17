@@ -148,7 +148,6 @@
     <span class="ponto-marca"></span>
     <h1>Mural</h1>
     <span class="espaco"></span>
-    <button id="tema" class="icone" title="Alternar tema">◐</button>
     <button class="primario" id="novo">Novo mural</button>
   </div>
   <p class="sub">Seus quadros. Cada um acompanha uma conversa do Teams.</p>
@@ -161,15 +160,14 @@
 <script>
 const $ = (id) => document.getElementById(id);
 
-function aplicarTema(m) {
-  document.documentElement.setAttribute('data-color-mode', m);
-  localStorage.setItem('mural:tema', m);
-}
-aplicarTema(localStorage.getItem('mural:tema') ||
-  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
-$('tema').addEventListener('click', () => {
-  aplicarTema(document.documentElement.getAttribute('data-color-mode') === 'dark' ? 'light' : 'dark');
-});
+// Tema segue o sistema operacional, sem controle na tela. O CSS depende do
+// atributo data-color-mode, entao ele e mantido em dia por aqui — inclusive se
+// o SO trocar de tema com a pagina aberta.
+const preferenciaEscura = matchMedia('(prefers-color-scheme: dark)');
+const aplicarTema = () =>
+  document.documentElement.setAttribute('data-color-mode', preferenciaEscura.matches ? 'dark' : 'light');
+aplicarTema();
+preferenciaEscura.addEventListener('change', aplicarTema);
 
 $('novo').addEventListener('click', () => { location.href = '/onboarding'; });
 

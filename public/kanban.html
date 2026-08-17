@@ -321,7 +321,6 @@
   <span class="marca"><span class="ponto-marca"></span><h1 id="titulo">Mural</h1></span>
   <span class="sync-info" id="info">carregando…</span>
   <span class="espaco"></span>
-  <button id="tema" class="icone" title="Alternar tema">◐</button>
   <button id="visto" title="Zera as marcas NOVO e MUDOU">Marcar como visto</button>
   <button id="atualizar" class="primario">Atualizar</button>
 </header>
@@ -362,7 +361,6 @@
 // tudo daqui pra frente e por mural, inclusive a marca de "ja vi".
 const MURAL_ID = location.pathname.split('/').pop();
 const CHAVE_VISTO = 'mural:ultima-visita:' + MURAL_ID;
-const CHAVE_TEMA = 'mural:tema';
 
 let ultimaVisita = localStorage.getItem(CHAVE_VISTO) || null;
 let cache = [];
@@ -372,19 +370,14 @@ const $ = (id) => document.getElementById(id);
 
 $('voltar').addEventListener('click', () => { location.href = '/'; });
 
-// ---- tema (data-color-mode, igual ao apps/status: o modo resolvido manda,
-// nao o OS — mas o OS define o padrao na primeira visita) ----
-function aplicarTema(modo) {
-  document.documentElement.setAttribute('data-color-mode', modo);
-  localStorage.setItem(CHAVE_TEMA, modo);
-}
-aplicarTema(
-  localStorage.getItem(CHAVE_TEMA) ||
-  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-);
-$('tema').addEventListener('click', () => {
-  aplicarTema(document.documentElement.getAttribute('data-color-mode') === 'dark' ? 'light' : 'dark');
-});
+// Tema segue o sistema operacional, sem controle na tela. O CSS depende do
+// atributo data-color-mode, entao ele e mantido em dia por aqui — inclusive se
+// o SO trocar de tema com a pagina aberta.
+const preferenciaEscura = matchMedia('(prefers-color-scheme: dark)');
+const aplicarTema = () =>
+  document.documentElement.setAttribute('data-color-mode', preferenciaEscura.matches ? 'dark' : 'light');
+aplicarTema();
+preferenciaEscura.addEventListener('change', aplicarTema);
 
 // ---- helpers ----
 function dataCurta(iso) {

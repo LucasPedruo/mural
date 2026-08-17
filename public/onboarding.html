@@ -244,11 +244,14 @@
 <script>
 const $ = (id) => document.getElementById(id);
 
-aplicarTema(
-  localStorage.getItem('mural:tema') ||
-  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-);
-function aplicarTema(m) { document.documentElement.setAttribute('data-color-mode', m); }
+// Tema segue o sistema operacional, sem controle na tela. O CSS depende do
+// atributo data-color-mode, entao ele e mantido em dia por aqui — inclusive se
+// o SO trocar de tema com a pagina aberta.
+const preferenciaEscura = matchMedia('(prefers-color-scheme: dark)');
+const aplicarTema = () =>
+  document.documentElement.setAttribute('data-color-mode', preferenciaEscura.matches ? 'dark' : 'light');
+aplicarTema();
+preferenciaEscura.addEventListener('change', aplicarTema);
 
 let escolha = null; // {tipo, nome, ...ids}
 
