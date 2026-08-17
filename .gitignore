@@ -1,0 +1,10 @@
+# Tudo que é da máquina de quem roda: configuração da conversa escolhida,
+# histórico de tasks, snapshots e caches do onboarding. Nada disso deve ir
+# para o repositório — o config.json aponta para um canal específico e o
+# tasks.json contém texto de mensagens internas.
+data/
+
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="pt-BR" data-color-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mural · configuração</title>
+<style>
+  @font-face {
+    font-family: "DM Sans Variable"; font-style: normal; font-display: swap;
+    font-weight: 100 1000;
+    src: url("/assets/dm-sans-latin-wght-normal.woff2") format("woff2-variations");
+  }
+
+  :root {
+    --color-brand-50: #ecfff7; --color-brand-400: #2ce293; --color-brand-500: #00d479;
+    --color-brand-700: #009457; --color-brand-950: #123320;
+    --color-neutral-0: #ffffff; --color-neutral-50: #f7f9f8; --color-neutral-100: #f0f3f1;
+    --color-neutral-200: #e6eae7; --color-neutral-300: #d5dcd7; --color-neutral-500: #95a399;
+    --color-neutral-650: #474f55; --color-neutral-700: #3a4146; --color-neutral-750: #2f353a;
+    --color-neutral-800: #262b2f; --color-neutral-850: #1f2427; --color-neutral-925: #15181b;
+    --color-neutral-950: #172019;
+    --color-success-300: #9de5ba; --color-success-500: #35b76f; --color-success-700: #1f7a48;
+    --color-danger-300: #ffb4b4; --color-danger-500: #e05252; --color-danger-600: #c93f3f;
+    --color-info-200: #a9c9ff; --color-info-500: #3b82f6; --color-info-800: #1a478f;
+  }
+  [data-color-mode="light"], :root {
+    --bg-app: var(--color-neutral-50); --bg-surface: var(--color-neutral-0);
+    --bg-surface-2: var(--color-neutral-100); --bg-surface-3: var(--color-neutral-200);
+    --bg-brand: var(--color-brand-500); --bg-brand-hover: var(--color-brand-700);
+    --bg-brand-subtle: var(--color-brand-50);
+    --bg-success: #eaf8f0; --bg-danger: #fdeeee; --bg-info: #ebf3ff;
+    --border-subtle: var(--color-neutral-100); --border-default: var(--color-neutral-200);
+    --border-strong: var(--color-neutral-300);
+    --focus-ring: color-mix(in srgb, var(--color-brand-500) 32%, transparent);
+    --text-primary: var(--color-neutral-950); --text-secondary: #4e5c52;
+    --text-tertiary: #68756c; --text-muted: #758079;
+    --text-on-brand: var(--color-brand-950);
+    --text-success: var(--color-success-700); --text-danger: var(--color-danger-600);
+    --text-info: var(--color-info-800);
+    --shadow-card: 0 1px 2px rgba(23,32,25,.04), 0 1px 3px rgba(23,32,25,.03);
+  }
+  [data-color-mode="dark"] {
+    --bg-app: var(--color-neutral-925); --bg-surface: var(--color-neutral-850);
+    --bg-surface-2: var(--color-neutral-800); --bg-surface-3: var(--color-neutral-750);
+    --bg-brand-subtle: color-mix(in srgb, var(--color-brand-500) 16%, transparent);
+    --bg-success: color-mix(in srgb, var(--color-success-500) 18%, transparent);
+    --bg-danger: color-mix(in srgb, var(--color-danger-500) 18%, transparent);
+    --bg-info: color-mix(in srgb, var(--color-info-500) 20%, transparent);
+    --border-subtle: var(--color-neutral-750); --border-default: var(--color-neutral-700);
+    --border-strong: var(--color-neutral-650);
+    --focus-ring: color-mix(in srgb, var(--color-brand-500) 45%, transparent);
+    --text-primary: #f4f7f5; --text-secondary: #c2cbc5; --text-tertiary: #a4b2a9;
+    --text-muted: var(--color-neutral-500);
+    --text-success: var(--color-success-300); --text-danger: var(--color-danger-300);
+    --text-info: var(--color-info-200);
+    --shadow-card: 0 0 rgba(0,0,0,0);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg-app); color: var(--text-primary);
+    font-family: "DM Sans Variable", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+  .pagina { max-width: 660px; margin: 0 auto; padding: 48px 24px 64px; }
+
+  .topo { display: flex; align-items: center; gap: 11px; margin-bottom: 6px; }
+  .ponto-marca {
+    width: 11px; height: 11px; border-radius: 999px; background: var(--bg-brand);
+    box-shadow: 0 0 0 4px var(--bg-brand-subtle);
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
+  .sub { color: var(--text-tertiary); font-size: 13.5px; margin: 0 0 32px; }
+
+  .passo {
+    background: var(--bg-surface); border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 14px;
+    box-shadow: var(--shadow-card);
+  }
+  .passo[data-estado="espera"] { opacity: .5; }
+  .passo-topo { display: flex; align-items: center; gap: 11px; }
+  .num {
+    width: 24px; height: 24px; border-radius: 999px; flex: none;
+    display: grid; place-items: center; font-size: 12px; font-weight: 600;
+    background: var(--bg-surface-3); color: var(--text-secondary);
+  }
+  .passo[data-estado="ok"] .num { background: var(--bg-success); color: var(--text-success); }
+  .passo[data-estado="erro"] .num { background: var(--bg-danger); color: var(--text-danger); }
+  h2 { font-size: 14.5px; font-weight: 600; margin: 0; }
+  .detalhe { font-size: 13px; color: var(--text-tertiary); margin: 9px 0 0 35px; }
+  .detalhe.ok { color: var(--text-success); }
+  .detalhe.ruim { color: var(--text-danger); }
+  .corpo { margin: 14px 0 0 35px; }
+
+  button {
+    font: inherit; font-weight: 500; cursor: pointer; border-radius: 8px;
+    padding: 7px 14px; border: 1px solid var(--border-default);
+    background: var(--bg-surface); color: var(--text-secondary);
+    transition: background-color .12s, border-color .12s, color .12s;
+  }
+  button:hover:not(:disabled) { background: var(--bg-surface-2); color: var(--text-primary); }
+  button:disabled { opacity: .55; cursor: default; }
+  button.primario {
+    background: var(--bg-brand); border-color: var(--bg-brand);
+    color: var(--text-on-brand); font-weight: 600;
+  }
+  button.primario:hover:not(:disabled) {
+    background: var(--bg-brand-hover); border-color: var(--bg-brand-hover); color: #fff;
+  }
+
+  .abas { display: flex; gap: 6px; margin-bottom: 14px; }
+  .aba {
+    padding: 6px 13px; border-radius: 999px; font-size: 13px; cursor: pointer;
+    border: 1px solid var(--border-default); background: var(--bg-surface);
+    color: var(--text-secondary);
+  }
+  .aba[aria-selected="true"] {
+    background: var(--bg-brand-subtle); border-color: var(--bg-brand);
+    color: var(--text-primary); font-weight: 600;
+  }
+
+  input[type="text"] {
+    width: 100%; font: inherit; padding: 9px 12px; border-radius: 8px;
+    border: 1px solid var(--border-default); background: var(--bg-surface);
+    color: var(--text-primary);
+  }
+  label.rotulo { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+
+  .lista-chats {
+    max-height: 300px; overflow-y: auto; border: 1px solid var(--border-default);
+    border-radius: 10px; background: var(--bg-surface);
+  }
+  .item-chat {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 10px 13px; border: 0; border-bottom: 1px solid var(--border-subtle);
+    border-radius: 0; background: none; cursor: pointer;
+  }
+  .item-chat:last-child { border-bottom: 0; }
+  .item-chat:hover { background: var(--bg-surface-2); }
+  .item-chat[aria-selected="true"] { background: var(--bg-brand-subtle); }
+  .item-chat .nome { font-weight: 500; color: var(--text-primary); }
+  .item-chat .meta { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
+
+  .aviso {
+    border-radius: 9px; padding: 11px 13px; font-size: 12.5px; margin: 12px 0 0;
+  }
+  .aviso.info { background: var(--bg-info); color: var(--text-info); }
+  .aviso.erro { background: var(--bg-danger); color: var(--text-danger); }
+  .aviso.ok { background: var(--bg-success); color: var(--text-success); }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px;
+    background: var(--bg-surface-3); padding: 1px 5px; border-radius: 4px;
+  }
+  .oculto { display: none !important; }
+  .dica { font-size: 12.5px; color: var(--text-muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="pagina">
+
+  <div class="topo"><span class="ponto-marca"></span><h1>Mural</h1></div>
+  <p class="sub">
+    Um kanban montado a partir das reações de uma conversa do Teams.
+    Três passos e o quadro está de pé.
+  </p>
+
+  <!-- 1 -->
+  <section class="passo" id="p1" data-estado="carregando">
+    <div class="passo-topo"><span class="num" id="n1">1</span><h2>Claude Code instalado</h2></div>
+    <p class="detalhe" id="d1">verificando…</p>
+    <div class="corpo oculto" id="c1">
+      <p class="aviso erro">
+        O Mural usa o Claude Code para ler o Teams — ele é obrigatório.
+        Instale em <code>claude.com/claude-code</code>, feche e abra este servidor de novo.
+      </p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="passo" id="p2" data-estado="espera">
+    <div class="passo-topo"><span class="num" id="n2">2</span><h2>Conta Microsoft conectada</h2></div>
+    <p class="detalhe" id="d2">aguardando o passo 1</p>
+    <div class="corpo oculto" id="c2">
+      <button class="primario" id="btn-conta">Verificar conexão</button>
+      <p class="dica">
+        O Mural não pede nem guarda sua senha. Quem autentica é o conector
+        Microsoft 365 do Claude Code — aqui só perguntamos quem já está logado.
+        Leva cerca de 20 segundos.
+      </p>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="passo" id="p3" data-estado="espera">
+    <div class="passo-topo"><span class="num" id="n3">3</span><h2>Escolher a conversa</h2></div>
+    <p class="detalhe" id="d3">aguardando o passo 2</p>
+    <div class="corpo oculto" id="c3">
+
+      <div class="abas" role="tablist">
+        <button class="aba" id="aba-canal" role="tab" aria-selected="true">Canal de time</button>
+        <button class="aba" id="aba-chat" role="tab" aria-selected="false">Chat ou grupo</button>
+      </div>
+
+      <!-- canal: só por link, o Graph não expõe lista de canais -->
+      <div id="painel-canal">
+        <label class="rotulo" for="link">
+          No Teams, abra o canal → “…” em qualquer mensagem → <strong>Copiar link</strong> → cole aqui:
+        </label>
+        <input type="text" id="link" placeholder="https://teams.microsoft.com/l/message/19%3A…" autocomplete="off">
+        <p class="aviso info" id="previa-canal" hidden></p>
+        <p class="dica">
+          Canais não podem ser listados: a API da Microsoft não oferece essa rota para
+          conectores. O link resolve porque carrega o time, o canal e os nomes de ambos.
+        </p>
+      </div>
+
+      <!-- chat: esses o Graph lista -->
+      <div id="painel-chat" class="oculto">
+        <button id="btn-chats">Carregar meus chats</button>
+        <p class="dica" id="dica-chats">
+          Lista chats 1:1, grupos e reuniões. Costuma levar de 2 a 3 minutos —
+          o Teams entrega os chats em páginas e cada uma é uma ida à API.
+        </p>
+        <div class="lista-chats oculto" id="lista-chats"></div>
+      </div>
+
+      <p class="aviso erro" id="erro-3" hidden></p>
+      <div style="margin-top:16px">
+        <button class="primario" id="btn-salvar" disabled>Criar o mural</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+aplicarTema(
+  localStorage.getItem('mural:tema') ||
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+);
+function aplicarTema(m) { document.documentElement.setAttribute('data-color-mode', m); }
+
+let escolha = null; // {tipo, nome, ...ids}
+
+// Passos que chamam o Claude levam de 20s a 3min. Sem cronometro a tela parece
+// travada e a pessoa recarrega a pagina no meio.
+function cronometro(el, prefixo) {
+  const inicio = Date.now();
+  const render = () => {
+    const s = Math.round((Date.now() - inicio) / 1000);
+    el.textContent = `${prefixo} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+  render();
+  const id = setInterval(render, 1000);
+  return () => clearInterval(id);
+}
+
+function estado(n, valor, texto, classe) {
+  $('p' + n).dataset.estado = valor;
+  $('d' + n).textContent = texto;
+  $('d' + n).className = 'detalhe' + (classe ? ' ' + classe : '');
+  if (valor === 'ok') $('n' + n).textContent = '✓';
+}
+
+// ---- passo 1 ----
+async function verificarClaude() {
+  try {
+    const d = await (await fetch('/api/setup/claude')).json();
+    if (!d.ok) {
+      estado(1, 'erro', d.erro, 'ruim');
+      $('c1').classList.remove('oculto');
+      return false;
+    }
+    estado(1, 'ok', d.versao, 'ok');
+    $('p2').dataset.estado = 'pronto';
+    estado(2, 'pronto', 'pronto para verificar');
+    $('c2').classList.remove('oculto');
+    return true;
+  } catch (e) {
+    estado(1, 'erro', 'não consegui verificar: ' + e.message, 'ruim');
+    return false;
+  }
+}
+
+// ---- passo 2 ----
+$('btn-conta').addEventListener('click', async () => {
+  const b = $('btn-conta');
+  b.disabled = true; b.textContent = 'Verificando…';
+  const pararCrono = cronometro($('d2'), 'perguntando ao Claude Code…');
+  try {
+    const d = await (await fetch('/api/setup/conta', { method: 'POST' })).json();
+    pararCrono();
+    if (!d.ok) {
+      estado(2, 'erro', d.erro, 'ruim');
+      b.disabled = false; b.textContent = 'Tentar de novo';
+      return;
+    }
+    estado(2, 'ok', `${d.conta.displayName} · ${d.conta.mail}`, 'ok');
+    b.classList.add('oculto');
+    estado(3, 'pronto', 'escolha o canal ou o chat que vira o quadro');
+    $('p3').dataset.estado = 'pronto';
+    $('c3').classList.remove('oculto');
+  } catch (e) {
+    pararCrono();
+    estado(2, 'erro', e.message, 'ruim');
+    b.disabled = false; b.textContent = 'Tentar de novo';
+  }
+});
+
+// ---- passo 3: abas ----
+function trocarAba(qual) {
+  const canal = qual === 'canal';
+  $('aba-canal').setAttribute('aria-selected', String(canal));
+  $('aba-chat').setAttribute('aria-selected', String(!canal));
+  $('painel-canal').classList.toggle('oculto', !canal);
+  $('painel-chat').classList.toggle('oculto', canal);
+  escolha = null;
+  $('btn-salvar').disabled = true;
+}
+$('aba-canal').addEventListener('click', () => trocarAba('canal'));
+$('aba-chat').addEventListener('click', () => trocarAba('chat'));
+
+// ---- passo 3a: link do canal ----
+// O link copiado pela UI do Teams carrega tudo que precisamos, inclusive os
+// nomes legiveis do time e do canal — que a API nao devolve em lugar nenhum.
+function lerLinkDoTeams(bruto) {
+  let u;
+  try { u = new URL(bruto.trim()); } catch { return null; }
+  if (!/teams\.microsoft\.com$/i.test(u.hostname)) return null;
+
+  const m = u.pathname.match(/\/l\/message\/([^/]+)\//);
+  if (!m) return null;
+
+  const channelId = decodeURIComponent(m[1]);
+  const teamId = u.searchParams.get('groupId');
+  if (!teamId) return null;                 // link de chat nao traz groupId
+  if (!/^19:/.test(channelId)) return null;
+
+  const nomeCanal = u.searchParams.get('channelName');
+  const nomeTime = u.searchParams.get('teamName');
+  const nome = [nomeTime, nomeCanal].filter(Boolean).join(' › ') || 'Canal do Teams';
+
+  return { tipo: 'canal', teamId, channelId, nome };
+}
+
+$('link').addEventListener('input', () => {
+  const previa = $('previa-canal');
+  const valor = $('link').value.trim();
+  if (!valor) { previa.hidden = true; escolha = null; $('btn-salvar').disabled = true; return; }
+
+  const r = lerLinkDoTeams(valor);
+  if (!r) {
+    previa.hidden = false;
+    previa.className = 'aviso erro';
+    previa.textContent =
+      'Não reconheci esse link. Ele precisa ser o "Copiar link" de uma mensagem ' +
+      'de canal (o de chat não serve aqui — use a aba Chat ou grupo).';
+    escolha = null;
+    $('btn-salvar').disabled = true;
+    return;
+  }
+  previa.hidden = false;
+  previa.className = 'aviso ok';
+  previa.textContent = 'Encontrei: ' + r.nome;
+  escolha = r;
+  $('btn-salvar').disabled = false;
+});
+
+// ---- passo 3b: lista de chats ----
+$('btn-chats').addEventListener('click', async () => {
+  const b = $('btn-chats');
+  b.disabled = true; b.textContent = 'Carregando…';
+  const pararCrono = cronometro($('dica-chats'), 'Lendo seus chats no Teams…');
+  try {
+    const d = await (await fetch('/api/setup/chats', { method: 'POST' })).json();
+    pararCrono();
+    if (!d.ok) throw new Error(d.erro);
+
+    const lista = $('lista-chats');
+    lista.replaceChildren();
+    lista.classList.remove('oculto');
+
+    for (const c of d.chats) {
+      const item = document.createElement('button');
+      item.className = 'item-chat';
+      item.setAttribute('aria-selected', 'false');
+
+      const nome = document.createElement('span');
+      nome.className = 'nome';
+      nome.textContent = c.nome;
+      item.appendChild(nome);
+
+      const meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = c.tipo === 'oneOnOne' ? '1:1'
+        : c.tipo === 'meeting' ? 'reunião' : `grupo · ${c.membros}`;
+      item.appendChild(meta);
+
+      item.addEventListener('click', () => {
+        for (const outro of lista.children) outro.setAttribute('aria-selected', 'false');
+        item.setAttribute('aria-selected', 'true');
+        escolha = { tipo: 'chat', chatId: c.id, nome: c.nome };
+        $('btn-salvar').disabled = false;
+      });
+      lista.appendChild(item);
+    }
+    b.classList.add('oculto');
+    $('dica-chats').textContent = d.chats.length + ' conversas. Clique em uma.';
+  } catch (e) {
+    pararCrono();
+    $('erro-3').hidden = false;
+    $('erro-3').textContent = e.message;
+    b.disabled = false; b.textContent = 'Tentar de novo';
+  }
+});
+
+// ---- salvar ----
+$('btn-salvar').addEventListener('click', async () => {
+  if (!escolha) return;
+  const b = $('btn-salvar');
+  b.disabled = true; b.textContent = 'Criando…';
+  try {
+    const d = await (await fetch('/api/setup/salvar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(escolha),
+    })).json();
+    if (!d.ok) throw new Error(d.erro);
+    location.href = '/';
+  } catch (e) {
+    $('erro-3').hidden = false;
+    $('erro-3').textContent = e.message;
+    b.disabled = false; b.textContent = 'Criar o mural';
+  }
+});
+
+verificarClaude();
+</script>
+</body>
+</html>

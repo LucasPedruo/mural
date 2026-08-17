@@ -1,0 +1,15 @@
+{
+  "name": "mural",
+  "version": "1.0.0",
+  "description": "Um kanban montado a partir das reacoes de uma conversa do Microsoft Teams. Sem dependencias.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["teams", "kanban", "claude-code", "mcp", "microsoft-365"],
+  "license": "MIT",
+  "private": false
+}
