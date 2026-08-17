@@ -5,8 +5,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { BarraDeSync } from '../componentes/BarraDeSync';
 import { Coluna } from '../componentes/Coluna';
+import {
+  ConfirmarAtualizacao,
+  formatarTokens,
+  formatarUsd,
+} from '../componentes/ConfirmarAtualizacao';
 import { COLUNAS, rotuloDaColuna } from '../rotulos';
-import type { Mural, Progresso, Status, Task } from '../tipos';
+import type { Mural, Progresso, RespostaConsumo, Status, Task } from '../tipos';
 import './quadro.css';
 
 export function Quadro() {
@@ -26,12 +31,20 @@ export function Quadro() {
     () => localStorage.getItem(chaveVisto),
   );
 
+  const [consumo, setConsumo] = useState<RespostaConsumo | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info] = await Promise.all([api.tasks(muralId), api.lerMural(muralId)]);
+      const [tarefas, info, custo] = await Promise.all([
+        api.tasks(muralId),
+        api.lerMural(muralId),
+        api.consumo(muralId),
+      ]);
       setMural(info.mural);
       setTasks(tarefas.tasks);
       setLastSync(tarefas.lastSync);
+      setConsumo(custo);
       document.title = `${info.mural.nome} · Mural`;
     } catch (e) {
       setErro((e as Error).message);
@@ -87,6 +100,33 @@ export function Quadro() {
     if (!sincronizando && timer.current === null) void carregar();
   }, [sincronizando, carregar]);
 
+  // Gastar dinheiro sem avisar nao pode ser o padrao: a confirmacao so e
+  // pulada se a pessoa desmarcou explicitamente.
+  async function pedirAtualizacao() {
+    const atual = consumo ?? (await api.consumo(muralId).catch(() => null));
+    if (atual) setConsumo(atual);
+    if (atual?.preferencias.confirmarAntesDeAtualizar !== false) {
+      setConfirmando(true);
+      return;
+    }
+    void atualizar();
+  }
+
+  async function confirmar(naoPerguntarDeNovo: boolean) {
+    setConfirmando(false);
+    if (naoPerguntarDeNovo) {
+      try {
+        await api.salvarPreferencias({ confirmarAntesDeAtualizar: false });
+        setConsumo((c) =>
+          c ? { ...c, preferencias: { confirmarAntesDeAtualizar: false } } : c,
+        );
+      } catch {
+        /* falhar em salvar a preferencia nao pode impedir a atualizacao */
+      }
+    }
+    void atualizar();
+  }
+
   async function atualizar() {
     setSincronizando(true);
     setErro(null);
@@ -106,7 +146,15 @@ export function Quadro() {
       if (r.retomadas.length) {
         partes.push(`${r.retomadas.length} voltou ao Teams e teve o status corrigido`);
       }
+      // O custo real desta execução entra no resumo: a estimativa foi mostrada
+      // antes, e ver o valor cobrado é o que torna a próxima estimativa crível.
+      if (r.consumo) {
+        partes.push(
+          `custou ${formatarUsd(r.consumo.custoUsd)} · ${formatarTokens(r.consumo.tokensTotal)} tokens`,
+        );
+      }
       setResumo(partes.length ? partes.join(', ') : 'nada mudou');
+      void api.consumo(muralId).then(setConsumo).catch(() => {});
     } catch (e) {
       setErro((e as Error).message);
     } finally {
@@ -186,6 +234,17 @@ export function Quadro() {
           {resumo && `  —  ${resumo}`}
         </span>
         <span className="espaco" />
+        {consumo && consumo.totais.execucoes > 0 && (
+          <span
+            className="gasto"
+            title={
+              `${consumo.usuario}: ${consumo.totais.execucoes} atualizações, ` +
+              `${formatarTokens(consumo.totais.tokensTotal)} tokens no total`
+            }
+          >
+            {formatarUsd(consumo.totais.custoUsd)} gastos
+          </span>
+        )}
         <button
           onClick={() => {
             const agora = new Date().toISOString();
@@ -196,10 +255,20 @@ export function Quadro() {
         >
           Marcar como visto
         </button>
-        <button className="primario" onClick={atualizar} disabled={sincronizando}>
+        <button className="primario" onClick={pedirAtualizacao} disabled={sincronizando}>
           {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
         </button>
       </header>
+
+      {confirmando && consumo && (
+        <ConfirmarAtualizacao
+          estimativa={consumo.estimativa}
+          totais={consumo.totais}
+          usuario={consumo.usuario}
+          aoConfirmar={confirmar}
+          aoCancelar={() => setConfirmando(false)}
+        />
+      )}
 
       <BarraDeSync progresso={progresso} />
 

@@ -70,6 +70,27 @@ interface deixasse passar.
 Se uma task movida à mão voltar a aparecer na janela, a reação real volta a
 mandar e o resumo da atualização avisa que o status foi corrigido.
 
+## Quanto custa atualizar
+
+Cada atualização roda o Claude Code de verdade, e isso é cobrado da sua conta.
+O custo não é trivial: só o system prompt da ferramenta consome dezenas de
+milhares de tokens de cache antes de ler a primeira mensagem.
+
+Por isso o Mural **pergunta antes de gastar**. O diálogo mostra o custo
+estimado em dólares, os tokens e a duração, além do total que sua conta já
+consumiu. Quem não quer ser perguntado marca "não perguntar de novo" — a
+preferência é por conta Microsoft, em `data/preferencias.json`.
+
+A estimativa é a média das **cinco últimas atualizações do mesmo mural**; sem
+histórico próprio, cai para a média dos outros murais; sem nenhum histórico, o
+diálogo diz que não há como estimar em vez de inventar um número. Depois de
+cada atualização o custo real aparece no resumo — é o que torna a estimativa
+seguinte confiável.
+
+Os números vêm do evento `result` do Claude Code (`total_cost_usd` e `usage`),
+ou seja, é o custo cobrado, não uma conta nossa. O acumulado por conta fica em
+`data/consumo.json`, limitado às últimas 200 execuções.
+
 ## Vários murais
 
 Cada conversa vira um mural com histórico próprio, e a home lista todos com as
@@ -158,6 +179,8 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `conta.json`, `chats.json` | cache do onboarding |
+| `consumo.json` | tokens e custo por conta, usado para estimar |
+| `preferencias.json` | se pede confirmação antes de atualizar |
 
 Nada sai da sua máquina além das chamadas que o Claude Code já faz ao Graph.
 O servidor escuta apenas em `127.0.0.1`.

@@ -4,6 +4,8 @@ import type {
   FonteEscolhida,
   Mural,
   MuralNaLista,
+  Preferencias,
+  RespostaConsumo,
   RespostaTasks,
   ResultadoSync,
   Status,
@@ -60,6 +62,11 @@ export const api = {
     ),
 
   estadoSync: () => pedir<EstadoSync>('/api/status'),
+
+  consumo: (muralId: string) => pedir<RespostaConsumo>(`/api/consumo?mural=${muralId}`),
+
+  salvarPreferencias: (prefs: Preferencias) =>
+    pedir<{ preferencias: Preferencias }>('/api/preferencias', json(prefs)),
 
   // --- onboarding ---
   // Estas rotas respondem HTTP 200 com { ok:false, erro } de proposito: "o

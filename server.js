@@ -29,6 +29,8 @@ const DIST_DIR = path.join(ROOT, 'dist');
 const INDICE_FILE = path.join(DATA_DIR, 'murais.json');
 const CONTA_FILE = path.join(DATA_DIR, 'conta.json');
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
+const CONSUMO_FILE = path.join(DATA_DIR, 'consumo.json');
+const PREFS_FILE = path.join(DATA_DIR, 'preferencias.json');
 
 const PORT = Number(process.env.MURAL_PORT) || 4317;
 
@@ -145,6 +147,110 @@ function migrarFormatoAntigo() {
 }
 
 migrarFormatoAntigo();
+
+// -------------------------------------------------------------------- consumo
+
+// Cada atualizacao roda o Claude Code de verdade e custa dinheiro: so o system
+// prompt da ferramenta ja consome dezenas de milhares de tokens de cache. O
+// consumo e registrado por conta Microsoft (o Mural e local, mas a conta e o
+// que identifica quem esta gastando) e serve para estimar a proxima.
+const MAX_EXECUCOES_GUARDADAS = 200;
+
+function usuarioAtual() {
+  const conta = lerJson(CONTA_FILE, {});
+  return conta.mail || conta.displayName || 'desconhecido';
+}
+
+function lerConsumo() {
+  const c = lerJson(CONSUMO_FILE, { porUsuario: {} });
+  return c && typeof c.porUsuario === 'object' ? c : { porUsuario: {} };
+}
+
+function lerPreferencias() {
+  const p = lerJson(PREFS_FILE, { porUsuario: {} });
+  return p && typeof p.porUsuario === 'object' ? p : { porUsuario: {} };
+}
+
+function prefsDoUsuario(usuario) {
+  const todas = lerPreferencias();
+  // Confirmar e o padrao: gastar dinheiro sem avisar nao pode ser opt-out
+  // silencioso de quem instalou.
+  return { confirmarAntesDeAtualizar: true, ...(todas.porUsuario[usuario] || {}) };
+}
+
+// O evento `result` do stream-json traz o custo real da execucao. Sem ele nao
+// ha estimativa honesta — nao da para inferir preco a partir do numero de
+// mensagens, porque o cache muda tudo entre uma execucao e outra.
+function extrairConsumo(ev) {
+  const u = ev.usage || {};
+  const entrada = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+  return {
+    tokensEntrada: entrada,
+    tokensSaida: u.output_tokens || 0,
+    tokensCacheLido: u.cache_read_input_tokens || 0,
+    // Cache lido conta para o total gasto, ainda que muito mais barato.
+    tokensTotal: entrada + (u.output_tokens || 0) + (u.cache_read_input_tokens || 0),
+    custoUsd: typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : null,
+    duracaoMs: ev.duration_ms || null,
+  };
+}
+
+function registrarConsumo(usuario, muralId, consumo, mensagensLidas) {
+  const db = lerConsumo();
+  const doUsuario = db.porUsuario[usuario] || { execucoes: [] };
+
+  doUsuario.execucoes.push({
+    muralId,
+    quando: new Date().toISOString(),
+    mensagensLidas,
+    ...consumo,
+  });
+  // Histórico limitado: serve para estimar, não para auditoria eterna.
+  if (doUsuario.execucoes.length > MAX_EXECUCOES_GUARDADAS) {
+    doUsuario.execucoes = doUsuario.execucoes.slice(-MAX_EXECUCOES_GUARDADAS);
+  }
+
+  db.porUsuario[usuario] = doUsuario;
+  gravarJsonAtomico(CONSUMO_FILE, db);
+}
+
+function totaisDoUsuario(usuario) {
+  const doUsuario = lerConsumo().porUsuario[usuario];
+  if (!doUsuario) return { execucoes: 0, tokensTotal: 0, custoUsd: 0 };
+  return doUsuario.execucoes.reduce(
+    (acc, e) => ({
+      execucoes: acc.execucoes + 1,
+      tokensTotal: acc.tokensTotal + (e.tokensTotal || 0),
+      custoUsd: acc.custoUsd + (e.custoUsd || 0),
+    }),
+    { execucoes: 0, tokensTotal: 0, custoUsd: 0 },
+  );
+}
+
+// Estimativa = media das ultimas execucoes DESTE mural; sem historico proprio,
+// cai para o de qualquer mural; sem nenhum, devolve null. Um numero inventado
+// seria pior que admitir que a primeira vez e desconhecida.
+function estimarProximaAtualizacao(usuario, muralId) {
+  const doUsuario = lerConsumo().porUsuario[usuario];
+  if (!doUsuario || !doUsuario.execucoes.length) return null;
+
+  const doMural = doUsuario.execucoes.filter((e) => e.muralId === muralId);
+  const base = (doMural.length ? doMural : doUsuario.execucoes).slice(-5);
+  if (!base.length) return null;
+
+  const media = (campo) => base.reduce((s, e) => s + (e[campo] || 0), 0) / base.length;
+
+  return {
+    baseadoEm: base.length,
+    doProprioMural: doMural.length > 0,
+    tokensTotal: Math.round(media('tokensTotal')),
+    tokensEntrada: Math.round(media('tokensEntrada')),
+    tokensSaida: Math.round(media('tokensSaida')),
+    tokensCacheLido: Math.round(media('tokensCacheLido')),
+    custoUsd: Number(media('custoUsd').toFixed(4)),
+    duracaoMs: Math.round(media('duracaoMs')),
+  };
+}
 
 // ---------------------------------------------------------------------- tasks
 
@@ -294,11 +400,21 @@ function etapaVisivel(p) {
 
 // Cada evento do stream-json vem como uma linha JSON. So interessam os tool_use:
 // a 1a leitura e a listagem, as seguintes sao as mensagens uma a uma.
+// Preenchido pelo evento `result` no fim do stream — e a unica fonte do custo
+// real da execucao.
+let consumoDaExecucao = null;
+
 function processarEvento(linha) {
-  if (!linha.trim() || !progresso) return;
+  if (!linha.trim()) return;
   let ev;
   try { ev = JSON.parse(linha); } catch { return; }
 
+  if (ev.type === 'result') {
+    consumoDaExecucao = extrairConsumo(ev);
+    return;
+  }
+
+  if (!progresso) return;
   if (ev.type !== 'assistant') return;
   const partes = ev.message && ev.message.content;
   if (!Array.isArray(partes)) return;
@@ -394,6 +510,7 @@ function rodarSync(muralId) {
 
     syncEmAndamento = muralId;
     zerarProgresso('iniciando');
+    consumoDaExecucao = null;
 
     const snapshotFile = arquivoSnapshot(muralId);
     fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
@@ -466,7 +583,18 @@ function rodarSync(muralId) {
         const m = indice.murais.find((x) => x.id === muralId);
         if (m) { m.ultimoSync = db.lastSync; gravarIndice(indice); }
 
-        resolve(r);
+        // Registra mesmo se o merge nao mudou nada: o custo foi pago de todo
+        // jeito, e e disso que sai a estimativa da proxima.
+        const usuario = usuarioAtual();
+        if (consumoDaExecucao) {
+          registrarConsumo(usuario, muralId, consumoDaExecucao, snapshot.length);
+        }
+
+        resolve({
+          ...r,
+          consumo: consumoDaExecucao,
+          totaisDoUsuario: totaisDoUsuario(usuario),
+        });
       } catch (e) {
         reject(e); // historico ilegivel: aborta sem gravar por cima
       }
@@ -712,6 +840,35 @@ async function rotear(req, res) {
     const id = url.searchParams.get('mural') || '';
     if (!acharMural(id)) return json(res, 404, { erro: 'Mural nao encontrado.' });
     return json(res, 200, tasksParaTela(id));
+  }
+
+  // Estimativa do que a proxima atualizacao vai custar, mais o acumulado da
+  // conta. E o que a tela de confirmacao mostra antes de gastar.
+  if (p === '/api/consumo') {
+    const muralId = url.searchParams.get('mural') || '';
+    const usuario = usuarioAtual();
+    return json(res, 200, {
+      usuario,
+      estimativa: estimarProximaAtualizacao(usuario, muralId),
+      totais: totaisDoUsuario(usuario),
+      preferencias: prefsDoUsuario(usuario),
+    });
+  }
+
+  if (p === '/api/preferencias' && req.method === 'POST') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      const usuario = usuarioAtual();
+      const todas = lerPreferencias();
+      todas.porUsuario[usuario] = {
+        ...prefsDoUsuario(usuario),
+        confirmarAntesDeAtualizar: corpo.confirmarAntesDeAtualizar !== false,
+      };
+      gravarJsonAtomico(PREFS_FILE, todas);
+      return json(res, 200, { ok: true, preferencias: todas.porUsuario[usuario] });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
   }
 
   if (p === '/api/sync' && req.method === 'POST') {

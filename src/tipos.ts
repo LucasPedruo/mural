@@ -44,12 +44,50 @@ export interface RespostaTasks {
   tasks: Task[];
 }
 
+/** O que uma execução do Claude Code realmente consumiu. Vem do evento
+ *  `result` do stream-json — é o custo cobrado, não uma estimativa nossa. */
+export interface Consumo {
+  tokensEntrada: number;
+  tokensSaida: number;
+  tokensCacheLido: number;
+  tokensTotal: number;
+  custoUsd: number | null;
+  duracaoMs: number | null;
+}
+
+export interface Estimativa extends Consumo {
+  /** Quantas execuções passadas entraram na média. */
+  baseadoEm: number;
+  /** false = média de outros murais, porque este ainda não tem histórico. */
+  doProprioMural: boolean;
+  duracaoMs: number;
+}
+
+export interface TotaisDeConsumo {
+  execucoes: number;
+  tokensTotal: number;
+  custoUsd: number;
+}
+
+export interface Preferencias {
+  confirmarAntesDeAtualizar: boolean;
+}
+
+export interface RespostaConsumo {
+  usuario: string;
+  estimativa: Estimativa | null;
+  totais: TotaisDeConsumo;
+  preferencias: Preferencias;
+}
+
 export interface ResultadoSync extends RespostaTasks {
   ok: boolean;
   novos: string[];
   mudaram: string[];
   retomadas: string[];
   total: number;
+  consumo: Consumo | null;
+  totaisDoUsuario: TotaisDeConsumo;
 }
 
 export interface Progresso {
