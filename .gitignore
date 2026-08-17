@@ -4,7 +4,11 @@
 # contêm o texto de mensagens internas.
 data/
 
+# Build da interface. Quem clona roda `npm install && npm run build`.
+dist/
 node_modules/
+*.tsbuildinfo
+
 *.log
 .DS_Store
 Thumbs.db

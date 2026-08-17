@@ -47,8 +47,9 @@ Não há lista de emojis para manter. Times reais não usam um emoji fixo para
 no lugar certo sozinho. O emoji usado aparece como badge no card, porque sem
 convenção fixa é a única forma de saber o que aconteceu ali.
 
-A fonte da verdade é sempre o Teams. Os cards não se arrastam de propósito:
-para mover uma task, reaja na mensagem lá e clique em Atualizar.
+A fonte da verdade é sempre o Teams: para mover uma task, reaja na mensagem lá
+e clique em Atualizar. O arraste entre colunas existe, mas só para os casos em
+que o Teams não tem mais como responder — veja "tasks fora de alcance" abaixo.
 
 Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
 "ninguém pegou" pressupõe um time dividindo trabalho.
@@ -60,11 +61,11 @@ janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
 check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
 "em aberto" para sempre.
 
-Esses cards ganham borda tracejada e a etiqueta **fora de alcance** — e são os
-únicos que você pode mover à mão, com botões no próprio card. Nas tasks que
-ainda estão na janela mover é bloqueado de propósito: a próxima atualização
+Esses cards ganham borda tracejada e são os **únicos que você pode arrastar**
+entre as colunas. Nos demais o arraste nem começa: a próxima atualização
 desfaria a mudança, e um quadro que mente por dois minutos é pior que um quadro
-que recusa a ação.
+que não deixa você fazer o gesto. O servidor recusa esse caso mesmo que a
+interface deixasse passar.
 
 Se uma task movida à mão voltar a aparecer na janela, a reação real volta a
 mandar e o resumo da atualização avisa que o status foi corrigido.
@@ -75,20 +76,31 @@ Cada conversa vira um mural com histórico próprio, e a home lista todos com as
 contagens de cada coluna. Mapear a mesma conversa duas vezes reabre o mural
 existente em vez de duplicar — o id vem da própria conversa.
 
+## Stack
+
+Interface em **React + TypeScript**, compilada pelo Vite, com
+[@hello-pangea/dnd](https://github.com/hello-pangea/dnd) para o arraste entre
+colunas. O servidor é **Node puro** — sem framework — e faz três coisas: fala
+com o Claude Code, guarda o histórico e serve o build.
+
 ## Requisitos
 
-- **Node.js 18+** — sem dependências, nenhum `npm install`
+- **Node.js 18+**
 - **[Claude Code](https://claude.com/claude-code)** instalado e autenticado
 - O **conector Microsoft 365** ativo no Claude Code (`/mcp` para conferir)
 
 Não existe login próprio. A autenticação com a Microsoft é a do Claude Code e
-do conector — este servidor nunca vê nem guarda credencial nenhuma.
+do conector — este servidor nunca vê nem guarda credencial nenhuma. Quando o
+token do conector expira, o Mural para de atualizar até você reautorizar
+com `/mcp`.
 
 ## Instalação
 
 ```bash
 git clone https://github.com/<voce>/mural.git
 cd mural
+npm install
+npm run build
 node server.js
 ```
 
@@ -96,9 +108,17 @@ Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuraç
 que verifica o Claude Code, mostra com qual conta Microsoft você está logado e
 pede a conversa que vira o quadro.
 
-No Windows dá para usar `start.cmd`, que sobe o servidor e abre o navegador.
+No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
+servidor e abre o navegador.
 
 Para trocar a porta: `MURAL_PORT=5000 node server.js`.
+
+### Desenvolvimento
+
+```bash
+node server.js   # API na 4317
+npm run dev      # interface na 5317, com /api indo para a 4317
+```
 
 ## Escolhendo a conversa
 

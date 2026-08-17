@@ -1,0 +1,38 @@
+.barra-sync {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.barra-sync .trilho {
+  flex: 1;
+  max-width: 320px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-surface-3);
+  overflow: hidden;
+}
+
+.barra-sync .pulso {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--bg-brand);
+  width: 0;
+  transition: width 0.4s;
+}
+
+/* Enquanto nao ha contagem util, a barra desliza para mostrar que esta viva. */
+.barra-sync .pulso.indefinido {
+  width: 32%;
+  animation: desliza 1.15s ease-in-out infinite;
+}
+
+@keyframes desliza {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(330%); }
+}

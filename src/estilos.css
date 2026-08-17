@@ -1,0 +1,242 @@
+/* DM Sans self-hosted (SIL Open Font License), copiada para public/fonts —
+   sem CDN, funciona offline. */
+@font-face {
+  font-family: 'DM Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 1000;
+  src: url('/fonts/dm-sans-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'DM Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 1000;
+  src: url('/fonts/dm-sans-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---- Primitives ---- */
+:root {
+  --color-brand-50: #ecfff7;
+  --color-brand-400: #2ce293;
+  --color-brand-500: #00d479;
+  --color-brand-700: #009457;
+  --color-brand-950: #123320;
+
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f7f9f8;
+  --color-neutral-100: #f0f3f1;
+  --color-neutral-200: #e6eae7;
+  --color-neutral-300: #d5dcd7;
+  --color-neutral-500: #95a399;
+  --color-neutral-650: #474f55;
+  --color-neutral-700: #3a4146;
+  --color-neutral-750: #2f353a;
+  --color-neutral-800: #262b2f;
+  --color-neutral-850: #1f2427;
+  --color-neutral-925: #15181b;
+  --color-neutral-950: #172019;
+
+  --color-success-300: #9de5ba;
+  --color-success-500: #35b76f;
+  --color-success-600: #2a9a5c;
+  --color-success-700: #1f7a48;
+
+  --color-warning-300: #ffd986;
+  --color-warning-500: #f2b84b;
+  --color-warning-700: #8a5b00;
+
+  --color-danger-300: #ffb4b4;
+  --color-danger-500: #e05252;
+  --color-danger-600: #c93f3f;
+
+  --color-info-200: #a9c9ff;
+  --color-info-500: #3b82f6;
+  --color-info-800: #1a478f;
+}
+
+/* ---- Semantic — light ---- */
+:root,
+[data-color-mode='light'] {
+  --bg-app: var(--color-neutral-50);
+  --bg-surface: var(--color-neutral-0);
+  --bg-surface-2: var(--color-neutral-100);
+  --bg-surface-3: var(--color-neutral-200);
+
+  --bg-brand: var(--color-brand-500);
+  --bg-brand-hover: var(--color-brand-700);
+  --bg-brand-subtle: var(--color-brand-50);
+
+  --bg-success: #eaf8f0;
+  --bg-warning: #fff7e5;
+  --bg-danger: #fdeeee;
+  --bg-info: #ebf3ff;
+
+  --border-subtle: var(--color-neutral-100);
+  --border-default: var(--color-neutral-200);
+  --border-strong: var(--color-neutral-300);
+  --focus-ring: color-mix(in srgb, var(--color-brand-500) 32%, transparent);
+
+  --text-primary: var(--color-neutral-950);
+  --text-secondary: #4e5c52;
+  --text-tertiary: #68756c;
+  --text-muted: #758079;
+  --text-on-brand: var(--color-brand-950);
+  --text-success: var(--color-success-700);
+  --text-warning: var(--color-warning-700);
+  --text-danger: var(--color-danger-600);
+  --text-info: var(--color-info-800);
+
+  --marca-aberto: var(--color-danger-500);
+  --marca-interagido: var(--color-info-500);
+  --marca-feito: var(--color-success-600);
+
+  --shadow-card: 0 1px 2px rgba(23, 32, 25, 0.04), 0 1px 3px rgba(23, 32, 25, 0.03);
+  --shadow-arrastando: 0 8px 20px rgba(23, 32, 25, 0.14), 0 2px 6px rgba(23, 32, 25, 0.1);
+  --bg-header-flutuante: color-mix(in srgb, var(--color-neutral-0) 88%, transparent);
+}
+
+/* ---- Semantic — dark ---- */
+[data-color-mode='dark'] {
+  --bg-app: var(--color-neutral-925);
+  --bg-surface: var(--color-neutral-850);
+  --bg-surface-2: var(--color-neutral-800);
+  --bg-surface-3: var(--color-neutral-750);
+
+  --bg-brand-subtle: color-mix(in srgb, var(--color-brand-500) 16%, transparent);
+  --bg-success: color-mix(in srgb, var(--color-success-500) 18%, transparent);
+  --bg-warning: color-mix(in srgb, var(--color-warning-500) 18%, transparent);
+  --bg-danger: color-mix(in srgb, var(--color-danger-500) 18%, transparent);
+  --bg-info: color-mix(in srgb, var(--color-info-500) 20%, transparent);
+
+  --border-subtle: var(--color-neutral-750);
+  --border-default: var(--color-neutral-700);
+  --border-strong: var(--color-neutral-650);
+  --focus-ring: color-mix(in srgb, var(--color-brand-500) 45%, transparent);
+
+  --text-primary: #f4f7f5;
+  --text-secondary: #c2cbc5;
+  --text-tertiary: #a4b2a9;
+  --text-muted: var(--color-neutral-500);
+  --text-success: var(--color-success-300);
+  --text-warning: var(--color-warning-300);
+  --text-danger: var(--color-danger-300);
+  --text-info: var(--color-info-200);
+
+  --marca-aberto: var(--color-danger-500);
+  --marca-interagido: var(--color-info-500);
+  --marca-feito: var(--color-success-500);
+
+  /* No dark a hierarquia vem da diferenca de superficie, nao de sombra. */
+  --shadow-card: 0 0 rgba(0, 0, 0, 0);
+  --shadow-arrastando: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --bg-header-flutuante: color-mix(in srgb, var(--color-neutral-850) 88%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: 'DM Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- botoes ---- */
+button {
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+button:hover:not(:disabled) {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button.primario {
+  background: var(--bg-brand);
+  border-color: var(--bg-brand);
+  color: var(--text-on-brand);
+  font-weight: 600;
+}
+button.primario:hover:not(:disabled) {
+  background: var(--bg-brand-hover);
+  border-color: var(--bg-brand-hover);
+  color: var(--color-neutral-0);
+}
+button.icone {
+  padding: 7px 10px;
+}
+button.perigo:hover:not(:disabled) {
+  background: var(--bg-danger);
+  color: var(--text-danger);
+  border-color: var(--text-danger);
+}
+
+/* ---- badges (rounded-full, semibold, 10px — igual ao design system) ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+.badge.danger { background: var(--bg-danger); color: var(--text-danger); }
+.badge.info { background: var(--bg-info); color: var(--text-info); }
+.badge.warning { background: var(--bg-warning); color: var(--text-warning); }
+.badge.neutral { background: var(--bg-surface-3); color: var(--text-secondary); }
+.badge.reacao { background: var(--bg-surface-3); font-size: 11px; padding: 1px 7px; }
+
+/* ---- avisos ---- */
+.aviso {
+  border-radius: 9px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  margin: 0;
+}
+.aviso.info { background: var(--bg-info); color: var(--text-info); }
+.aviso.erro { background: var(--bg-danger); color: var(--text-danger); }
+.aviso.ok { background: var(--bg-success); color: var(--text-success); }
+
+/* ---- marca ---- */
+.ponto-marca {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--bg-brand);
+  box-shadow: 0 0 0 4px var(--bg-brand-subtle);
+  flex: none;
+}

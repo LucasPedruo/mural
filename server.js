@@ -9,17 +9,22 @@
 // Nao ha login proprio: a autenticacao com a Microsoft e a do Claude Code e do
 // conector Microsoft 365. Este servidor nunca ve nem guarda credencial.
 
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { spawn, execFile } = require('child_process');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { spawn, execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = __dirname;
+// ESM nao tem __dirname; o package.json declara "type": "module" por causa do
+// Vite, entao o servidor tambem roda como modulo.
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(ROOT, 'data');
 const MURAIS_DIR = path.join(DATA_DIR, 'murais');
 const PROMPTS_DIR = path.join(ROOT, 'prompts');
-const PUBLIC_DIR = path.join(ROOT, 'public');
+// A interface e um app React compilado pelo Vite. Em producao o proprio
+// server.js serve o dist/; em desenvolvimento o Vite serve e repassa /api aqui.
+const DIST_DIR = path.join(ROOT, 'dist');
 
 const INDICE_FILE = path.join(DATA_DIR, 'murais.json');
 const CONTA_FILE = path.join(DATA_DIR, 'conta.json');
@@ -533,10 +538,45 @@ function json(res, code, body) {
   res.end(JSON.stringify(body));
 }
 
-function servirHtml(res, arquivo) {
-  const html = fs.readFileSync(path.join(PUBLIC_DIR, arquivo), 'utf8');
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(html);
+const TIPOS_MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+function servirArquivo(res, arquivo) {
+  const ext = path.extname(arquivo).toLowerCase();
+  // Assets do Vite tem hash no nome, entao podem ser cacheados para sempre.
+  // O index.html nao: e ele que aponta para os hashes novos a cada build.
+  const cache = arquivo.includes(`${path.sep}assets${path.sep}`) || ext === '.woff2'
+    ? 'public, max-age=31536000, immutable'
+    : 'no-store';
+  res.writeHead(200, {
+    'Content-Type': TIPOS_MIME[ext] || 'application/octet-stream',
+    'Cache-Control': cache,
+  });
+  res.end(fs.readFileSync(arquivo));
+}
+
+function servirIndex(res) {
+  const index = path.join(DIST_DIR, 'index.html');
+  if (!fs.existsSync(index)) {
+    res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(
+      '<!doctype html><meta charset="utf-8">' +
+      '<div style="font:15px/1.6 system-ui;max-width:38rem;margin:15vh auto;padding:0 1.5rem">' +
+      '<h1 style="font-size:1.2rem">A interface ainda nao foi compilada</h1>' +
+      '<p>Rode <code style="background:#eee;padding:.1rem .35rem;border-radius:4px">npm install ' +
+      '&amp;&amp; npm run build</code> na pasta do projeto e recarregue esta pagina.</p></div>'
+    );
+  }
+  return servirArquivo(res, index);
 }
 
 function lerCorpoJson(req) {
@@ -594,15 +634,21 @@ async function rotear(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = url.pathname;
 
-  // ---- paginas ----
+  // ---- interface (SPA) ----
+  // Toda rota que nao e /api e nao existe como arquivo cai no index.html: o
+  // roteamento acontece no navegador. Sem isso, recarregar em /m/<id> daria 404.
+  if (!p.startsWith('/api/')) {
+    if (p === '/' || p === '/index.html') return servirIndex(res);
 
-  // Sem nenhum mural, a raiz e o onboarding: quem clona o repo cai direto na
-  // configuracao em vez de uma lista vazia sem explicacao.
-  if (p === '/' || p === '/index.html') {
-    return servirHtml(res, lerIndice().murais.length ? 'home.html' : 'onboarding.html');
+    const relativo = path.normalize(decodeURIComponent(p)).replace(/^[\\/]+/, '');
+    const alvo = path.join(DIST_DIR, relativo);
+    // Confere que o caminho resolvido continua dentro de dist/ — sem isso um
+    // "../" no pedido leria arquivos de qualquer lugar do disco.
+    if (alvo.startsWith(DIST_DIR) && fs.existsSync(alvo) && fs.statSync(alvo).isFile()) {
+      return servirArquivo(res, alvo);
+    }
+    return servirIndex(res);
   }
-  if (p === '/onboarding') return servirHtml(res, 'onboarding.html');
-  if (/^\/m\/[0-9a-f]{10}$/.test(p)) return servirHtml(res, 'kanban.html');
 
   // ---- murais ----
 
@@ -788,22 +834,8 @@ async function rotear(req, res) {
     }
   }
 
-  // ---- assets ----
-
-  // DM Sans servida localmente: mesma fonte do design system, sem CDN.
-  if (p.startsWith('/assets/') && p.endsWith('.woff2')) {
-    const arquivo = path.join(ROOT, 'assets', path.basename(p));
-    if (fs.existsSync(arquivo)) {
-      res.writeHead(200, {
-        'Content-Type': 'font/woff2',
-        'Cache-Control': 'public, max-age=31536000, immutable',
-      });
-      return res.end(fs.readFileSync(arquivo));
-    }
-  }
-
-  res.writeHead(404);
-  res.end('nao encontrado');
+  res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ ok: false, erro: 'Rota nao encontrada.' }));
 }
 
 // Alias interno para uso dentro de rotear (mesma regra de foraDeAlcance).

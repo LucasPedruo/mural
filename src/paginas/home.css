@@ -1,0 +1,96 @@
+.pagina-home {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 44px 24px 64px;
+}
+
+.pagina-home .topo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.pagina-home h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.pagina-home .sub {
+  color: var(--text-tertiary);
+  font-size: 13.5px;
+  margin: 0 0 28px;
+}
+
+.pagina-home .espaco {
+  flex: 1;
+}
+
+.lista-murais {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.cartao-mural {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 15px 18px;
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s;
+}
+.cartao-mural:hover {
+  border-color: var(--border-strong);
+}
+
+.cartao-mural .info {
+  min-width: 0;
+  flex: 1;
+}
+.cartao-mural .nome {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.cartao-mural .meta {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cartao-mural .numeros {
+  display: flex;
+  gap: 7px;
+  flex: none;
+}
+
+.cartao-mural .pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  border-radius: 999px;
+  padding: 4px 11px 4px 8px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.cartao-mural .pilula .ponto {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+}

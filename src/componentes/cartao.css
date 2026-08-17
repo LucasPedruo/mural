@@ -1,0 +1,88 @@
+.cartao {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--linha);
+  border-radius: 10px;
+  padding: 11px 13px;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.cartao:hover {
+  border-color: var(--border-strong);
+  border-left-color: var(--linha);
+}
+
+/* Fora de alcance: o Teams nao conta mais nada sobre este card, entao ele e o
+   unico que pode ser movido a mao. A borda tracejada anuncia isso antes do
+   usuario tentar arrastar. */
+.cartao.fora {
+  border-style: dashed;
+  border-left-style: solid;
+  cursor: grab;
+}
+.cartao.fora:active {
+  cursor: grabbing;
+}
+.cartao.preso {
+  cursor: default;
+}
+
+.cartao.arrastando {
+  box-shadow: var(--shadow-arrastando);
+  border-color: var(--border-strong);
+}
+
+/* O texto e um botao para abrir no Teams: precisa ser alcancavel por teclado,
+   mas nao pode parecer um botao dentro do card. */
+.cartao .texto {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.cartao .texto:hover {
+  background: none;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cartao .rodape {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cartao .autor {
+  font-variant-numeric: tabular-nums;
+}
+
+.cartao .abrir-web {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  padding: 1px 8px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.cartao:hover .abrir-web {
+  opacity: 1;
+}
+.cartao .abrir-web:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
