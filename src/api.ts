@@ -86,6 +86,9 @@ export const api = {
       '/api/setup/chats',
       { method: 'POST' },
     ),
+
+  resetarOnboarding: () =>
+    pedir<{ apagados: string[] }>('/api/setup/reset', { method: 'POST' }),
 };
 
 async function pedirBruto<T>(url: string, init?: RequestInit): Promise<T> {

@@ -945,6 +945,24 @@ async function rotear(req, res) {
 
   // ---- onboarding ----
 
+  // Refazer a configuracao do zero: some com o cache do onboarding (conta,
+  // lista de chats) e com a preferencia de confirmacao. NAO toca nos murais,
+  // no historico de tasks nem no registro de consumo — esses sao dados, nao
+  // configuracao, e um botao chamado "refazer configuracao" nao pode apagar
+  // trabalho acumulado por tabela.
+  if (p === '/api/setup/reset' && req.method === 'POST') {
+    const apagados = [];
+    for (const arquivo of [CONTA_FILE, CHATS_FILE, PREFS_FILE]) {
+      try {
+        fs.unlinkSync(arquivo);
+        apagados.push(path.basename(arquivo));
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+    }
+    return json(res, 200, { ok: true, apagados });
+  }
+
   if (p === '/api/setup/claude') {
     return new Promise((resolve) => {
       execFile('claude', ['--version'], { shell: true }, (erro, stdout) => {

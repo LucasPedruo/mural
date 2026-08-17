@@ -27,6 +27,22 @@ export function Home() {
     document.title = 'Mural';
   }, [carregar]);
 
+  async function resetarOnboarding() {
+    const confirmado = window.confirm(
+      'Refazer a configuração?\n\n' +
+        'Apaga o cache do onboarding: a conta Microsoft verificada, a lista de chats e ' +
+        'a preferência de confirmar antes de atualizar.\n\n' +
+        'Seus murais, o histórico de tasks e o registro de gastos NÃO são tocados.',
+    );
+    if (!confirmado) return;
+    try {
+      await api.resetarOnboarding();
+      navegar('/onboarding');
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   async function remover(m: MuralNaLista) {
     const confirmado = window.confirm(
       `Remover "${m.nome}"?\n\n` +
@@ -47,6 +63,9 @@ export function Home() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
         <span className="espaco" />
+        <button onClick={resetarOnboarding} title="Limpa o cache do onboarding e recomeça">
+          Refazer configuração
+        </button>
         <button className="primario" onClick={() => navegar('/onboarding')}>
           Novo mural
         </button>

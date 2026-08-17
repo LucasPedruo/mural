@@ -97,6 +97,12 @@ Cada conversa vira um mural com histórico próprio, e a home lista todos com as
 contagens de cada coluna. Mapear a mesma conversa duas vezes reabre o mural
 existente em vez de duplicar — o id vem da própria conversa.
 
+O **✕** de cada linha remove aquele mural e o histórico dele. **Refazer
+configuração**, no topo, limpa só o cache do onboarding — a conta verificada, a
+lista de chats e a preferência de confirmação — e volta para a tela de
+configuração. Murais, histórico de tasks e registro de gastos ficam intactos:
+um botão de configuração não pode apagar trabalho acumulado por tabela.
+
 ## Stack
 
 Interface em **React + TypeScript**, compilada pelo Vite, com
