@@ -9,7 +9,9 @@ import type {
   RespostaConsumo,
   RespostaTasks,
   ResultadoSync,
+  SomaDeConsumo,
   Status,
+  TotaisDeConsumo,
 } from './tipos';
 
 // O servidor devolve { ok:false, erro } com status 4xx/5xx em falha esperada.
@@ -27,6 +29,24 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(dados.erro || `Falhou com HTTP ${resposta.status}.`);
   }
   return corpo as T;
+}
+
+const SEM_CONSUMO: SomaDeConsumo = { execucoes: 0, tokensTotal: 0, custoUsd: 0 };
+
+// Um servidor mais velho que esta interface — o processo que ficou de pé desde
+// antes do último build — devolve os totais sem a quebra por operação. Faltar
+// um detalhe de custo não pode derrubar o quadro inteiro: aqui a quebra vira
+// zero e o resto da tela segue.
+function comQuebraPorOperacao(totais: TotaisDeConsumo): TotaisDeConsumo {
+  const q = totais.porOperacao;
+  return {
+    ...totais,
+    porOperacao: {
+      sync: q?.sync ?? SEM_CONSUMO,
+      conta: q?.conta ?? SEM_CONSUMO,
+      chats: q?.chats ?? SEM_CONSUMO,
+    },
+  };
 }
 
 function json(corpo: unknown): RequestInit {
@@ -50,8 +70,10 @@ export const api = {
 
   tasks: (muralId: string) => pedir<RespostaTasks>(`/api/tasks?mural=${muralId}`),
 
-  sincronizar: (muralId: string) =>
-    pedir<ResultadoSync>(`/api/sync?mural=${muralId}`, { method: 'POST' }),
+  sincronizar: async (muralId: string): Promise<ResultadoSync> => {
+    const r = await pedir<ResultadoSync>(`/api/sync?mural=${muralId}`, { method: 'POST' });
+    return { ...r, totaisDoUsuario: comQuebraPorOperacao(r.totaisDoUsuario) };
+  },
 
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
@@ -89,7 +111,10 @@ export const api = {
 
   estadoSync: () => pedir<EstadoSync>('/api/status'),
 
-  consumo: (muralId: string) => pedir<RespostaConsumo>(`/api/consumo?mural=${muralId}`),
+  consumo: async (muralId: string): Promise<RespostaConsumo> => {
+    const r = await pedir<RespostaConsumo>(`/api/consumo?mural=${muralId}`);
+    return { ...r, totais: comQuebraPorOperacao(r.totais) };
+  },
 
   salvarPreferencias: (prefs: Preferencias) =>
     pedir<{ preferencias: Preferencias }>('/api/preferencias', json(prefs)),
