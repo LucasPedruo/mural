@@ -1,0 +1,65 @@
+/* Reaproveita .fundo-modal e .modal de confirmar.css — a caixa é a mesma, o
+   que muda é o conteúdo. */
+.campo {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.campo > .rotulo {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.campo textarea,
+.campo input[type='text'] {
+  width: 100%;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  padding: 9px 11px;
+  resize: vertical;
+}
+
+.campo textarea:focus,
+.campo input[type='text']:focus {
+  border-color: var(--border-strong);
+}
+
+.campo .dica {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* Escolha entre poucas opções: pílulas, não um <select> — as três colunas e os
+   dois tipos cabem na tela e ver todas de uma vez custa menos que abrir. */
+.opcoes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.opcoes button {
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.opcoes button.escolhida {
+  border-color: var(--marca-escolha, var(--bg-brand));
+  background: var(--bg-brand-subtle);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.acoes-modal .separador {
+  flex: 1;
+}

@@ -6,8 +6,9 @@ Muitos times recebem demandas por um canal do Teams e se organizam por reação:
 alguém reage com um relógio para dizer "eu pego", com um check para dizer "feito".
 Funciona — até o canal encher e ninguém mais conseguir ver o que está solto.
 
-O Mural lê esse canal e mostra três colunas: **ninguém pegou**, **interagido**,
-**concluído**. Clicar num card abre a mensagem original no Teams.
+O Mural lê esse canal e mostra quatro colunas: **ninguém pegou**, **interagido**,
+**concluído** e **feito por mim** — esta última sua, com a anotação que você lê
+na daily. Clicar num card abre a mensagem original no Teams.
 
 ![três colunas: ninguém pegou, interagido, concluído](#)
 
@@ -49,7 +50,11 @@ convenção fixa é a única forma de saber o que aconteceu ali.
 
 A fonte da verdade é sempre o Teams: para mover uma task, reaja na mensagem lá
 e clique em Atualizar. O arraste entre colunas existe, mas só para os casos em
-que o Teams não tem mais como responder — veja "tasks fora de alcance" abaixo.
+que o Teams não tem mais como responder — veja "tasks fora de alcance" abaixo —
+e para as tasks que você mesmo criou, que ele nunca viu.
+
+A quarta coluna, **Feito por mim**, não sai de reação nenhuma: é sua, e o
+Teams não opina sobre ela.
 
 Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
 "ninguém pegou" pressupõe um time dividindo trabalho.
@@ -61,14 +66,49 @@ janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
 check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
 "em aberto" para sempre.
 
-Esses cards ganham borda tracejada e são os **únicos que você pode arrastar**
-entre as colunas. Nos demais o arraste nem começa: a próxima atualização
-desfaria a mudança, e um quadro que mente por dois minutos é pior que um quadro
-que não deixa você fazer o gesto. O servidor recusa esse caso mesmo que a
-interface deixasse passar.
+Esses cards ganham borda tracejada e, junto com as tasks que você mesmo criou,
+são os **únicos que você pode arrastar** entre as colunas do Teams. Nos demais o
+arraste nem começa: a próxima atualização desfaria a mudança, e um quadro que
+mente por dois minutos é pior que um quadro que não deixa você fazer o gesto. O
+servidor recusa esse caso mesmo que a interface deixasse passar.
 
 Se uma task movida à mão voltar a aparecer na janela, a reação real volta a
 mandar e o resumo da atualização avisa que o status foi corrigido.
+
+## Tasks suas
+
+Nem tudo que vira trabalho passa pelo canal: o que combinaram no corredor, o bug
+que você mesmo achou. **Nova task** abre um formulário — texto, tipo e coluna —
+e o card nasce direto no quadro.
+
+Ele tem id próprio, então nenhuma atualização o alcança: o merge só mexe em ids
+que vieram do snapshot do Teams. Por isso essas tasks são livres — arraste entre
+colunas, edite o texto, apague. Um selo **minha** no rodapé diz de onde ela veio,
+e clicar no texto abre a edição em vez do Teams, que não tem mensagem para abrir.
+
+A recíproca também vale: task que veio do Teams não pode ser editada nem apagada
+aqui. Mudar o texto criaria um quadro que discorda da conversa, e a próxima
+leitura desfaria.
+
+## Feito por mim
+
+A quarta coluna é a da daily. Todo card tem um botão **fiz** no rodapé: ele pede
+uma ou duas frases sobre como você resolveu e move o card para lá, **agrupado
+pelo dia** — Hoje, Ontem, e a data nos anteriores. A anotação fica visível no
+próprio card, não escondida atrás de um clique: durante a reunião ninguém abre
+um por um.
+
+Marcar como seu **não muda o status no Teams**. É uma marca pessoal, guardada
+num campo separado justamente para o sync não a apagar — o status real continua
+lá embaixo e aparece como badge no card ("no Teams: interagido"). O card sai da
+coluna do Teams porque estar em duas ao mesmo tempo confundiria a contagem, mas
+o dado não é reescrito. Por isso essa marca vale para **qualquer** card,
+inclusive os que o Teams ainda acompanha: não há o que a próxima leitura possa
+desfazer.
+
+O **↩** tira a marca e devolve o card para a coluna que a reação manda. Editar a
+anotação depois não muda o dia do agrupamento — corrigir uma vírgula não pode
+jogar o que você fez ontem para o grupo de hoje.
 
 ## Quanto custa atualizar
 
@@ -194,7 +234,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | arquivo | o que é |
 | --- | --- |
 | `murais.json` | índice dos murais e suas conversas |
-| `murais/<id>/tasks.json` | o histórico daquele mural — o insubstituível |
+| `murais/<id>/tasks.json` | o histórico daquele mural, com as tasks suas e as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `conta.json`, `chats.json` | cache do onboarding |

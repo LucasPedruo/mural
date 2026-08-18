@@ -96,6 +96,8 @@
   --marca-aberto: var(--color-danger-500);
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-600);
+  /* Feito por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
+  --marca-meu: var(--color-brand-700);
 
   --shadow-card: 0 1px 2px rgba(23, 32, 25, 0.04), 0 1px 3px rgba(23, 32, 25, 0.03);
   --shadow-arrastando: 0 8px 20px rgba(23, 32, 25, 0.14), 0 2px 6px rgba(23, 32, 25, 0.1);
@@ -132,6 +134,7 @@
   --marca-aberto: var(--color-danger-500);
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-500);
+  --marca-meu: var(--color-brand-400);
 
   /* No dark a hierarquia vem da diferenca de superficie, nao de sombra. */
   --shadow-card: 0 0 rgba(0, 0, 0, 0);
@@ -218,6 +221,7 @@ button.perigo:hover:not(:disabled) {
 .badge.info { background: var(--bg-info); color: var(--text-info); }
 .badge.warning { background: var(--bg-warning); color: var(--text-warning); }
 .badge.neutral { background: var(--bg-surface-3); color: var(--text-secondary); }
+.badge.marca { background: var(--bg-brand-subtle); color: var(--marca-meu); }
 .badge.reacao { background: var(--bg-surface-3); font-size: 11px; padding: 1px 7px; }
 
 /* ---- avisos ---- */

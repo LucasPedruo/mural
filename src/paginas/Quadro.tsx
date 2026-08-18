@@ -4,15 +4,31 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api';
 import { BarraDeSync } from '../componentes/BarraDeSync';
-import { Coluna } from '../componentes/Coluna';
+import { Coluna, type GrupoDaColuna } from '../componentes/Coluna';
 import {
   ConfirmarAtualizacao,
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
-import { COLUNAS, rotuloDaColuna } from '../rotulos';
-import type { Mural, Progresso, RespostaConsumo, Status, Task } from '../tipos';
+import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
+import { DialogoDeTask } from '../componentes/DialogoDeTask';
+import { COLUNAS, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
+import type {
+  ColunaId,
+  Mural,
+  NovaTask,
+  Progresso,
+  RespostaConsumo,
+  Status,
+  Task,
+} from '../tipos';
 import './quadro.css';
+
+/** Mensagem de coluna vazia. A da daily não é "nada aqui": é uma instrução,
+ *  porque a coluna só enche se você marcar os cards. */
+const VAZIO: Partial<Record<ColunaId, string>> = {
+  meu: 'nada ainda — use "fiz" num card para anotar o que você resolveu',
+};
 
 export function Quadro() {
   const { muralId = '' } = useParams();
@@ -33,6 +49,10 @@ export function Quadro() {
 
   const [consumo, setConsumo] = useState<RespostaConsumo | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+
+  // 'nova' = criando; uma Task = editando aquela. Só task própria chega aqui.
+  const [editando, setEditando] = useState<Task | 'nova' | null>(null);
+  const [anotando, setAnotando] = useState<Task | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -163,26 +183,98 @@ export function Quadro() {
     }
   }
 
+  // ---- tasks próprias e marca da daily ---------------------------------
+
+  async function salvarTask(dados: NovaTask) {
+    const alvo = editando;
+    setEditando(null);
+    setErro(null);
+    try {
+      const r =
+        alvo === 'nova'
+          ? await api.criarTask(muralId, dados)
+          : await api.editarTask(muralId, { ...dados, id: (alvo as Task).id });
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function removerTask(task: Task) {
+    const confirmado = window.confirm(
+      `Apagar "${task.summary}"?\n\nEla foi criada aqui dentro, então não há como recuperá-la ` +
+        'por uma atualização — o Teams nunca soube dela.',
+    );
+    if (!confirmado) return;
+    setEditando(null);
+    try {
+      const r = await api.removerTask(muralId, task.id);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function salvarSolucao(solucao: string) {
+    const task = anotando;
+    setAnotando(null);
+    if (!task) return;
+    setErro(null);
+    try {
+      const r = await api.marcarComoMeu(muralId, task.id, solucao);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function desmarcar(task: Task) {
+    setErro(null);
+    try {
+      const r = await api.desmarcarComoMeu(muralId, task.id);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   // ---- drag ------------------------------------------------------------
 
   async function aoSoltar(resultado: DropResult) {
     const destino = resultado.destination;
     if (!destino) return;
 
-    const novoStatus = destino.droppableId as Status;
+    const coluna = destino.droppableId as ColunaId;
     const task = tasks.find((t) => t.id === resultado.draggableId);
-    if (!task || task.status === novoStatus) return;
+    if (!task) return;
+
+    // Soltar na coluna da daily não muda o status: abre a anotação. É a mesma
+    // coisa que o botão "fiz" do card faz, só que pelo gesto.
+    if (coluna === 'meu') {
+      if (!task.meu) setAnotando(task);
+      return;
+    }
+
+    // Saindo da daily: a marca sai e o card volta para a coluna que o Teams
+    // manda. Se ele for móvel e você largou noutra coluna, a mudança de status
+    // vai junto.
+    if (task.meu) {
+      await desmarcar(task);
+      if (!task.podeMover || task.status === coluna) return;
+    }
+
+    if (task.status === coluna) return;
 
     // Otimista: o card muda de coluna na hora e o servidor confirma. Se ele
     // recusar, o estado volta ao que era e o motivo aparece na tela.
     const anterior = tasks;
     setTasks((atual) =>
-      atual.map((t) => (t.id === task.id ? { ...t, status: novoStatus, movidoAMao: true } : t)),
+      atual.map((t) => (t.id === task.id ? { ...t, status: coluna, movidoAMao: true } : t)),
     );
     setErro(null);
 
     try {
-      const r = await api.mover(muralId, task.id, novoStatus);
+      const r = await api.mover(muralId, task.id, coluna as Status);
       setTasks(r.tasks);
     } catch (e) {
       setTasks(anterior);
@@ -190,7 +282,13 @@ export function Quadro() {
     }
   }
 
-  async function abrirNoTeams(task: Task) {
+  // Card do Teams abre a mensagem original; card seu abre a própria edição —
+  // não há mensagem para abrir.
+  async function abrir(task: Task) {
+    if (task.origem === 'manual') {
+      setEditando(task);
+      return;
+    }
     try {
       await api.abrirNoTeams(muralId, task.id);
       setErro(null);
@@ -203,16 +301,43 @@ export function Quadro() {
 
   // ---- render ----------------------------------------------------------
 
-  const porColuna = useMemo(() => {
-    const grupos: Record<Status, Task[]> = { aberto: [], interagido: [], feito: [] };
-    for (const t of tasks) (grupos[t.status] ?? grupos.aberto).push(t);
+  // Card marcado como seu sai da coluna do Teams: o status real continua no
+  // dado (e visível como badge no card), mas o card mora numa coluna só —
+  // senão a mesma task apareceria duas vezes no quadro.
+  const grupos = useMemo(() => {
+    const porColuna: Record<ColunaId, Task[]> = {
+      aberto: [], interagido: [], feito: [], meu: [],
+    };
+    for (const t of tasks) {
+      if (t.meu) porColuna.meu.push(t);
+      else (porColuna[t.status] ?? porColuna.aberto).push(t);
+    }
 
     // Abertas: mais antigas primeiro — o que está parado há mais tempo sobe.
-    grupos.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
+    porColuna.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
     for (const k of ['interagido', 'feito'] as const) {
-      grupos[k].sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt));
+      porColuna[k].sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt));
     }
-    return grupos;
+    // Na daily o mais recente é o que você conta primeiro.
+    porColuna.meu.sort((a, b) => (b.meu?.em ?? '').localeCompare(a.meu?.em ?? ''));
+
+    const resultado = {} as Record<ColunaId, GrupoDaColuna[]>;
+    for (const c of COLUNAS) {
+      resultado[c] = [{ chave: c, rotulo: '', tasks: porColuna[c] }];
+    }
+
+    // A coluna da daily é a única quebrada por dia: na reunião você conta o de
+    // ontem e o de hoje, e uma lista corrida obrigaria a ler data por data.
+    const porDia: GrupoDaColuna[] = [];
+    for (const t of porColuna.meu) {
+      const chave = diaLocal(t.meu!.em);
+      const ultimo = porDia[porDia.length - 1];
+      if (ultimo && ultimo.chave === chave) ultimo.tasks.push(t);
+      else porDia.push({ chave, rotulo: rotuloDoDia(t.meu!.em), tasks: [t] });
+    }
+    resultado.meu = porDia;
+
+    return resultado;
   }, [tasks]);
 
   const foraDeAlcance = tasks.filter((t) => t.foraDeAlcance).length;
@@ -251,6 +376,9 @@ export function Quadro() {
             {formatarUsd(consumo.totais.custoUsd)} gastos
           </span>
         )}
+        <button onClick={() => setEditando('nova')} title="Criar uma task que não veio do Teams">
+          Nova task
+        </button>
         <button
           onClick={() => {
             const agora = new Date().toISOString();
@@ -276,6 +404,26 @@ export function Quadro() {
         />
       )}
 
+      {editando && (
+        <DialogoDeTask
+          task={editando === 'nova' ? null : editando}
+          mural={mural}
+          aoSalvar={(d) => void salvarTask(d)}
+          aoCancelar={() => setEditando(null)}
+          aoRemover={
+            editando === 'nova' ? undefined : () => void removerTask(editando)
+          }
+        />
+      )}
+
+      {anotando && (
+        <DialogoDeSolucao
+          task={anotando}
+          aoSalvar={(s) => void salvarSolucao(s)}
+          aoCancelar={() => setAnotando(null)}
+        />
+      )}
+
       <BarraDeSync progresso={progresso} />
 
       {erro && <p className="aviso erro faixa">{erro}</p>}
@@ -285,21 +433,24 @@ export function Quadro() {
           {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
           API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
           {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. Só{' '}
-          {foraDeAlcance === 1 ? 'esse card' : 'esses cards'} (borda tracejada) pode
-          {foraDeAlcance === 1 ? '' : 'm'} ser arrastado entre colunas.
+          {foraDeAlcance === 1 ? 'esse card' : 'esses cards'} (borda tracejada) e as tasks criadas
+          por você podem ser arrastados entre as colunas do Teams.
         </p>
       )}
 
-      <DragDropContext onDragEnd={aoSoltar}>
+      <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
         <main className="colunas">
-          {COLUNAS.map((status) => (
+          {COLUNAS.map((coluna) => (
             <Coluna
-              key={status}
-              status={status}
-              rotulo={rotuloDaColuna(status, mural ?? undefined)}
-              tasks={porColuna[status]}
+              key={coluna}
+              status={coluna}
+              rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
+              grupos={grupos[coluna]}
+              vazio={VAZIO[coluna]}
               ultimaVisita={ultimaVisita}
-              aoAbrir={abrirNoTeams}
+              aoAbrir={(t) => void abrir(t)}
+              aoMarcarComoMeu={setAnotando}
+              aoDesmarcarComoMeu={(t) => void desmarcar(t)}
             />
           ))}
         </main>

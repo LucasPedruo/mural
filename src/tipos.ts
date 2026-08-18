@@ -1,5 +1,10 @@
 export type Status = 'aberto' | 'interagido' | 'feito';
 
+/** As colunas do quadro. `meu` não é um status do Teams: é a marca pessoal
+ *  "eu fiz isso", que vive num campo separado justamente para o sync não a
+ *  apagar. Ver `MeuFeito`. */
+export type ColunaId = Status | 'meu';
+
 export type TipoFonte = 'canal' | 'chat';
 export type SubtipoFonte = 'canal' | 'oneOnOne' | 'group' | 'meeting';
 
@@ -16,12 +21,22 @@ export interface Mural {
 }
 
 export interface MuralNaLista extends Mural {
-  totais: Record<Status, number>;
+  totais: Record<ColunaId, number>;
   foraDeAlcance: number;
+}
+
+/** O que você anotou ao marcar a task como feita por você. `em` é a data da
+ *  marcação, não a da última edição do texto — é ela que agrupa os cards por
+ *  dia na coluna da daily. */
+export interface MeuFeito {
+  em: string;
+  solucao: string;
 }
 
 export interface Task {
   id: string;
+  /** `manual` = você escreveu aqui dentro; nenhum sync alcança essa task. */
+  origem: 'teams' | 'manual';
   author: string;
   createdDateTime: string;
   summary: string;
@@ -36,7 +51,17 @@ export interface Task {
   lastSeen: string;
   /** Saiu das ~20 mensagens que a API devolve: o Teams nao atualiza mais. */
   foraDeAlcance: boolean;
+  /** Pode trocar de coluna à mão: fora de alcance ou criada por você. */
+  podeMover: boolean;
   movidoAMao: boolean;
+  meu: MeuFeito | null;
+}
+
+/** O que o formulário de task própria manda para o servidor. */
+export interface NovaTask {
+  summary: string;
+  kind: 'bug' | 'sugestao';
+  status: Status;
 }
 
 export interface RespostaTasks {

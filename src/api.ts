@@ -4,6 +4,7 @@ import type {
   FonteEscolhida,
   Mural,
   MuralNaLista,
+  NovaTask,
   Preferencias,
   RespostaConsumo,
   RespostaTasks,
@@ -54,6 +55,31 @@ export const api = {
 
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
+
+  // --- tasks próprias ---
+
+  criarTask: (muralId: string, task: NovaTask) =>
+    pedir<RespostaTasks & { id: string }>(`/api/task?mural=${muralId}`, json(task)),
+
+  editarTask: (muralId: string, task: NovaTask & { id: string }) =>
+    pedir<RespostaTasks>(`/api/task?mural=${muralId}`, {
+      ...json(task),
+      method: 'PUT',
+    }),
+
+  removerTask: (muralId: string, id: string) =>
+    pedir<RespostaTasks>(
+      `/api/task?mural=${muralId}&id=${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    ),
+
+  // A marca pessoal vale para qualquer card, inclusive os que o Teams ainda
+  // acompanha: ela não mexe no status, então não há o que o sync desfazer.
+  marcarComoMeu: (muralId: string, id: string, solucao: string) =>
+    pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, solucao })),
+
+  desmarcarComoMeu: (muralId: string, id: string) =>
+    pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, marcar: false })),
 
   abrirNoTeams: (muralId: string, id: string) =>
     pedir<{ via: string }>(
