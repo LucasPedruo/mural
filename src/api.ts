@@ -116,7 +116,9 @@ export const api = {
     return { ...r, totais: comQuebraPorOperacao(r.totais) };
   },
 
-  salvarPreferencias: (prefs: Preferencias) =>
+  // Parcial de proposito: o servidor so mexe no que veio, entao salvar o emoji
+  // nao religa a confirmação que você desmarcou.
+  salvarPreferencias: (prefs: Partial<Preferencias>) =>
     pedir<{ preferencias: Preferencias }>('/api/preferencias', json(prefs)),
 
   // --- onboarding ---

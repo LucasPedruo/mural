@@ -1,4 +1,5 @@
 import { Droppable } from '@hello-pangea/dnd';
+import type { ReactNode } from 'react';
 
 import { CORES_DE_STATUS } from '../rotulos';
 import type { ColunaId, Task } from '../tipos';
@@ -20,6 +21,9 @@ interface Props {
   grupos: GrupoDaColuna[];
   ultimaVisita: string | null;
   vazio?: string;
+  /** Controle próprio no cabeçalho — hoje só a coluna da daily usa, para
+   *  mostrar e trocar a reação que marca os cards como seus. */
+  acessorio?: ReactNode;
   aoAbrir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
@@ -30,6 +34,7 @@ export function Coluna({
   rotulo,
   grupos,
   ultimaVisita,
+  acessorio,
   vazio = 'nada aqui',
   aoAbrir,
   aoMarcarComoMeu,
@@ -49,6 +54,7 @@ export function Coluna({
           <span className="ponto" style={{ background: CORES_DE_STATUS[status] }} />
           {rotulo}
         </span>
+        {acessorio}
         <span className="contagem">{total}</span>
       </header>
 

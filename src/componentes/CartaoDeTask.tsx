@@ -98,6 +98,14 @@ export function CartaoDeTask({
                   no Teams: {task.status === 'feito' ? 'concluído' : task.status}
                 </span>
               )}
+              {task.meu?.via === 'emoji' && (
+                <span
+                  className="badge marca"
+                  title="Está aqui porque a sua reação está na mensagem. Para tirar, remova a reação no Teams."
+                >
+                  pela reação
+                </span>
+              )}
               {task.foraDeAlcance && (
                 <span
                   className="badge neutral"
@@ -134,17 +142,22 @@ export function CartaoDeTask({
                     >
                       ✎
                     </button>
-                    <button
-                      className="acao"
-                      type="button"
-                      title="Tirar de Feito por mim — o card volta para a coluna do Teams"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        aoDesmarcarComoMeu(task);
-                      }}
-                    >
-                      ↩
-                    </button>
+                    {/* Se foi a sua reação que trouxe o card para cá, tirar a
+                        marca aqui duraria até o próximo sync repor. O gesto nem
+                        aparece — a saída é tirar a reação no Teams. */}
+                    {task.podeDesmarcar && (
+                      <button
+                        className="acao"
+                        type="button"
+                        title="Tirar de Feito por mim — o card volta para a coluna do Teams"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          aoDesmarcarComoMeu(task);
+                        }}
+                      >
+                        ↩
+                      </button>
+                    )}
                   </>
                 ) : (
                   <button

@@ -92,11 +92,34 @@ leitura desfaria.
 
 ## Feito por mim
 
-A quarta coluna é a da daily. Todo card tem um botão **fiz** no rodapé: ele pede
-uma ou duas frases sobre como você resolveu e move o card para lá, **agrupado
-pelo dia** — Hoje, Ontem, e a data nos anteriores. A anotação fica visível no
-próprio card, não escondida atrás de um clique: durante a reunião ninguém abre
-um por um.
+A quarta coluna é a da daily, **agrupada pelo dia** — Hoje, Ontem, e a data nos
+anteriores. A anotação de como você resolveu fica visível no próprio card, não
+escondida atrás de um clique: durante a reunião ninguém abre um por um.
+
+Um card chega ali de dois jeitos.
+
+**Pela sua reação.** Você escolhe um emoji de assinatura — 🟢 por padrão, no
+cabeçalho da coluna — e reage com ele na mensagem do Teams. Na próxima
+atualização o card cai em Feito por mim sozinho, e a anotação você escreve
+quando quiser.
+
+Isso é uma **convenção sua, não um dado da API**. O Graph devolve a reação com
+`users: [{ displayName: null, id: null, email: null }]` — dá para saber quantos
+reagiram, nunca quem. Então "foi você quem colocou o check" é uma pergunta que
+não tem resposta, e o que resta é um emoji que só você usa naquele canal. O
+check não serve: ele já significa "concluído" para o time inteiro, e o Mural
+recusa escolhê-lo. Emoji em branco desliga a detecção.
+
+O dia que agrupa o card é o da **leitura que viu a reação**, não o da reação —
+o Teams não diz quando ela foi feita. Reagir na sexta e atualizar na segunda
+joga o card para segunda.
+
+Tirar a reação no Teams tira o card da coluna na atualização seguinte. A exceção
+é quando você já escreveu a anotação: aí a marca fica, porque texto que você
+escreveu não pode sumir por causa de um clique numa reação.
+
+**Pelo botão.** Todo card tem um **fiz** no rodapé, para o que você esqueceu de
+reagir e para as tasks suas, que nunca tiveram mensagem no Teams.
 
 Marcar como seu **não muda o status no Teams**. É uma marca pessoal, guardada
 num campo separado justamente para o sync não a apagar — o status real continua
@@ -106,9 +129,14 @@ o dado não é reescrito. Por isso essa marca vale para **qualquer** card,
 inclusive os que o Teams ainda acompanha: não há o que a próxima leitura possa
 desfazer.
 
-O **↩** tira a marca e devolve o card para a coluna que a reação manda. Editar a
-anotação depois não muda o dia do agrupamento — corrigir uma vírgula não pode
-jogar o que você fez ontem para o grupo de hoje.
+O **↩** tira a marca e devolve o card para a coluna que a reação manda — mas só
+aparece nos cards que você marcou à mão. Se foi a sua reação que trouxe o card,
+desmarcar aqui duraria até o próximo sync repor; a saída é tirar a reação lá, e
+o card diz isso no selo **pela reação**. Fora de alcance a mão volta a mandar,
+como no resto do quadro.
+
+Editar a anotação depois não muda o dia do agrupamento — corrigir uma vírgula
+não pode jogar o que você fez ontem para o grupo de hoje.
 
 ## Quanto custa atualizar
 
@@ -213,8 +241,10 @@ carrega o time, o canal e os nomes legíveis de ambos.
 
 Vale saber antes de adotar:
 
-- **Não dá para saber quem reagiu.** O Graph devolve a lista de usuários da
-  reação vazia. O quadro diz "alguém interagiu", nunca "fulano pegou".
+- **Não dá para saber quem reagiu.** O Graph devolve os usuários da reação com
+  displayName, id e email nulos — dá para contar quantos foram, não quem. O
+  quadro diz "alguém interagiu", nunca "fulano pegou", e "feito por mim" precisa
+  de um emoji de assinatura em vez da identidade real.
 - **Não dá para ler respostas de thread.** Um "pego essa" escrito como resposta
   é invisível aqui — só a reação na mensagem principal conta.
 - **20 mensagens por leitura.** É o teto da API. O histórico acumulado no disco
@@ -239,7 +269,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `conta.json`, `chats.json` | cache do onboarding |
 | `consumo.json` | tokens e custo por conta e por operação, usado para estimar |
-| `preferencias.json` | se pede confirmação antes de atualizar |
+| `preferencias.json` | se pede confirmação antes de atualizar e o seu emoji de assinatura |
 
 Nada sai da sua máquina além das chamadas que o Claude Code já faz ao Graph.
 O servidor escuta apenas em `127.0.0.1`.

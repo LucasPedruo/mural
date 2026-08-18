@@ -31,6 +31,8 @@ export interface MuralNaLista extends Mural {
 export interface MeuFeito {
   em: string;
   solucao: string;
+  /** `emoji` = veio da sua reação no Teams; `mao` = você marcou aqui. */
+  via: 'emoji' | 'mao';
 }
 
 export interface Task {
@@ -53,6 +55,9 @@ export interface Task {
   foraDeAlcance: boolean;
   /** Pode trocar de coluna à mão: fora de alcance ou criada por você. */
   podeMover: boolean;
+  /** Pode sair de "Feito por mim" pelo quadro. Falso quando é a sua reação que
+   *  põe o card lá: nesse caso quem manda é o Teams. */
+  podeDesmarcar: boolean;
   movidoAMao: boolean;
   meu: MeuFeito | null;
 }
@@ -104,6 +109,10 @@ export interface TotaisDeConsumo extends SomaDeConsumo {
 
 export interface Preferencias {
   confirmarAntesDeAtualizar: boolean;
+  /** A reação que, na sua mão, quer dizer "fui eu que fiz". Vazio desliga a
+   *  detecção e deixa só o botão "fiz" — o Graph não diz quem reagiu, então
+   *  isso é uma convenção sua, não um dado da API. */
+  emojiMeu: string;
 }
 
 export interface RespostaConsumo {
@@ -118,6 +127,8 @@ export interface ResultadoSync extends RespostaTasks {
   novos: string[];
   mudaram: string[];
   retomadas: string[];
+  /** Ganharam a marca "feito por mim" pela sua reação nesta leitura. */
+  marcados: string[];
   total: number;
   consumo: Consumo | null;
   totaisDoUsuario: TotaisDeConsumo;

@@ -25,10 +25,13 @@ import type {
 import './quadro.css';
 
 /** Mensagem de coluna vazia. A da daily não é "nada aqui": é uma instrução,
- *  porque a coluna só enche se você marcar os cards. */
-const VAZIO: Partial<Record<ColunaId, string>> = {
-  meu: 'nada ainda — use "fiz" num card para anotar o que você resolveu',
-};
+ *  porque a coluna só enche quando a sua reação aparece — ou quando você marca. */
+function vazioDaColuna(coluna: ColunaId, emojiMeu: string): string | undefined {
+  if (coluna !== 'meu') return undefined;
+  return emojiMeu
+    ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou use "fiz" num card`
+    : 'nada ainda — use "fiz" num card para anotar o que você resolveu';
+}
 
 export function Quadro() {
   const { muralId = '' } = useParams();
@@ -138,7 +141,9 @@ export function Quadro() {
       try {
         await api.salvarPreferencias({ confirmarAntesDeAtualizar: false });
         setConsumo((c) =>
-          c ? { ...c, preferencias: { confirmarAntesDeAtualizar: false } } : c,
+          c
+            ? { ...c, preferencias: { ...c.preferencias, confirmarAntesDeAtualizar: false } }
+            : c,
         );
       } catch {
         /* falhar em salvar a preferencia nao pode impedir a atualizacao */
@@ -165,6 +170,13 @@ export function Quadro() {
       // real; avisar evita a impressao de que o quadro desfez a acao sozinho.
       if (r.retomadas.length) {
         partes.push(`${r.retomadas.length} voltou ao Teams e teve o status corrigido`);
+      }
+      // A marca automática move card de coluna sozinha; dizer quantas foram
+      // evita a impressão de que o quadro perdeu tasks da coluna do Teams.
+      if (r.marcados.length) {
+        partes.push(
+          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Feito por mim`,
+        );
       }
       // O custo real desta execução entra no resumo: a estimativa foi mostrada
       // antes, e ver o valor cobrado é o que torna a próxima estimativa crível.
@@ -223,6 +235,28 @@ export function Quadro() {
     try {
       const r = await api.marcarComoMeu(muralId, task.id, solucao);
       setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // O Graph não diz quem reagiu — `reactions[].users` vem com tudo nulo. Então
+  // "fui eu" é uma convenção sua: um emoji que só você usa naquele canal.
+  async function trocarEmojiMeu() {
+    const atual = consumo?.preferencias.emojiMeu ?? '';
+    const escolhido = window.prompt(
+      'Qual reação você usa no Teams para dizer "fui eu que fiz"?\n\n' +
+        'Toda mensagem com ela cai em "Feito por mim" na próxima atualização. ' +
+        'Escolha algo que só você use — o check não serve, ele já significa ' +
+        '"concluído" para o canal inteiro.\n\n' +
+        'Deixe em branco para desligar e usar só o botão "fiz".',
+      atual,
+    );
+    if (escolhido === null) return;
+    try {
+      const r = await api.salvarPreferencias({ emojiMeu: escolhido.trim() });
+      setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
+      setErro(null);
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -341,6 +375,7 @@ export function Quadro() {
   }, [tasks]);
 
   const foraDeAlcance = tasks.filter((t) => t.foraDeAlcance).length;
+  const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
 
   return (
     <>
@@ -446,7 +481,22 @@ export function Quadro() {
               status={coluna}
               rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
               grupos={grupos[coluna]}
-              vazio={VAZIO[coluna]}
+              vazio={vazioDaColuna(coluna, emojiMeu)}
+              acessorio={
+                coluna === 'meu' ? (
+                  <button
+                    className="assinatura"
+                    onClick={() => void trocarEmojiMeu()}
+                    title={
+                      emojiMeu
+                        ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`
+                        : 'Nenhuma reação configurada — clique para escolher a sua'
+                    }
+                  >
+                    {emojiMeu || 'sem reação'}
+                  </button>
+                ) : undefined
+              }
               ultimaVisita={ultimaVisita}
               aoAbrir={(t) => void abrir(t)}
               aoMarcarComoMeu={setAnotando}

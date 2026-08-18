@@ -95,3 +95,16 @@
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* A reação que marca os cards como seus. Fica no cabeçalho da coluna porque é
+   ali que ela age — e porque o emoji sozinho não se explica. */
+.coluna .assinatura {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.3;
+  background: var(--bg-surface);
+}
+.coluna .assinatura:hover {
+  border-color: var(--marca-meu);
+}

@@ -44,10 +44,24 @@ fs.mkdirSync(MURAIS_DIR, { recursive: true });
 // manter, e um emoji novo que apareca amanha ja cai no lugar certo sozinho.
 const CHECKS = ['✅', '☑️', '✔️', '✔', '☑'];
 
+// Variação de emoji (U+FE0F/U+FE0E) nao muda o significado, e o Teams devolve
+// o mesmo emoji com e sem ela dependendo de quem reagiu.
+function normalizarEmoji(emoji) {
+  return (emoji || '').replace(/[️︎]/g, '');
+}
+
 function ehCheck(emoji) {
-  // Variação de emoji (U+FE0F) e tom de pele nao mudam o significado.
-  const limpo = (emoji || '').replace(/[️︎]/g, '');
-  return CHECKS.some((c) => c.replace(/[️︎]/g, '') === limpo);
+  const limpo = normalizarEmoji(emoji);
+  return CHECKS.some((c) => normalizarEmoji(c) === limpo);
+}
+
+// O Graph NAO diz quem reagiu: `reactions[].users` volta com displayName, id e
+// email nulos. Entao "fui eu que fiz" nao tem como sair da API — sai de uma
+// convencao que voce controla: um emoji que so voce usa naquele canal.
+function temEmojiDeAssinatura(reactions, assinatura) {
+  const alvo = normalizarEmoji(assinatura);
+  if (!alvo) return false;
+  return (reactions || []).some((e) => normalizarEmoji(e) === alvo);
 }
 
 function statusDe(reactions) {
@@ -171,11 +185,33 @@ function lerPreferencias() {
   return p && typeof p.porUsuario === 'object' ? p : { porUsuario: {} };
 }
 
+// O emoji de assinatura: a reacao que, na SUA mao, quer dizer "fui eu que fiz".
+// Nao pode ser o check — esse todo mundo usa, e o significado dele ja e outro.
+const EMOJI_MEU_PADRAO = '🟢';
+
 function prefsDoUsuario(usuario) {
   const todas = lerPreferencias();
   // Confirmar e o padrao: gastar dinheiro sem avisar nao pode ser opt-out
   // silencioso de quem instalou.
-  return { confirmarAntesDeAtualizar: true, ...(todas.porUsuario[usuario] || {}) };
+  return {
+    confirmarAntesDeAtualizar: true,
+    emojiMeu: EMOJI_MEU_PADRAO,
+    ...(todas.porUsuario[usuario] || {}),
+  };
+}
+
+// Um emoji, nao uma frase: isto vira comparacao com o que o Teams devolve.
+// Vazio desliga a deteccao automatica e deixa so o botao "fiz".
+function validarEmojiMeu(valor, atual) {
+  if (valor === undefined) return atual;
+  const limpo = String(valor).trim().slice(0, 8);
+  if (limpo && ehCheck(limpo)) {
+    throw new Error(
+      'O check ja significa "concluido" para o canal inteiro. ' +
+      'Escolha um emoji que so voce use.'
+    );
+  }
+  return limpo;
 }
 
 // O evento `result` do stream-json traz o custo real da execucao. Sem ele nao
@@ -337,6 +373,14 @@ function podeMover(t, lastSync) {
   return t.origem === 'manual' || foraDeAlcance(t, lastSync);
 }
 
+// Tirar a marca a mao so vale quando o Teams nao vai repo-la no proximo sync:
+// se o card esta na coluna por causa da sua reacao, e la que ela tem de sair.
+// Fora de alcance o Teams nao conta mais nada, entao a mao volta a mandar.
+function podeDesmarcar(t, lastSync) {
+  if (!t.meu) return false;
+  return t.meu.via !== 'emoji' || foraDeAlcance(t, lastSync);
+}
+
 function tasksParaTela(muralId) {
   const db = lerTasks(muralId);
   const lista = Object.values(db.tasks).map((t) => ({
@@ -346,6 +390,7 @@ function tasksParaTela(muralId) {
     emojis: emojisDoCard(t.reactions),
     foraDeAlcance: foraDeAlcance(t, db.lastSync),
     podeMover: podeMover(t, db.lastSync),
+    podeDesmarcar: podeDesmarcar(t, db.lastSync),
   }));
   return { lastSync: db.lastSync, tasks: lista };
 }
@@ -439,6 +484,9 @@ function marcarComoMeu(muralId, id, solucao) {
     // corrigir uma virgula jogaria o card de ontem para o grupo de hoje.
     em: (t.meu && t.meu.em) || new Date().toISOString(),
     solucao: String(solucao || '').trim().slice(0, 2000),
+    // Escrever a anotacao num card que a reacao trouxe nao o torna manual: se
+    // voce tirar o 🟢 la, ele sai daqui — a nao ser pela regra da anotacao.
+    via: (t.meu && t.meu.via) || 'mao',
   };
   gravarTasks(muralId, db);
 }
@@ -447,6 +495,12 @@ function desmarcarComoMeu(muralId, id) {
   const db = lerTasks(muralId);
   const t = db.tasks[String(id || '')];
   if (!t) throw new Error('Task desconhecida.');
+  if (!podeDesmarcar(t, db.lastSync)) {
+    throw new Error(
+      'Este card esta aqui por causa da sua reacao na mensagem. ' +
+      'Tire a reacao no Teams e atualize — desmarcar aqui duraria ate o proximo sync.'
+    );
+  }
   t.meu = null;
   gravarTasks(muralId, db);
 }
@@ -456,10 +510,33 @@ function desmarcarComoMeu(muralId, id) {
 // Mescla o snapshot (janela de ~20) sobre o historico acumulado. Tasks que
 // sairam da janela PERMANECEM no arquivo — e esse o ganho principal: a API so
 // devolve 20, o arquivo lembra de tudo que ja passou.
-function merge(db, snapshot, agora) {
+// A sua reacao entra e sai do quadro sozinha, junto com o resto do merge. O dia
+// que agrupa o card na daily e o da LEITURA que viu a reacao, nao o da reacao em
+// si: o Teams nao devolve quando ela foi feita. Reagir na sexta e sincronizar na
+// segunda joga o card para segunda — e por isso o dia fica editavel no card.
+function aplicarAssinatura(t, agora, assinatura, marcados) {
+  const assinado = temEmojiDeAssinatura(t.reactions, assinatura);
+
+  if (assinado && !t.meu) {
+    t.meu = { em: agora, solucao: '', via: 'emoji' };
+    marcados.push(t.id);
+    return;
+  }
+
+  if (!assinado && t.meu && t.meu.via === 'emoji') {
+    // Tirar a reacao no Teams tira o card da coluna — menos quando ja existe
+    // anotacao. Texto que voce escreveu nao pode sumir por causa de um clique
+    // numa reacao; nesse caso a marca so deixa de ser automatica.
+    if (t.meu.solucao) t.meu.via = 'mao';
+    else t.meu = null;
+  }
+}
+
+function merge(db, snapshot, agora, assinatura) {
   const novos = [];
   const mudaram = [];
   const retomadas = [];
+  const marcados = [];
 
   for (const m of snapshot) {
     if (!m || !m.id) continue;
@@ -482,8 +559,10 @@ function merge(db, snapshot, agora) {
         statusAnterior: null,
         lastSeen: agora,
         movidoAMao: false,
+        meu: null,
       };
       novos.push(m.id);
+      aplicarAssinatura(db.tasks[m.id], agora, assinatura, marcados);
       continue;
     }
 
@@ -509,10 +588,12 @@ function merge(db, snapshot, agora) {
       antigo.statusChangedAt = agora;
       mudaram.push(m.id);
     }
+
+    aplicarAssinatura(antigo, agora, assinatura, marcados);
   }
 
   db.lastSync = agora;
-  return { novos, mudaram, retomadas, total: snapshot.length };
+  return { novos, mudaram, retomadas, marcados, total: snapshot.length };
 }
 
 // ------------------------------------------------------------------ claude run
@@ -756,7 +837,10 @@ function rodarSync(muralId) {
 
       try {
         const db = lerTasks(muralId);
-        const r = merge(db, snapshot, new Date().toISOString());
+        const r = merge(
+          db, snapshot, new Date().toISOString(),
+          prefsDoUsuario(usuario).emojiMeu,
+        );
         gravarTasks(muralId, db);
 
         const indice = lerIndice();
@@ -882,12 +966,18 @@ function servirIndex(res) {
 
 function lerCorpoJson(req) {
   return new Promise((resolve, reject) => {
-    let dados = '';
+    // Acumula bytes, nao texto: um emoji tem 4 bytes e pode cair na fronteira
+    // de dois chunks. Concatenar como string ali quebra o caractere ao meio, e
+    // e justamente um emoji que o corpo carrega quando voce troca a assinatura.
+    const pedacos = [];
+    let bytes = 0;
     req.on('data', (d) => {
-      dados += d;
-      if (dados.length > 64 * 1024) { req.destroy(); reject(new Error('Corpo grande demais.')); }
+      pedacos.push(d);
+      bytes += d.length;
+      if (bytes > 64 * 1024) { req.destroy(); reject(new Error('Corpo grande demais.')); }
     });
     req.on('end', () => {
+      const dados = Buffer.concat(pedacos).toString('utf8');
       try { resolve(JSON.parse(dados || '{}')); } catch { reject(new Error('JSON invalido.')); }
     });
     req.on('error', reject);
@@ -1036,9 +1126,15 @@ async function rotear(req, res) {
       const corpo = await lerCorpoJson(req);
       const usuario = usuarioAtual();
       const todas = lerPreferencias();
+      // Cada campo so muda se veio no corpo: salvar o emoji nao pode religar a
+      // confirmacao que a pessoa desmarcou, nem o contrario.
+      const atuais = prefsDoUsuario(usuario);
       todas.porUsuario[usuario] = {
-        ...prefsDoUsuario(usuario),
-        confirmarAntesDeAtualizar: corpo.confirmarAntesDeAtualizar !== false,
+        ...atuais,
+        confirmarAntesDeAtualizar: corpo.confirmarAntesDeAtualizar === undefined
+          ? atuais.confirmarAntesDeAtualizar
+          : corpo.confirmarAntesDeAtualizar !== false,
+        emojiMeu: validarEmojiMeu(corpo.emojiMeu, atuais.emojiMeu),
       };
       gravarJsonAtomico(PREFS_FILE, todas);
       return json(res, 200, { ok: true, preferencias: todas.porUsuario[usuario] });
