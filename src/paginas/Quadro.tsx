@@ -238,8 +238,14 @@ export function Quadro() {
           <span
             className="gasto"
             title={
-              `${consumo.usuario}: ${consumo.totais.execucoes} atualizações, ` +
-              `${formatarTokens(consumo.totais.tokensTotal)} tokens no total`
+              `${consumo.usuario} · ${formatarTokens(consumo.totais.tokensTotal)} tokens em ` +
+              `${consumo.totais.execucoes} leituras do Claude Code\n` +
+              `atualizações do quadro: ${consumo.totais.porOperacao.sync.execucoes} · ` +
+              `${formatarUsd(consumo.totais.porOperacao.sync.custoUsd)}\n` +
+              `listagem de chats: ${consumo.totais.porOperacao.chats.execucoes} · ` +
+              `${formatarUsd(consumo.totais.porOperacao.chats.custoUsd)}\n` +
+              `verificação da conta: ${consumo.totais.porOperacao.conta.execucoes} · ` +
+              `${formatarUsd(consumo.totais.porOperacao.conta.custoUsd)}`
             }
           >
             {formatarUsd(consumo.totais.custoUsd)} gastos

@@ -76,6 +76,19 @@ Cada atualização roda o Claude Code de verdade, e isso é cobrado da sua conta
 O custo não é trivial: só o system prompt da ferramenta consome dezenas de
 milhares de tokens de cache antes de ler a primeira mensagem.
 
+**Toda** ida ao Claude Code entra na conta, não só a atualização do quadro: o
+onboarding também roda o modelo para verificar sua conta Microsoft e para listar
+os chats — essa última leva 2 a 3 minutos de API e custa de acordo. Cada
+execução fica registrada com a operação que a motivou (`sync`, `conta`,
+`chats`), e o total no topo do quadro soma as três; passar o mouse mostra a
+quebra. Uma leitura que falhou no meio também é registrada: os tokens foram
+cobrados do mesmo jeito, e um acumulado que só conta os sucessos mente para
+menos.
+
+Só as execuções de `sync` entram na **estimativa** da próxima atualização.
+Misturar as leituras do onboarding na média faria o diálogo prometer um preço
+que nunca acontece.
+
 Por isso o Mural **pergunta antes de gastar**. O diálogo mostra o custo
 estimado em dólares, os tokens e a duração, além do total que sua conta já
 consumiu. Quem não quer ser perguntado marca "não perguntar de novo" — a
@@ -185,7 +198,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `conta.json`, `chats.json` | cache do onboarding |
-| `consumo.json` | tokens e custo por conta, usado para estimar |
+| `consumo.json` | tokens e custo por conta e por operação, usado para estimar |
 | `preferencias.json` | se pede confirmação antes de atualizar |
 
 Nada sai da sua máquina além das chamadas que o Claude Code já faz ao Graph.

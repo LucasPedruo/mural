@@ -195,12 +195,25 @@ function extrairConsumo(ev) {
   };
 }
 
-function registrarConsumo(usuario, muralId, consumo, mensagensLidas) {
+// Toda ida ao Claude Code custa, nao so a atualizacao do quadro: verificar a
+// conta e listar os chats no onboarding tambem sao leituras cobradas. `operacao`
+// diz qual foi — todas entram no acumulado, mas so as de 'sync' servem para
+// estimar a proxima atualizacao (misturar as baratas do onboarding na media
+// faria o dialogo prometer um preco que nao acontece).
+const OPERACOES = ['sync', 'conta', 'chats'];
+
+// Execucoes gravadas antes deste campo existir eram todas de sync.
+function operacaoDe(e) {
+  return OPERACOES.includes(e.operacao) ? e.operacao : 'sync';
+}
+
+function registrarConsumo(usuario, muralId, consumo, mensagensLidas, operacao = 'sync') {
   const db = lerConsumo();
   const doUsuario = db.porUsuario[usuario] || { execucoes: [] };
 
   doUsuario.execucoes.push({
     muralId,
+    operacao,
     quando: new Date().toISOString(),
     mensagensLidas,
     ...consumo,
@@ -214,10 +227,8 @@ function registrarConsumo(usuario, muralId, consumo, mensagensLidas) {
   gravarJsonAtomico(CONSUMO_FILE, db);
 }
 
-function totaisDoUsuario(usuario) {
-  const doUsuario = lerConsumo().porUsuario[usuario];
-  if (!doUsuario) return { execucoes: 0, tokensTotal: 0, custoUsd: 0 };
-  return doUsuario.execucoes.reduce(
+function somarConsumo(execucoes) {
+  return execucoes.reduce(
     (acc, e) => ({
       execucoes: acc.execucoes + 1,
       tokensTotal: acc.tokensTotal + (e.tokensTotal || 0),
@@ -227,6 +238,18 @@ function totaisDoUsuario(usuario) {
   );
 }
 
+// O total e de tudo que foi cobrado; a quebra por operacao mostra quanto do
+// gasto foi quadro e quanto foi onboarding.
+function totaisDoUsuario(usuario) {
+  const doUsuario = lerConsumo().porUsuario[usuario];
+  const todas = doUsuario ? doUsuario.execucoes : [];
+  const porOperacao = {};
+  for (const op of OPERACOES) {
+    porOperacao[op] = somarConsumo(todas.filter((e) => operacaoDe(e) === op));
+  }
+  return { ...somarConsumo(todas), porOperacao };
+}
+
 // Estimativa = media das ultimas execucoes DESTE mural; sem historico proprio,
 // cai para o de qualquer mural; sem nenhum, devolve null. Um numero inventado
 // seria pior que admitir que a primeira vez e desconhecida.
@@ -234,8 +257,13 @@ function estimarProximaAtualizacao(usuario, muralId) {
   const doUsuario = lerConsumo().porUsuario[usuario];
   if (!doUsuario || !doUsuario.execucoes.length) return null;
 
-  const doMural = doUsuario.execucoes.filter((e) => e.muralId === muralId);
-  const base = (doMural.length ? doMural : doUsuario.execucoes).slice(-5);
+  // So atualizacoes entram na media: as leituras do onboarding custam outra
+  // coisa e puxariam a estimativa para um numero que nunca acontece.
+  const syncs = doUsuario.execucoes.filter((e) => operacaoDe(e) === 'sync');
+  if (!syncs.length) return null;
+
+  const doMural = syncs.filter((e) => e.muralId === muralId);
+  const base = (doMural.length ? doMural : syncs).slice(-5);
   if (!base.length) return null;
 
   const media = (campo) => base.reduce((s, e) => s + (e[campo] || 0), 0) / base.length;
@@ -458,13 +486,20 @@ function moldeDeWebUrl(f) {
 }
 
 // Roda o Claude headless e espera que ele grave `arquivoSaida`. Usado pelos
-// passos curtos do onboarding, que nao precisam de barra de progresso.
-function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
+// passos curtos do onboarding, que nao precisam de barra de progresso — mas
+// custam dinheiro igual, entao saem em stream-json so para o evento `result`
+// contar o gasto. Sem isso, listar chats (2 a 3 minutos de API) apareceria
+// como leitura gratuita no registro, e nao e.
+function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 * 1000) {
   return new Promise((resolve, reject) => {
+    // A conta e lida antes porque o passo 'conta' apaga o proprio arquivo que
+    // identifica o usuario: sem isso o gasto dele cairia sempre em "desconhecido".
+    const usuarioAntes = usuarioAtual();
     try { fs.unlinkSync(arquivoSaida); } catch {}
 
     const proc = spawn('claude', [
       '-p',
+      '--output-format', 'stream-json', '--verbose',
       '--allowedTools', 'mcp__claude_ai_Microsoft_365__get_me,' +
                         'mcp__claude_ai_Microsoft_365__teams_list_chats,Write',
       '--permission-mode', 'acceptEdits',
@@ -473,9 +508,22 @@ function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
     proc.stdin.write(prompt);
     proc.stdin.end();
 
-    let stderr = '';
+    let stderr = '', buffer = '', consumo = null;
     proc.stderr.on('data', (d) => (stderr += d));
-    proc.stdout.resume(); // sem consumir, o processo trava com o buffer cheio
+    // Sem consumir o stdout o processo trava com o buffer cheio; de quebra e
+    // dali que sai o custo real desta leitura.
+    proc.stdout.on('data', (d) => {
+      buffer += d;
+      const linhas = buffer.split('\n');
+      buffer = linhas.pop();
+      for (const l of linhas) {
+        if (!l.trim()) continue;
+        try {
+          const ev = JSON.parse(l);
+          if (ev.type === 'result') consumo = extrairConsumo(ev);
+        } catch { /* linha parcial ou ruido: o que importa e o evento result */ }
+      }
+    });
 
     const timer = setTimeout(() => {
       proc.kill();
@@ -484,6 +532,17 @@ function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
 
     proc.on('close', (code) => {
       clearTimeout(timer);
+
+      // Registra antes de olhar o codigo de saida: se a leitura falhou no fim,
+      // os tokens ja foram cobrados do mesmo jeito.
+      if (consumo) {
+        const agora = usuarioAtual();
+        registrarConsumo(
+          agora === 'desconhecido' ? usuarioAntes : agora,
+          null, consumo, 0, operacao,
+        );
+      }
+
       if (code !== 0) {
         return reject(new Error(
           'O Claude Code saiu com erro (codigo ' + code + '). ' + stderr.slice(0, 300)
@@ -559,7 +618,15 @@ function rodarSync(muralId) {
 
     proc.on('close', (code) => {
       clearTimeout(timer);
+      const lidas = progresso ? progresso.lidas : 0;
       syncEmAndamento = null; progresso = null;
+
+      // Uma leitura que falhou no fim ja gastou os tokens. Registrar antes de
+      // qualquer saida por erro e o que impede o acumulado de mentir para menos.
+      const usuario = usuarioAtual();
+      if (consumoDaExecucao) {
+        registrarConsumo(usuario, muralId, consumoDaExecucao, lidas, 'sync');
+      }
 
       if (code !== 0) {
         return reject(new Error(`O Claude saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
@@ -582,13 +649,6 @@ function rodarSync(muralId) {
         const indice = lerIndice();
         const m = indice.murais.find((x) => x.id === muralId);
         if (m) { m.ultimoSync = db.lastSync; gravarIndice(indice); }
-
-        // Registra mesmo se o merge nao mudou nada: o custo foi pago de todo
-        // jeito, e e disso que sai a estimativa da proxima.
-        const usuario = usuarioAtual();
-        if (consumoDaExecucao) {
-          registrarConsumo(usuario, muralId, consumoDaExecucao, snapshot.length);
-        }
 
         resolve({
           ...r,
@@ -983,7 +1043,8 @@ async function rotear(req, res) {
     try {
       const conta = await rodarClaudeSimples(
         montarPrompt('verificar-conta.md', { ARQUIVO_SAIDA: CONTA_FILE }),
-        CONTA_FILE
+        CONTA_FILE,
+        'conta'
       );
       if (conta.erro) return json(res, 200, { ok: false, erro: conta.erro });
       return json(res, 200, { ok: true, conta });
@@ -1000,7 +1061,8 @@ async function rotear(req, res) {
           ARQUIVO_SAIDA: CHATS_FILE,
           USUARIO_ATUAL: conta.displayName || 'a pessoa logada',
         }),
-        CHATS_FILE
+        CHATS_FILE,
+        'chats'
       );
       if (chats.erro) return json(res, 200, { ok: false, erro: chats.erro });
       return json(res, 200, { ok: true, chats });

@@ -96,10 +96,15 @@ export function ConfirmarAtualizacao({
           </p>
         )}
 
+        {/* O acumulado conta TODA leitura cobrada, não só as atualizações: o
+            onboarding também roda o Claude Code. Somar sem dizer isso faria o
+            número parecer alto demais para a quantidade de syncs listada. */}
         <p className="acumulado">
           <strong>{usuario}</strong> já gastou {formatarUsd(totais.custoUsd)} em{' '}
-          {totais.execucoes} {totais.execucoes === 1 ? 'atualização' : 'atualizações'} (
-          {formatarTokens(totais.tokensTotal)} tokens).
+          {totais.execucoes} {totais.execucoes === 1 ? 'leitura' : 'leituras'} do Claude Code (
+          {formatarTokens(totais.tokensTotal)} tokens) — {totais.porOperacao.sync.execucoes}{' '}
+          {totais.porOperacao.sync.execucoes === 1 ? 'atualização' : 'atualizações'} de quadro,{' '}
+          {formatarUsd(totais.porOperacao.sync.custoUsd)}; o resto é configuração.
         </p>
 
         <label className="nao-perguntar">

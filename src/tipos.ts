@@ -63,10 +63,18 @@ export interface Estimativa extends Consumo {
   duracaoMs: number;
 }
 
-export interface TotaisDeConsumo {
+export interface SomaDeConsumo {
   execucoes: number;
   tokensTotal: number;
   custoUsd: number;
+}
+
+/** Toda ida ao Claude Code custa, não só a atualização do quadro: `conta` e
+ *  `chats` são as leituras do onboarding. */
+export type Operacao = 'sync' | 'conta' | 'chats';
+
+export interface TotaisDeConsumo extends SomaDeConsumo {
+  porOperacao: Record<Operacao, SomaDeConsumo>;
 }
 
 export interface Preferencias {
