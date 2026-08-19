@@ -38,8 +38,11 @@ três linhas de texto em seguida, aquilo vira um card só — veja
 Você precisa de:
 
 - **Node.js 18+**
-- **[Claude Code](https://claude.com/claude-code)** instalado e autenticado
-- O **conector Microsoft 365** ativo no Claude Code (`/mcp` para conferir)
+- Um **agente de IA** de linha de comando, instalado e autenticado — Claude Code,
+  Codex CLI, Gemini CLI ou outro que você configure
+- Nesse agente, **acesso ao Microsoft Graph por MCP**. No Claude Code isso é o
+  conector Microsoft 365 (`/mcp` para conferir); nos outros, um MCP server de
+  Graph que você configura no arquivo de config deles
 
 ```bash
 git clone https://github.com/<voce>/mural.git
@@ -58,9 +61,54 @@ No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
 servidor e abre o navegador. Para trocar a porta:
 `MURAL_PORT=5000 node server.js`.
 
-Não existe login próprio. A autenticação com a Microsoft é a do Claude Code e do
-conector — este servidor nunca vê nem guarda credencial nenhuma. Quando o token
-do conector expira, o Mural para de atualizar até você reautorizar com `/mcp`.
+Não existe login próprio. A autenticação com a Microsoft é a do agente e do MCP
+dele — este servidor nunca vê nem guarda credencial nenhuma. Quando o token
+expira, o Mural para de atualizar até você reautorizar no agente (no Claude Code,
+`/mcp`).
+
+## Qual agente lê o Teams
+
+O Mural não fala com o Teams. Ele monta um prompt, entrega a um **agente de IA já
+autenticado** e espera que o agente grave um snapshot em disco. Isso é escolha
+sua, e é o **primeiro passo** da configuração — antes ali só havia um veredito
+("Claude Code instalado"), o que não é escolha nenhuma.
+
+| Agente | Estado |
+| --- | --- |
+| **Claude Code** | verificado, é o caminho testado |
+| **Codex CLI** | flags conferidas contra o `codex exec --help` desta máquina |
+| **Gemini CLI** | escrito a partir da documentação, sem stream de eventos |
+| **Outro agente** | você preenche binário, argumentos e nomes de tool |
+
+A tela marca **não verificado** o que não foi testado aqui, em vez de fingir que
+os quatro são iguais.
+
+<details>
+<summary><b>O que exatamente é trocável, e o que não é</b></summary>
+
+Cinco coisas amarravam o Mural ao Claude Code. Quatro viraram configuração, em
+`agentes.js`:
+
+- **binário** e **molde de argumentos**, com `{{FERRAMENTAS}}` e `{{PROMPT}}`;
+- **por onde o prompt entra**: stdin ou argumento;
+- **como ler o stdout**: `stream-json` do Claude, JSONL do Codex, ou nada — e
+  "nada" custa a barra de progresso detalhada, não a leitura;
+- **os nomes das tools** do Teams e o **molde das URIs** das mensagens.
+
+A quinta não é trocável, e vale ser dito com clareza: **quem lê o Teams é o MCP,
+não o CLI**. As tools `mcp__claude_ai_Microsoft_365__*` e os endereços `teams:///`
+são vocabulário do conector hospedado da claude.ai. Outro agente precisa do
+próprio MCP de Microsoft Graph, com os nomes e os endereços que *aquele* MCP usa —
+e é por isso que esses campos são editáveis na tela em vez de estarem cravados no
+código. Escolher Codex sem um MCP de Graph configurado nele faz o passo 2 falhar,
+e é lá que a falha aparece com o motivo certo.
+
+**Custo só aparece onde existe dado.** O preço em dólar sai do evento `result` do
+Claude Code. Em agente que não informa gasto, o total e o diálogo de confirmação
+somem da tela — o registro continua guardando tokens e duração, que existem
+sempre — e o cabeçalho passa a dizer apenas quem está lendo. Mostrar "US$ 0,00"
+seria mentir para menos.
+</details>
 
 ### Escolhendo a conversa
 
@@ -380,7 +428,7 @@ Vale saber antes de adotar:
 Interface em **React + TypeScript**, compilada pelo Vite, com
 [@hello-pangea/dnd](https://github.com/hello-pangea/dnd) para o arraste entre
 colunas. O servidor é **Node puro** — sem framework — e faz três coisas: fala
-com o Claude Code, guarda o histórico e serve o build.
+com o agente de IA escolhido (`agentes.js`), guarda o histórico e serve o build.
 
 ## Onde ficam seus dados
 
@@ -393,6 +441,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — os painéis vivem daqui |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
+| `agentes.json` | qual agente de IA lê o Teams, e os ajustes dele |
 | `conta.json`, `chats.json` | cache do onboarding |
 | `consumo.json` | tokens e custo por conta e por operação, usado para estimar |
 | `preferencias.json` | se pede confirmação antes de atualizar e o seu emoji de assinatura |

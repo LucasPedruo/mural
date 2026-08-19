@@ -208,3 +208,104 @@ code {
 .campos-sprint input[type='text'] {
   min-width: 180px;
 }
+
+/* ------------------------------------------------------------------ agentes */
+
+/* A escolha do agente. Mesmo vocabulario da lista de chats do passo 3: linha
+   clicavel com nome a esquerda e estado a direita. */
+.lista-agentes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.item-agente {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 13px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  font-size: 13px;
+}
+
+.item-agente[aria-selected='true'] {
+  border-color: var(--marca-meu);
+  background: var(--bg-brand-subtle);
+}
+
+.item-agente .nome {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.item-agente .meta {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ajustes avancados: escondidos por padrao porque quem usa o Claude Code nunca
+   precisa deles — e obrigatorios para quem usa outro agente. */
+.alternar {
+  font-size: 12px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: none;
+}
+
+.ajustes-agente {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+}
+
+.campos-agente {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.campos-agente .rotulo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.campos-agente input,
+.campos-agente select {
+  font: inherit;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 7px 9px;
+  min-width: 0;
+}
+
+.campos-agente .dica-campo {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.acao-agente {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}

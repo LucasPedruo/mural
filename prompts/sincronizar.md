@@ -2,20 +2,21 @@ Leia as mensagens de uma conversa do Teams e grave um snapshot cru em JSON.
 
 ## Passo 1 — listar
 
-`read_resource` nesta URI (devolve as ~20 mensagens mais recentes):
+`{{FERRAMENTA_LEITURA}}` nesta URI (devolve as ~20 mensagens mais recentes):
 
 {{URI_MENSAGENS}}
 
 ## Passo 2 — ler cada mensagem
 
-Para CADA id retornado, `read_resource` na mesma URI + `/{id}`.
+Para CADA id retornado, `{{FERRAMENTA_LEITURA}}` na mesma URI + `/{id}`.
 Isso é obrigatório: a listagem NÃO traz o campo `reactions`, só a leitura individual traz.
 Dispare em paralelo, em lotes de 8 (várias tool calls na mesma resposta).
 Se alguma retornar NOT_FOUND, ignore essa mensagem (foi apagada).
 
 ## Passo 3 — gravar
 
-Escreva o arquivo `{{ARQUIVO_SNAPSHOT}}` com EXATAMENTE este formato — um array JSON,
+Com `{{FERRAMENTA_ESCRITA}}`, escreva o arquivo `{{ARQUIVO_SNAPSHOT}}`
+com EXATAMENTE este formato — um array JSON,
 sem markdown, sem cercas de código, sem comentários:
 
 [

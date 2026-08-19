@@ -1,13 +1,14 @@
 // Mural — kanbans montados a partir das reacoes de conversas do Microsoft Teams.
 //
 // Cada mural aponta para uma conversa (canal ou chat) e tem historico proprio.
-// O botao "Atualizar" roda o Claude Code headless, que apenas LE as mensagens e
+// O botao "Atualizar" roda o AGENTE ESCOLHIDO em modo headless — Claude Code,
+// Codex, Gemini CLI ou outro, ver agentes.js — que apenas LE as mensagens e
 // grava um snapshot cru. O merge com o historico e feito aqui, em JS
-// deterministico — o LLM nunca toca no historico, para o acumulado nao poder
-// ser inventado nem perdido.
+// deterministico: o LLM nunca toca no historico, para o acumulado nao poder ser
+// inventado nem perdido.
 //
-// Nao ha login proprio: a autenticacao com a Microsoft e a do Claude Code e do
-// conector Microsoft 365. Este servidor nunca ve nem guarda credencial.
+// Nao ha login proprio: a autenticacao com a Microsoft e a do agente e do MCP
+// que ele usa para o Graph. Este servidor nunca ve nem guarda credencial.
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -15,6 +16,20 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+
+// Quem fala com o Teams e um agente de IA ja autenticado — Claude Code, Codex,
+// Gemini CLI ou outro. Qual deles e escolha de quem instala, e mora aqui para
+// nao virar um `if` espalhado pelo servidor.
+import {
+  adaptadorEscolhido,
+  adaptadores,
+  comandoDe,
+  detectarVersao,
+  idEscolhido,
+  IDS_DE_AGENTE,
+  interpretarLinha,
+  paraTela,
+} from './agentes.js';
 
 // ESM nao tem __dirname; o package.json declara "type": "module" por causa do
 // Vite, entao o servidor tambem roda como modulo.
@@ -31,6 +46,7 @@ const CONTA_FILE = path.join(DATA_DIR, 'conta.json');
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
 const CONSUMO_FILE = path.join(DATA_DIR, 'consumo.json');
 const PREFS_FILE = path.join(DATA_DIR, 'preferencias.json');
+const AGENTES_FILE = path.join(DATA_DIR, 'agentes.json');
 
 const PORT = Number(process.env.MURAL_PORT) || 4317;
 
@@ -408,6 +424,22 @@ migrarFormatoAntigo();
 // que identifica quem esta gastando) e serve para estimar a proxima.
 const MAX_EXECUCOES_GUARDADAS = 200;
 
+// O agente escolhido e os ajustes dele. E configuracao, nao dado: `refazer
+// configuracao` limpa este arquivo junto com o resto do onboarding.
+function lerConfigAgentes() {
+  const c = lerJson(AGENTES_FILE, { escolhido: 'claude', porAgente: {} });
+  if (!c.porAgente || typeof c.porAgente !== 'object') c.porAgente = {};
+  return c;
+}
+
+function gravarConfigAgentes(config) {
+  gravarJsonAtomico(AGENTES_FILE, config);
+}
+
+function agenteEmUso() {
+  return adaptadorEscolhido(lerConfigAgentes());
+}
+
 function usuarioAtual() {
   const conta = lerJson(CONTA_FILE, {});
   return conta.mail || conta.displayName || 'desconhecido';
@@ -452,22 +484,9 @@ function validarEmojiMeu(valor, atual) {
   return limpo;
 }
 
-// O evento `result` do stream-json traz o custo real da execucao. Sem ele nao
-// ha estimativa honesta — nao da para inferir preco a partir do numero de
-// mensagens, porque o cache muda tudo entre uma execucao e outra.
-function extrairConsumo(ev) {
-  const u = ev.usage || {};
-  const entrada = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-  return {
-    tokensEntrada: entrada,
-    tokensSaida: u.output_tokens || 0,
-    tokensCacheLido: u.cache_read_input_tokens || 0,
-    // Cache lido conta para o total gasto, ainda que muito mais barato.
-    tokensTotal: entrada + (u.output_tokens || 0) + (u.cache_read_input_tokens || 0),
-    custoUsd: typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : null,
-    duracaoMs: ev.duration_ms || null,
-  };
-}
+// Quem extrai o gasto de cada evento e o adaptador do agente, em agentes.js:
+// o formato do stream muda de CLI para CLI, e agente que nao informa custo
+// devolve `custoUsd: null` em vez de um numero inventado.
 
 // Toda ida ao Claude Code custa, nao so a atualizacao do quadro: verificar a
 // conta e listar os chats no onboarding tambem sao leituras cobradas. `operacao`
@@ -1202,30 +1221,28 @@ function etapaVisivel(p) {
 // real da execucao.
 let consumoDaExecucao = null;
 
-function processarEvento(linha) {
-  if (!linha.trim()) return;
-  let ev;
-  try { ev = JSON.parse(linha); } catch { return; }
+// A etapa sai da ferramenta que o agente acabou de usar, e o nome dela vem da
+// configuracao — nao de uma constante: em outro agente a leitura do Teams se
+// chama outra coisa. Por isso a comparacao e com `ferramentas.leitura`, e o
+// fallback por sufixo cobre o MCP que prefixa o nome com o servidor.
+function processarEvento(linha, ad) {
+  const lido = interpretarLinha(ad, linha);
+  if (!lido) return;
 
-  if (ev.type === 'result') {
-    consumoDaExecucao = extrairConsumo(ev);
-    return;
-  }
+  if (lido.consumo) consumoDaExecucao = lido.consumo;
+  if (!progresso || !lido.usos) return;
 
-  if (!progresso) return;
-  if (ev.type !== 'assistant') return;
-  const partes = ev.message && ev.message.content;
-  if (!Array.isArray(partes)) return;
+  const f = ad.ferramentas;
+  const ehTool = (nome, alvo) => !!alvo && (nome === alvo || nome.endsWith(alvo));
 
-  for (const p of partes) {
-    if (p.type !== 'tool_use') continue;
+  for (const uso of lido.usos) {
     progresso.ultimaAtividade = Date.now();
-    const nome = p.name || '';
-    if (nome.includes('read_resource')) {
-      const uri = (p.input && p.input.uri) || '';
-      if (/\/messages\/?$/.test(uri)) progresso.etapa = 'listando as mensagens';
+    if (ehTool(uso.nome, f.leitura)) {
+      if (/\/messages\/?$/.test(uso.uri)) progresso.etapa = 'listando as mensagens';
       else { progresso.lidas++; progresso.etapa = 'lendo mensagens'; }
-    } else if (nome === 'Write') {
+    } else if (uso.nome === '__arquivo__' || ehTool(uso.nome, f.escrita)) {
+      // `__arquivo__` e o nome que o leitor do Codex da para uma mudanca de
+      // arquivo: gravar o snapshot nao aparece como tool call ali.
       progresso.etapa = 'gravando';
     }
   }
@@ -1239,10 +1256,15 @@ function montarPrompt(nome, valores) {
   return txt;
 }
 
-// A URI que o Claude vai ler. Canal e chat tem formatos diferentes no Graph.
-function uriDasMensagens(f) {
-  if (f.tipo === 'chat') return `teams:///chats/${encodeURIComponent(f.chatId)}/messages`;
-  return `teams:///teams/${f.teamId}/channels/${encodeURIComponent(f.channelId)}/messages`;
+// A URI que o agente vai ler. Canal e chat tem formatos diferentes, e o molde
+// vem do adaptador: o endereco das mensagens e vocabulario do MCP que le o
+// Teams, nao do Mural. Outro MCP, outro molde — sem tocar em codigo.
+function uriDasMensagens(f, ad = agenteEmUso()) {
+  const molde = f.tipo === 'chat' ? ad.ferramentas.uriChat : ad.ferramentas.uriCanal;
+  return molde
+    .split('{chatId}').join(encodeURIComponent(f.chatId || ''))
+    .split('{teamId}').join(f.teamId || '')
+    .split('{channelId}').join(encodeURIComponent(f.channelId || ''));
 }
 
 // Mensagem de chat volta com webUrl null, entao o link precisa ser montado.
@@ -1255,28 +1277,31 @@ function moldeDeWebUrl(f) {
     `/{id}?groupId=${f.teamId}&parentMessageId={id}`;
 }
 
-// Roda o Claude headless e espera que ele grave `arquivoSaida`. Usado pelos
+// Roda o agente headless e espera que ele grave `arquivoSaida`. Usado pelos
 // passos curtos do onboarding, que nao precisam de barra de progresso — mas
-// custam dinheiro igual, entao saem em stream-json so para o evento `result`
-// contar o gasto. Sem isso, listar chats (2 a 3 minutos de API) apareceria
-// como leitura gratuita no registro, e nao e.
-function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 * 1000) {
+// custam dinheiro igual, entao o stdout e lido de qualquer forma, para o gasto
+// entrar no registro. Sem isso, listar chats (2 a 3 minutos de API) apareceria
+// como leitura gratuita, e nao e.
+function rodarAgenteSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 * 1000) {
   return new Promise((resolve, reject) => {
     // A conta e lida antes porque o passo 'conta' apaga o proprio arquivo que
     // identifica o usuario: sem isso o gasto dele cairia sempre em "desconhecido".
     const usuarioAntes = usuarioAtual();
+    const ad = agenteEmUso();
     try { fs.unlinkSync(arquivoSaida); } catch {}
 
-    const proc = spawn('claude', [
-      '-p',
-      '--output-format', 'stream-json', '--verbose',
-      '--allowedTools', 'mcp__claude_ai_Microsoft_365__get_me,' +
-                        'mcp__claude_ai_Microsoft_365__teams_list_chats,Write',
-      '--permission-mode', 'acceptEdits',
-    ], { cwd: ROOT, shell: true });
+    let cmd;
+    try { cmd = comandoDe(ad, operacao, prompt); }
+    catch (e) { return reject(e); }
 
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+    const proc = spawn(cmd.binario, cmd.args, { cwd: ROOT, shell: true });
+
+    if (cmd.viaStdin) {
+      proc.stdin.write(prompt);
+      proc.stdin.end();
+    } else {
+      proc.stdin.end();
+    }
 
     let stderr = '', buffer = '', consumo = null;
     proc.stderr.on('data', (d) => (stderr += d));
@@ -1287,17 +1312,14 @@ function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 *
       const linhas = buffer.split('\n');
       buffer = linhas.pop();
       for (const l of linhas) {
-        if (!l.trim()) continue;
-        try {
-          const ev = JSON.parse(l);
-          if (ev.type === 'result') consumo = extrairConsumo(ev);
-        } catch { /* linha parcial ou ruido: o que importa e o evento result */ }
+        const lido = interpretarLinha(ad, l);
+        if (lido && lido.consumo) consumo = lido.consumo;
       }
     });
 
     const timer = setTimeout(() => {
       proc.kill();
-      reject(new Error('O Claude demorou demais para responder.'));
+      reject(new Error(`O ${ad.nome} demorou demais para responder.`));
     }, timeoutMs);
 
     proc.on('close', (code) => {
@@ -1315,16 +1337,18 @@ function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 *
 
       if (code !== 0) {
         return reject(new Error(
-          'O Claude Code saiu com erro (codigo ' + code + '). ' + stderr.slice(0, 300)
+          `O ${ad.nome} saiu com erro (codigo ${code}). ` + stderr.slice(0, 300)
         ));
       }
       try { resolve(JSON.parse(fs.readFileSync(arquivoSaida, 'utf8'))); }
-      catch { reject(new Error('O Claude rodou mas nao gravou um resultado legivel.')); }
+      catch {
+        reject(new Error(`O ${ad.nome} rodou mas nao gravou um resultado legivel.`));
+      }
     });
 
     proc.on('error', (e) => {
       clearTimeout(timer);
-      reject(new Error('Nao consegui executar `claude`: ' + e.message));
+      reject(new Error(`Nao consegui executar \`${cmd.binario}\`: ` + e.message));
     });
   });
 }
@@ -1344,12 +1368,19 @@ function rodarSync(muralId) {
     const snapshotFile = arquivoSnapshot(muralId);
     fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
 
+    // O agente escolhido dita tres coisas do prompt: como se chama a tool que
+    // le o Teams, como se chama a que grava arquivo e como se enderecam as
+    // mensagens. Sem isso o prompt falaria o dialeto de um conector so.
+    const ad = agenteEmUso();
+
     let prompt;
     try {
       prompt = montarPrompt('sincronizar.md', {
-        URI_MENSAGENS: uriDasMensagens(mural),
+        URI_MENSAGENS: uriDasMensagens(mural, ad),
         ARQUIVO_SNAPSHOT: snapshotFile,
         WEBURL_MOLDE: moldeDeWebUrl(mural),
+        FERRAMENTA_LEITURA: ad.ferramentas.leitura,
+        FERRAMENTA_ESCRITA: ad.ferramentas.escrita,
       });
     } catch {
       syncEmAndamento = null; progresso = null;
@@ -1358,16 +1389,20 @@ function rodarSync(muralId) {
 
     try { fs.unlinkSync(snapshotFile); } catch {}
 
-    // O prompt vai por STDIN, nao como argumento: e multi-linha, e no Windows o
-    // shell mutila argumentos assim — o Claude recebia texto truncado.
-    const proc = spawn('claude', [
-      '-p',
-      '--output-format', 'stream-json', '--verbose',
-      '--allowedTools', 'mcp__claude_ai_Microsoft_365__read_resource,Write',
-      '--permission-mode', 'acceptEdits',
-    ], { cwd: ROOT, shell: true });
+    // No Claude o prompt vai por STDIN, nao como argumento: e multi-linha, e no
+    // Windows o shell mutila argumentos assim — o agente recebia texto truncado.
+    // Agente de entrada 'arg' recebe o prompt como um unico argv, sem passar por
+    // split de espaco, pelo mesmo motivo.
+    let cmd;
+    try { cmd = comandoDe(ad, 'sync', prompt); }
+    catch (e) {
+      syncEmAndamento = null; progresso = null;
+      return reject(e);
+    }
 
-    proc.stdin.write(prompt);
+    const proc = spawn(cmd.binario, cmd.args, { cwd: ROOT, shell: true });
+
+    if (cmd.viaStdin) proc.stdin.write(prompt);
     proc.stdin.end();
 
     let stdout = '', stderr = '', buffer = '';
@@ -1376,7 +1411,7 @@ function rodarSync(muralId) {
       buffer += d;
       const linhas = buffer.split('\n');
       buffer = linhas.pop();
-      for (const l of linhas) processarEvento(l);
+      for (const l of linhas) processarEvento(l, ad);
     });
     proc.stderr.on('data', (d) => (stderr += d));
 
@@ -1399,14 +1434,14 @@ function rodarSync(muralId) {
       }
 
       if (code !== 0) {
-        return reject(new Error(`O Claude saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
+        return reject(new Error(`O ${ad.nome} saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
       }
 
       let snapshot;
       try { snapshot = JSON.parse(fs.readFileSync(snapshotFile, 'utf8')); }
       catch {
         return reject(new Error(
-          'O Claude rodou mas nao gravou um snapshot valido. ' + resumoDoResultado(stdout)
+          `O ${ad.nome} rodou mas nao gravou um snapshot valido. ` + resumoDoResultado(stdout)
         ));
       }
       if (!Array.isArray(snapshot)) return reject(new Error('O snapshot nao e um array.'));
@@ -1436,7 +1471,7 @@ function rodarSync(muralId) {
     proc.on('error', (e) => {
       clearTimeout(timer);
       syncEmAndamento = null; progresso = null;
-      reject(new Error('Nao consegui executar `claude`: ' + e.message));
+      reject(new Error(`Nao consegui executar \`${cmd.binario}\`: ` + e.message));
     });
   });
 }
@@ -1689,11 +1724,15 @@ async function rotear(req, res) {
   if (p === '/api/consumo') {
     const muralId = url.searchParams.get('mural') || '';
     const usuario = usuarioAtual();
+    const ad = agenteEmUso();
     return json(res, 200, {
       usuario,
       estimativa: estimarProximaAtualizacao(usuario, muralId),
       totais: totaisDoUsuario(usuario),
       preferencias: prefsDoUsuario(usuario),
+      // Agente que nao informa custo nao pode ter preco na tela: a interface
+      // esconde o total e a confirmacao de gasto em vez de mostrar zero.
+      agente: { id: ad.id, nome: ad.nome, reportaCusto: ad.reportaCusto },
     });
   }
 
@@ -1926,7 +1965,7 @@ async function rotear(req, res) {
   // trabalho acumulado por tabela.
   if (p === '/api/setup/reset' && req.method === 'POST') {
     const apagados = [];
-    for (const arquivo of [CONTA_FILE, CHATS_FILE, PREFS_FILE]) {
+    for (const arquivo of [CONTA_FILE, CHATS_FILE, PREFS_FILE, AGENTES_FILE]) {
       try {
         fs.unlinkSync(arquivo);
         apagados.push(path.basename(arquivo));
@@ -1937,26 +1976,51 @@ async function rotear(req, res) {
     return json(res, 200, { ok: true, apagados });
   }
 
-  if (p === '/api/setup/claude') {
-    return new Promise((resolve) => {
-      execFile('claude', ['--version'], { shell: true }, (erro, stdout) => {
-        if (erro) {
-          json(res, 200, {
-            ok: false,
-            erro: 'Claude Code nao encontrado no PATH. Instale em claude.com/claude-code.',
-          });
-        } else {
-          json(res, 200, { ok: true, versao: String(stdout).trim() });
-        }
-        resolve();
-      });
+  // Escolher o agente, nao verificar UM agente. A pergunta do primeiro passo do
+  // onboarding e "com qual CLI de IA eu leio o Teams?" — e a resposta nao pode
+  // ser um binario cravado no codigo.
+  if (p === '/api/setup/agentes') {
+    const config = lerConfigAgentes();
+    const lista = adaptadores(config);
+    const detectados = await Promise.all(lista.map((ad) => detectarVersao(ad)));
+    return json(res, 200, {
+      ok: true,
+      escolhido: idEscolhido(config),
+      agentes: lista.map((ad, i) => paraTela(ad, detectados[i])),
     });
+  }
+
+  if (p === '/api/setup/agente' && req.method === 'POST') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      const id = String(corpo.id || '');
+      if (!IDS_DE_AGENTE.includes(id)) throw new Error('Agente desconhecido.');
+
+      const config = lerConfigAgentes();
+      config.escolhido = id;
+      // Os ajustes ficam guardados por agente, nao no escolhido: trocar de
+      // agente e voltar nao pode apagar as flags que voce corrigiu no outro.
+      if (corpo.ajustes && typeof corpo.ajustes === 'object') {
+        config.porAgente[id] = { ...(config.porAgente[id] || {}), ...corpo.ajustes };
+      }
+      gravarConfigAgentes(config);
+
+      const ad = adaptadorEscolhido(config);
+      const deteccao = await detectarVersao(ad);
+      return json(res, 200, { ok: true, agente: paraTela(ad, deteccao) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
   }
 
   if (p === '/api/setup/conta' && req.method === 'POST') {
     try {
-      const conta = await rodarClaudeSimples(
-        montarPrompt('verificar-conta.md', { ARQUIVO_SAIDA: CONTA_FILE }),
+      const conta = await rodarAgenteSimples(
+        montarPrompt('verificar-conta.md', {
+          ARQUIVO_SAIDA: CONTA_FILE,
+          FERRAMENTA_CONTA: agenteEmUso().ferramentas.conta,
+          FERRAMENTA_ESCRITA: agenteEmUso().ferramentas.escrita,
+        }),
         CONTA_FILE,
         'conta'
       );
@@ -1970,10 +2034,12 @@ async function rotear(req, res) {
   if (p === '/api/setup/chats' && req.method === 'POST') {
     try {
       const conta = lerJson(CONTA_FILE, {});
-      const chats = await rodarClaudeSimples(
+      const chats = await rodarAgenteSimples(
         montarPrompt('listar-chats.md', {
           ARQUIVO_SAIDA: CHATS_FILE,
           USUARIO_ATUAL: conta.displayName || 'a pessoa logada',
+          FERRAMENTA_CHATS: agenteEmUso().ferramentas.chats,
+          FERRAMENTA_ESCRITA: agenteEmUso().ferramentas.escrita,
         }),
         CHATS_FILE,
         'chats'

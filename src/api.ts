@@ -1,4 +1,6 @@
 import type {
+  AgenteDisponivel,
+  AjustesDoAgente,
   ChatDisponivel,
   EstadoSync,
   FonteEscolhida,
@@ -6,6 +8,7 @@ import type {
   MuralNaLista,
   NovaTask,
   Preferencias,
+  RespostaAgentes,
   RespostaConsumo,
   RespostaPainel,
   RespostaSprint,
@@ -141,7 +144,11 @@ export const api = {
 
   consumo: async (muralId: string): Promise<RespostaConsumo> => {
     const r = await pedir<RespostaConsumo>(`/api/consumo?mural=${muralId}`);
-    return { ...r, totais: comQuebraPorOperacao(r.totais) };
+    return {
+      ...r,
+      totais: comQuebraPorOperacao(r.totais),
+      agente: r.agente ?? { id: 'claude', nome: 'Claude Code', reportaCusto: true },
+    };
   },
 
   // Parcial de proposito: o servidor so mexe no que veio, entao salvar o emoji
@@ -153,8 +160,12 @@ export const api = {
   // Estas rotas respondem HTTP 200 com { ok:false, erro } de proposito: "o
   // Claude nao esta instalado" e uma resposta valida do diagnostico, nao uma
   // falha do servidor. Por isso passam por `pedirBruto`, sem o throw.
-  verificarClaude: () =>
-    pedirBruto<{ ok: boolean; versao?: string; erro?: string }>('/api/setup/claude'),
+  // Escolher o agente, não verificar um agente: a pergunta do primeiro passo é
+  // "com qual CLI de IA eu leio o Teams?".
+  agentes: () => pedirBruto<RespostaAgentes>('/api/setup/agentes'),
+
+  escolherAgente: (id: string, ajustes?: AjustesDoAgente) =>
+    pedir<{ agente: AgenteDisponivel }>('/api/setup/agente', json({ id, ajustes })),
 
   verificarConta: () =>
     pedirBruto<{ ok: boolean; conta?: { displayName: string; mail: string }; erro?: string }>(

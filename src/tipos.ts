@@ -141,6 +141,9 @@ export interface RespostaConsumo {
   estimativa: Estimativa | null;
   totais: TotaisDeConsumo;
   preferencias: Preferencias;
+  /** Quem lê o Teams nesta instalação. `reportaCusto` falso esconde preço da
+   *  tela: agente que não informa gasto não pode aparecer com zero dólar. */
+  agente: AgenteEmUso;
 }
 
 export interface ResultadoSync extends RespostaTasks {
@@ -270,4 +273,69 @@ export interface RespostaPainel {
     diasAtivos: number;
     arquivadas: number;
   };
+}
+
+// ------------------------------------------------------------------- agentes
+
+/** O Mural não fala com o Teams: ele pede a um agente de IA já autenticado que
+ *  leia a conversa e grave um snapshot. Qual agente é isso — Claude Code,
+ *  Codex, Gemini CLI ou outro — é escolha de quem instala. */
+export type IdDeAgente = 'claude' | 'codex' | 'gemini' | 'personalizado';
+
+export type FormatoDeEventos = 'claude' | 'codex' | 'nenhum';
+
+/** Os nomes das tools que o agente usa para ler o Teams, e o molde do endereço
+ *  das mensagens. Isto é vocabulário do MCP instalado no agente, não do Mural:
+ *  o conector da claude.ai chama a leitura de uma coisa, outro MCP chama de
+ *  outra — e é por isso que estes campos são editáveis. */
+export interface FerramentasDoAgente {
+  conta: string;
+  chats: string;
+  leitura: string;
+  escrita: string;
+  uriCanal: string;
+  uriChat: string;
+}
+
+export interface AgenteDisponivel {
+  id: IdDeAgente;
+  nome: string;
+  /** Só o adaptador do Claude Code foi verificado de verdade; os outros vão com
+   *  as flags que a documentação deles descreve. A tela precisa dizer isso. */
+  verificado: boolean;
+  /** Você já corrigiu algum campo deste agente à mão. */
+  ajustado: boolean;
+  reportaCusto: boolean;
+  requisitos: string;
+  binario: string;
+  argumentos: string;
+  entrada: 'stdin' | 'arg';
+  eventos: FormatoDeEventos;
+  ferramentas: FerramentasDoAgente;
+  /** null = ainda não detectado. Responder `--version` não prova que o MCP do
+   *  Teams está configurado ali: isso só o passo da conta descobre. */
+  instalado: boolean | null;
+  versao: string;
+  erro: string;
+}
+
+export interface RespostaAgentes {
+  ok: boolean;
+  escolhido: IdDeAgente;
+  agentes: AgenteDisponivel[];
+  erro?: string;
+}
+
+export interface AjustesDoAgente {
+  binario?: string;
+  argumentos?: string;
+  entrada?: 'stdin' | 'arg';
+  eventos?: FormatoDeEventos;
+  ferramentas?: Partial<FerramentasDoAgente>;
+}
+
+export interface AgenteEmUso {
+  id: IdDeAgente;
+  nome: string;
+  reportaCusto: boolean;
 }

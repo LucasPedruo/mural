@@ -154,7 +154,11 @@ export function Quadro() {
   async function pedirAtualizacao() {
     const atual = consumo ?? (await api.consumo(muralId).catch(() => null));
     if (atual) setConsumo(atual);
-    if (atual?.preferencias.confirmarAntesDeAtualizar !== false) {
+    // Agente que não informa custo não tem o que confirmar: o diálogo existe
+    // para perguntar antes de gastar, e um diálogo que diz "não sei quanto
+    // custa" só adiciona um clique.
+    const temCusto = atual?.agente?.reportaCusto !== false;
+    if (temCusto && atual?.preferencias.confirmarAntesDeAtualizar !== false) {
       setConfirmando(true);
       return;
     }
@@ -216,7 +220,9 @@ export function Quadro() {
       // antes, e ver o valor cobrado é o que torna a próxima estimativa crível.
       if (r.consumo) {
         partes.push(
-          `custou ${formatarUsd(r.consumo.custoUsd)} · ${formatarTokens(r.consumo.tokensTotal)} tokens`,
+          r.consumo.custoUsd === null
+            ? `${formatarTokens(r.consumo.tokensTotal)} tokens`
+            : `custou ${formatarUsd(r.consumo.custoUsd)} · ${formatarTokens(r.consumo.tokensTotal)} tokens`,
         );
       }
       setResumo(partes.length ? partes.join(', ') : 'nada mudou');
@@ -503,7 +509,18 @@ export function Quadro() {
           {resumo && `  —  ${resumo}`}
         </span>
         <span className="espaco" />
-        {consumo && consumo.totais.execucoes > 0 && (
+        {consumo && !consumo.agente.reportaCusto && (
+          <span
+            className="gasto"
+            title={
+              `${consumo.agente.nome} lê o Teams nesta instalação e não informa custo em dólar. ` +
+              'O registro guarda tokens e duração; o preço não aparece porque não existe dado.'
+            }
+          >
+            via {consumo.agente.nome}
+          </span>
+        )}
+        {consumo && consumo.agente.reportaCusto && consumo.totais.execucoes > 0 && (
           <span
             className="gasto"
             title={
