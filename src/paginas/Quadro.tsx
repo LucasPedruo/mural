@@ -12,12 +12,10 @@ import {
 } from '../componentes/ConfirmarAtualizacao';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
-import { DialogoDeTask } from '../componentes/DialogoDeTask';
 import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
 import type {
   ColunaId,
   Mural,
-  NovaTask,
   Progresso,
   RespostaConsumo,
   RespostaSprint,
@@ -57,8 +55,6 @@ export function Quadro() {
   const [consumo, setConsumo] = useState<RespostaConsumo | null>(null);
   const [confirmando, setConfirmando] = useState(false);
 
-  // 'nova' = criando; uma Task = editando aquela. Só task própria chega aqui.
-  const [editando, setEditando] = useState<Task | 'nova' | null>(null);
   const [anotando, setAnotando] = useState<Task | null>(null);
 
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
@@ -235,37 +231,7 @@ export function Quadro() {
     }
   }
 
-  // ---- tasks próprias e marca da daily ---------------------------------
-
-  async function salvarTask(dados: NovaTask) {
-    const alvo = editando;
-    setEditando(null);
-    setErro(null);
-    try {
-      const r =
-        alvo === 'nova'
-          ? await api.criarTask(muralId, dados)
-          : await api.editarTask(muralId, { ...dados, id: (alvo as Task).id });
-      setTasks(r.tasks);
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
-  async function removerTask(task: Task) {
-    const confirmado = window.confirm(
-      `Apagar "${task.summary}"?\n\nEla foi criada aqui dentro, então não há como recuperá-la ` +
-        'por uma atualização — o Teams nunca soube dela.',
-    );
-    if (!confirmado) return;
-    setEditando(null);
-    try {
-      const r = await api.removerTask(muralId, task.id);
-      setTasks(r.tasks);
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
+  // ---- marca da daily --------------------------------------------------
 
   async function salvarSolucao(solucao: string) {
     const task = anotando;
@@ -431,11 +397,15 @@ export function Quadro() {
     }
   }
 
-  // Card do Teams abre a mensagem original; card seu abre a própria edição —
-  // não há mensagem para abrir.
+  // Card do Teams abre a mensagem original. Card `manual` — resquício de quando
+  // dava para criar task aqui dentro — não tem mensagem para abrir, e dizer isso
+  // é melhor que mandar o Teams procurar um id que ele nunca viu.
   async function abrir(task: Task) {
     if (task.origem === 'manual') {
-      setEditando(task);
+      setErro(
+        'Esta task foi criada à mão numa versão anterior do Mural: ela não tem mensagem no ' +
+          'Teams para abrir. Você ainda pode arrastá-la entre as colunas.',
+      );
       return;
     }
     try {
@@ -563,9 +533,6 @@ export function Quadro() {
         <Link className="botao-link" to={`/m/${muralId}/painel`} title="Sprints e daily">
           Painéis
         </Link>
-        <button onClick={() => setEditando('nova')} title="Criar uma task que não veio do Teams">
-          Nova task
-        </button>
         <button className="primario" onClick={pedirAtualizacao} disabled={sincronizando}>
           {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
         </button>
@@ -578,18 +545,6 @@ export function Quadro() {
           usuario={consumo.usuario}
           aoConfirmar={confirmar}
           aoCancelar={() => setConfirmando(false)}
-        />
-      )}
-
-      {editando && (
-        <DialogoDeTask
-          task={editando === 'nova' ? null : editando}
-          mural={mural}
-          aoSalvar={(d) => void salvarTask(d)}
-          aoCancelar={() => setEditando(null)}
-          aoRemover={
-            editando === 'nova' ? undefined : () => void removerTask(editando)
-          }
         />
       )}
 
@@ -631,12 +586,11 @@ export function Quadro() {
       )}
 
       {foraDeAlcance > 0 && (
-        <p className="aviso faixa legado">
+        <p className="aviso faixa info">
           {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
           API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
-          {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards de{' '}
-          <strong>borda âmbar tracejada</strong>, os únicos que você move arrastando, junto com as
-          tasks criadas por você.
+          {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
+          <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
         </p>
       )}
 

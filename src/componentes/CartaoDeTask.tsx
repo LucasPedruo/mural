@@ -3,6 +3,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 
 import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
 import type { Task } from '../tipos';
+import { IconeImagem } from './icones';
 import './cartao.css';
 
 /** Quantos prints e quantas linhas de continuação o card mostra antes de
@@ -66,7 +67,7 @@ export function CartaoDeTask({
       ? 'Selecionada para juntar — clique para tirar da seleção'
       : 'Clique para incluir na task que vai ser juntada'
     : propria
-      ? 'Task sua: clique para editar, arraste para mudar de coluna'
+      ? 'Criada à mão numa versão anterior: não tem mensagem no Teams, mas você pode arrastá-la'
       : podeArrastar
         ? 'Clique para abrir no Teams · fora de alcance: arraste para mudar de coluna'
         : 'Clique para abrir a mensagem no Teams';
@@ -123,7 +124,9 @@ export function CartaoDeTask({
             {prints.length > 0 && (
               <div className="prints" aria-label={`${prints.length} print(s) na conversa`}>
                 {prints.slice(0, PRINTS_VISIVEIS).map((m) => (
-                  <span className="print" key={m.id} aria-hidden="true" />
+                  <span className="print" key={m.id}>
+                    <IconeImagem />
+                  </span>
                 ))}
                 {prints.length > PRINTS_VISIVEIS && (
                   <span className="mais">+{prints.length - PRINTS_VISIVEIS} prints</span>
@@ -157,9 +160,15 @@ export function CartaoDeTask({
               {ehNovo && <span className="badge info">novo</span>}
               {mudou && <span className="badge warning">mudou</span>}
               {task.kind === 'bug' && <span className="badge danger">bug</span>}
+              {/* Resquício de quando dava para criar task aqui dentro. O selo
+                  fica para o card do histórico antigo continuar legível — o
+                  Mural não cria mais task nenhuma. */}
               {propria && (
-                <span className="badge marca" title="Task criada por você, não veio do Teams">
-                  minha
+                <span
+                  className="badge marca"
+                  title="Criada à mão numa versão anterior do Mural, não veio do Teams"
+                >
+                  à mão
                 </span>
               )}
               {/* Quantas mensagens do Teams este card representa. Sem isso o

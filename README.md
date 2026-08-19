@@ -133,11 +133,7 @@ custo — veja [Quanto custa atualizar](#quanto-custa-atualizar).
 
 **Mover uma task** se faz no Teams: reaja na mensagem lá e atualize. A fonte da
 verdade é sempre a conversa. O arraste entre colunas só funciona nos cards que o
-Teams não acompanha mais (os "fora de alcance") e nas tasks que você mesmo criou.
-
-**Nova task** abre um formulário — texto, tipo e coluna — para o que não passou
-pelo canal: o que combinaram no corredor, o bug que você mesmo achou. Essas são
-livres: arraste, edite, apague. Um selo **minha** no rodapé diz de onde veio.
+Teams não acompanha mais — os "fora de alcance".
 
 **fiz**, no rodapé de qualquer card, joga ele para *Feito por mim*. Ou reaja no
 Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
@@ -262,18 +258,22 @@ Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
 </details>
 
 <details>
-<summary><b>Tasks fora de alcance (as de borda âmbar)</b></summary>
+<summary><b>Tasks fora de alcance (as de borda tracejada)</b></summary>
 
 A API devolve só as ~20 mensagens mais recentes. Quando uma task sai dessa
 janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
 check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
 "em aberto" para sempre.
 
-Esses cards têm aparência própria — borda âmbar tracejada, uma hachura de fundo,
-alça de arraste no canto e o selo *sem sinal do Teams* — porque, junto com as
-tasks que você mesmo criou, são os **únicos que você pode arrastar** entre as
-colunas do Teams. Tracejado sozinho não segurava esse recado: o card só se
-explicava quando a pessoa tentava arrastar os outros e nada acontecia. Nos demais o
+Esses cards têm aparência própria e são os **únicos que você pode arrastar**
+entre as colunas do Teams. A distinção é de **relevo, não de cor**: eles perdem a
+superfície e a sombra, então afundam na coluna em vez de flutuar sobre ela — que
+é exatamente o que são, cards que ninguém alimenta mais. Somam a borda
+tracejada, a alça de arraste no canto e o selo *sem sinal do Teams*, e voltam à
+superfície no hover, onde a mão manda.
+
+Cor aqui já significa status, na faixa lateral. Um fundo colorido competia com
+ela em vez de somar — foi o que uma primeira tentativa em âmbar mostrou. Nos demais o
 arraste nem começa: a próxima atualização desfaria a mudança, e um quadro que
 mente por dois minutos é pior que um quadro que não deixa você fazer o gesto. O
 servidor recusa esse caso mesmo que a interface deixasse passar.
@@ -283,16 +283,23 @@ mandar e o resumo da atualização avisa que o status foi corrigido.
 </details>
 
 <details>
-<summary><b>Tasks suas: por que nenhuma atualização as alcança</b></summary>
+<summary><b>Por que não existe "nova task"</b></summary>
 
-A task que você cria tem id próprio, então nenhuma atualização a alcança: o
-merge só mexe em ids que vieram do snapshot do Teams. Por isso ela é livre —
-arraste entre colunas, edite o texto, apague. Clicar no texto abre a edição em
-vez do Teams, que não tem mensagem para abrir.
+Existiu: dava para escrever uma task aqui dentro, com id próprio, que nenhuma
+atualização alcançava. Foi removida.
 
-A recíproca também vale: task que veio do Teams não pode ser editada nem apagada
-aqui. Mudar o texto criaria um quadro que discorda da conversa, e a próxima
+O Mural é um espelho da conversa, e task que só existe aqui não é espelho de
+nada: ela não tem mensagem para abrir, não tem reação para mudar de coluna e não
+tem autor além de você. O que ela cobria — o combinado no corredor, o bug que
+você mesmo achou — cabe melhor numa mensagem no canal, que é onde o time já olha.
+
+Task que veio do Teams nunca pôde ser editada nem apagada aqui, e continua
+assim: mudar o texto criaria um quadro que discorda da conversa, e a próxima
 leitura desfaria.
+
+Se o seu histórico tem tasks criadas na versão antiga, elas continuam no quadro,
+com o selo **à mão** e móveis entre colunas — apagar dado de alguém por causa de
+uma funcionalidade removida seria pior que manter duas linhas de código.
 </details>
 
 <details>
@@ -325,7 +332,7 @@ Tirar a reação no Teams tira o card da coluna na atualização seguinte. A exc
 escreveu não pode sumir por causa de um clique numa reação.
 
 **Pelo botão.** Todo card tem um **fiz** no rodapé, para o que você esqueceu de
-reagir e para as tasks suas, que nunca tiveram mensagem no Teams.
+reagir no Teams.
 
 Marcar como seu **não muda o status no Teams**. É uma marca pessoal, guardada
 num campo separado justamente para o sync não a apagar — o status real continua
@@ -437,7 +444,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | arquivo | o que é |
 | --- | --- |
 | `murais.json` | índice dos murais e suas conversas |
-| `murais/<id>/tasks.json` | o histórico daquele mural, com as tasks suas e as anotações da daily — o insubstituível |
+| `murais/<id>/tasks.json` | o histórico daquele mural, com as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — os painéis vivem daqui |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
@@ -453,5 +460,8 @@ O servidor escuta apenas em `127.0.0.1`.
 
 Fonte [DM Sans](https://fonts.google.com/specimen/DM+Sans) sob SIL Open Font
 License 1.1, embutida em `assets/`.
+
+Ícones do [lucide](https://lucide.dev) sob licença ISC, copiados como SVG inline
+em `src/componentes/icones.tsx` — dois traçados não justificam uma dependência.
 
 MIT.

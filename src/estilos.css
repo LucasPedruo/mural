@@ -99,14 +99,6 @@
   /* Feito por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
   --marca-meu: var(--color-brand-700);
 
-  /* O legado: cards que sairam das ~20 mensagens da API. Nao e status nem
-     aviso passageiro — e a natureza do card, e por isso tem cor propria em vez
-     de emprestar a de warning. */
-  --marca-legado: #c98a2e;
-  --tinta-legado: color-mix(in srgb, var(--marca-legado) 9%, transparent);
-  --bg-legado: color-mix(in srgb, var(--marca-legado) 13%, transparent);
-  --texto-legado: #8a5b00;
-
   --shadow-card: 0 1px 2px rgba(23, 32, 25, 0.04), 0 1px 3px rgba(23, 32, 25, 0.03);
   --shadow-card-hover: 0 2px 6px rgba(23, 32, 25, 0.07), 0 1px 3px rgba(23, 32, 25, 0.05);
   --shadow-arrastando: 0 8px 20px rgba(23, 32, 25, 0.14), 0 2px 6px rgba(23, 32, 25, 0.1);
@@ -144,11 +136,6 @@
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-500);
   --marca-meu: var(--color-brand-400);
-
-  --marca-legado: #d9a54a;
-  --tinta-legado: color-mix(in srgb, var(--marca-legado) 7%, transparent);
-  --bg-legado: color-mix(in srgb, var(--marca-legado) 17%, transparent);
-  --texto-legado: var(--color-warning-300);
 
   /* No dark a hierarquia vem da diferenca de superficie, nao de sombra. */
   --shadow-card: 0 0 rgba(0, 0, 0, 0);
@@ -239,12 +226,12 @@ button.perigo:hover:not(:disabled) {
 .badge.marca { background: var(--bg-brand-subtle); color: var(--marca-meu); }
 .badge.reacao { background: var(--bg-surface-3); font-size: 11px; padding: 1px 7px; }
 /* Fora de alcance nao e erro nem aviso passageiro: e um estado permanente do
-   card. O tom ambar do legado e o mesmo da borda e da hachura, para os tres
-   sinais lerem como um. */
+   card, e o card ja se distingue pelo relevo. O badge so nomeia o estado — sem
+   cor propria, que aqui significaria status. */
 .badge.alerta {
-  background: var(--bg-legado);
-  color: var(--texto-legado);
-  border: 1px solid var(--marca-legado);
+  background: var(--bg-surface-3);
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-strong);
 }
 
 /* ---- avisos ---- */
@@ -257,9 +244,6 @@ button.perigo:hover:not(:disabled) {
 .aviso.info { background: var(--bg-info); color: var(--text-info); }
 .aviso.erro { background: var(--bg-danger); color: var(--text-danger); }
 .aviso.ok { background: var(--bg-success); color: var(--text-success); }
-/* A faixa do legado usa a mesma cor da borda dos cards que ela explica: ler a
-   faixa e achar o card na tela tem de ser o mesmo gesto. */
-.aviso.legado { background: var(--bg-legado); color: var(--texto-legado); }
 /* Barra de acao, nao alerta: aparece porque voce selecionou cards. */
 .aviso.selecao {
   background: var(--bg-brand-subtle);

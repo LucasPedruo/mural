@@ -618,14 +618,17 @@ function gravarTasks(muralId, db) {
 // mensagens que a API devolve. Dali em diante o Teams nao conta mais nada sobre
 // ela, entao o quadro para de receber atualizacoes automaticas desse card.
 function foraDeAlcance(t, lastSync) {
-  // Task criada aqui dentro nunca esteve na janela do Teams, entao "saiu dela"
-  // nao quer dizer nada: ela e movivel por natureza, nao por ter se perdido.
+  // `manual` e task que uma versao anterior do Mural deixou gravada, quando dava
+  // para criar task a mao. Ela nunca esteve na janela do Teams, entao "saiu
+  // dela" nao quer dizer nada — e continua movivel, para nao virar um card
+  // preso no quadro de quem atualizou.
   if (t.origem === 'manual') return false;
   return !!lastSync && t.lastSeen !== lastSync;
 }
 
-// Quem pode trocar de coluna a mao: as que o Teams nao acompanha mais e as que
-// nasceram aqui. Nas demais a reacao manda, e o proximo sync desfaria o gesto.
+// Quem pode trocar de coluna a mao: as que o Teams nao acompanha mais e as
+// `manual` do historico antigo. Nas demais a reacao manda, e o proximo sync
+// desfaria o gesto.
 function podeMover(t, lastSync) {
   return t.origem === 'manual' || foraDeAlcance(t, lastSync);
 }
@@ -652,83 +655,6 @@ function tasksParaTela(muralId) {
     podeDesmarcar: podeDesmarcar(t, db.lastSync),
   }));
   return { lastSync: db.lastSync, tasks: lista };
-}
-
-// ------------------------------------------------------------- tasks proprias
-
-// Nem tudo que vira trabalho passa pelo canal: o que combinaram no corredor, o
-// bug que voce mesmo achou. Essas tasks nascem aqui, tem id proprio e o sync
-// nunca as toca — o merge so mexe em ids que vieram do snapshot.
-function nomeDoUsuario() {
-  const conta = lerJson(CONTA_FILE, {});
-  return conta.displayName || conta.mail || 'você';
-}
-
-function textoDeTask(valor, campo) {
-  const t = String(valor || '').trim();
-  if (!t) throw new Error(`Escreva ${campo}.`);
-  return t.slice(0, 1000);
-}
-
-function criarTaskManual(muralId, corpo) {
-  const summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
-  const status = STATUS_VALIDOS.includes(corpo.status) ? corpo.status : 'aberto';
-
-  const db = lerTasks(muralId);
-  const agora = new Date().toISOString();
-  const id = 'manual-' + crypto.randomUUID();
-
-  db.tasks[id] = {
-    id,
-    origem: 'manual',
-    author: nomeDoUsuario(),
-    createdDateTime: agora,
-    summary,
-    kind: corpo.kind === 'bug' ? 'bug' : 'sugestao',
-    reactions: [],
-    webUrl: '',
-    status,
-    firstSeen: agora,
-    statusChangedAt: agora,
-    statusAnterior: null,
-    lastSeen: agora,
-    movidoAMao: false,
-    meu: null,
-  };
-  gravarTasks(muralId, db);
-  return id;
-}
-
-// So task manual pode ser editada ou apagada: mexer no texto de uma mensagem do
-// Teams criaria um quadro que discorda da conversa, e o proximo sync desfaria.
-function taskManual(db, id) {
-  const t = db.tasks[String(id || '')];
-  if (!t) throw new Error('Task desconhecida.');
-  if (t.origem !== 'manual') {
-    throw new Error('Esta task veio do Teams — edite a mensagem por lá e atualize.');
-  }
-  return t;
-}
-
-function editarTaskManual(muralId, corpo) {
-  const db = lerTasks(muralId);
-  const t = taskManual(db, corpo.id);
-
-  t.summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
-  t.kind = corpo.kind === 'bug' ? 'bug' : 'sugestao';
-  if (STATUS_VALIDOS.includes(corpo.status) && corpo.status !== t.status) {
-    t.statusAnterior = t.status;
-    t.status = corpo.status;
-    t.statusChangedAt = new Date().toISOString();
-  }
-  gravarTasks(muralId, db);
-}
-
-function removerTaskManual(muralId, id) {
-  const db = lerTasks(muralId);
-  taskManual(db, id);
-  delete db.tasks[String(id)];
-  gravarTasks(muralId, db);
 }
 
 // "Feito por mim" NAO e um status do Teams — e uma marca pessoal, e por isso
@@ -988,7 +914,9 @@ function juntarTasks(muralId, ids) {
     const t = db.tasks[id];
     if (!t) throw new Error('Uma das tasks escolhidas nao existe mais.');
     if (t.origem === 'manual') {
-      throw new Error('Task sua nao entra num grupo: ela nao tem mensagem no Teams para juntar.');
+      throw new Error(
+        'Esta task foi criada a mao numa versao anterior e nao tem mensagem no Teams para juntar.'
+      );
     }
     return t;
   });
@@ -1798,43 +1726,6 @@ async function rotear(req, res) {
       }
       t.movidoAMao = true;
       gravarTasks(muralId, db);
-      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  // ---- tasks proprias ----
-
-  // Task que voce escreve aqui dentro: o que nao passou pelo canal mas e
-  // trabalho igual. Nasce com id proprio, entao nenhum sync a alcanca.
-  if (p === '/api/task' && req.method === 'POST') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      const id = criarTaskManual(muralId, await lerCorpoJson(req));
-      return json(res, 200, { ok: true, id, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/task' && req.method === 'PUT') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      editarTaskManual(muralId, await lerCorpoJson(req));
-      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/task' && req.method === 'DELETE') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      removerTaskManual(muralId, url.searchParams.get('id') || '');
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });

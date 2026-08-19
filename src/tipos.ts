@@ -52,7 +52,9 @@ export interface MensagemDaTask {
 
 export interface Task {
   id: string;
-  /** `manual` = você escreveu aqui dentro; nenhum sync alcança essa task. */
+  /** `manual` = task que uma versão anterior do Mural deixou gravada, quando
+   *  dava para criar task à mão. Nenhum sync alcança essas, então elas
+   *  continuam móveis — o quadro não pode prender o que já está no histórico. */
   origem: 'teams' | 'manual';
   author: string;
   createdDateTime: string;
@@ -81,13 +83,6 @@ export interface Task {
   /** 'auto' = o Mural juntou a rajada; 'mao' = você juntou ou separou, e nenhuma
    *  leitura desfaz isso. null = mensagem solta. */
   agrupamento: 'auto' | 'mao' | null;
-}
-
-/** O que o formulário de task própria manda para o servidor. */
-export interface NovaTask {
-  summary: string;
-  kind: 'bug' | 'sugestao';
-  status: Status;
 }
 
 export interface RespostaTasks {
