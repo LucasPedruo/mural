@@ -10,6 +10,7 @@ import {
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
+import { DialogoDeEscrita } from '../componentes/DialogoDeEscrita';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
@@ -18,6 +19,7 @@ import type {
   Mural,
   Progresso,
   RespostaConsumo,
+  RespostaEscrita,
   RespostaSprint,
   Status,
   Task,
@@ -60,6 +62,11 @@ export function Quadro() {
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
   const [editandoSprint, setEditandoSprint] = useState(false);
 
+  // A escrita no Teams é o que faz o arraste valer de verdade: ligada, o gesto
+  // põe a reação na mensagem em vez de virar uma opinião local do quadro.
+  const [escrita, setEscrita] = useState<RespostaEscrita | null>(null);
+  const [ligandoEscrita, setLigandoEscrita] = useState(false);
+
   // Seleção do "juntar". Vazia = modo desligado, e o clique no card volta a
   // abrir o Teams. Um Set porque a ordem não importa: a âncora do card juntado
   // é sempre a mensagem mais antiga, não a primeira que você clicou.
@@ -67,12 +74,14 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo] = await Promise.all([
+      const [tarefas, info, custo, ciclo, escreve] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
+        api.escrita(),
       ]);
+      setEscrita(escreve);
       setMural(info.mural);
       setTasks(tarefas.tasks);
       setLastSync(tarefas.lastSync);
@@ -268,6 +277,31 @@ export function Quadro() {
     }
   }
 
+  // A coluna Fazendo sai de uma convenção do TIME, não sua: qualquer um que
+  // reagir com esse emoji move o card. Por isso ela mora no cabeçalho da coluna
+  // e não nas suas preferências de daily.
+  async function trocarEmojiFazendo() {
+    const atual = consumo?.preferencias.emojiFazendo ?? '';
+    const escolhido = window.prompt(
+      'Qual reação o time usa no Teams para dizer "peguei esta"?\n\n' +
+        'Toda mensagem com ela cai na coluna Fazendo. Diferente do emoji de "fui eu", ' +
+        'esta vale para qualquer pessoa que reagir.\n\n' +
+        'Deixe em branco para desligar a coluna.',
+      atual,
+    );
+    if (escolhido === null) return;
+    try {
+      const r = await api.salvarPreferencias({ emojiFazendo: escolhido.trim() });
+      setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
+      setErro(null);
+      // A regra de status mudou: o quadro precisa reler para os cards caírem na
+      // coluna certa sem esperar a próxima atualização do Teams.
+      await carregar();
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   async function desmarcar(task: Task) {
     setErro(null);
     try {
@@ -370,6 +404,16 @@ export function Quadro() {
       return;
     }
 
+    // "Interagido" não é um destino: não existe emoji que signifique isso. É o
+    // que sobra quando alguém reage com outra coisa.
+    if (coluna === 'interagido') {
+      setErro(
+        '"Interagido" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
+          'outra coisa na mensagem. Arraste para Ninguém pegou, Fazendo ou Concluído.',
+      );
+      return;
+    }
+
     // Saindo da daily: a marca sai e o card volta para a coluna que o Teams
     // manda. Se ele for móvel e você largou noutra coluna, a mudança de status
     // vai junto.
@@ -425,7 +469,7 @@ export function Quadro() {
   // senão a mesma task apareceria duas vezes no quadro.
   const grupos = useMemo(() => {
     const porColuna: Record<ColunaId, Task[]> = {
-      aberto: [], interagido: [], feito: [], meu: [],
+      aberto: [], fazendo: [], interagido: [], feito: [], meu: [],
     };
     for (const t of tasks) {
       if (t.meu) porColuna.meu.push(t);
@@ -434,7 +478,7 @@ export function Quadro() {
 
     // Abertas: mais antigas primeiro — o que está parado há mais tempo sobe.
     porColuna.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
-    for (const k of ['interagido', 'feito'] as const) {
+    for (const k of ['fazendo', 'interagido', 'feito'] as const) {
       porColuna[k].sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt));
     }
     // Na daily o mais recente é o que você conta primeiro.
@@ -461,6 +505,7 @@ export function Quadro() {
 
   const foraDeAlcance = tasks.filter((t) => t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
+  const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
 
   return (
     <>
@@ -530,6 +575,19 @@ export function Quadro() {
             Encerrar sprint
           </button>
         )}
+        {/* O estado da escrita fica no cabeçalho porque ele muda o que o
+            arraste significa em todo o quadro. */}
+        <button
+          className={'escrita' + (escrita?.ligada ? ' ligada' : '')}
+          onClick={() => setLigandoEscrita(true)}
+          title={
+            escrita?.ligada
+              ? 'Escrita ligada: arrastar um card põe a reação na mensagem do Teams'
+              : 'O Mural só lê o Teams. Clique para ligar a escrita e fazer o arraste valer.'
+          }
+        >
+          {escrita?.ligada ? 'escrita ligada' : 'só leitura'}
+        </button>
         <Link className="botao-link" to={`/m/${muralId}/painel`} title="Sprints e daily">
           Painéis
         </Link>
@@ -545,6 +603,19 @@ export function Quadro() {
           usuario={consumo.usuario}
           aoConfirmar={confirmar}
           aoCancelar={() => setConfirmando(false)}
+        />
+      )}
+
+      {ligandoEscrita && escrita && (
+        <DialogoDeEscrita
+          estado={escrita}
+          aoMudar={(novo) => {
+            setEscrita(novo);
+            // Ligar ou desligar muda quem pode arrastar: o quadro relê para os
+            // cards passarem a aceitar (ou recusar) o gesto na hora.
+            void carregar();
+          }}
+          aoFechar={() => setLigandoEscrita(false)}
         />
       )}
 
@@ -590,7 +661,10 @@ export function Quadro() {
           {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
           API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
           {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
-          <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
+          <strong>sem fundo, de borda tracejada</strong>
+          {escrita?.ligada
+            ? '. Com a escrita ligada, qualquer card se move arrastando — nesses, o quadro é a única fonte.'
+            : ': os únicos que você move arrastando.'}
         </p>
       )}
 
@@ -604,7 +678,19 @@ export function Quadro() {
               grupos={grupos[coluna]}
               vazio={vazioDaColuna(coluna, emojiMeu)}
               acessorio={
-                coluna === 'meu' ? (
+                coluna === 'fazendo' ? (
+                  <button
+                    className="assinatura"
+                    onClick={() => void trocarEmojiFazendo()}
+                    title={
+                      emojiFazendo
+                        ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
+                        : 'Coluna desligada — clique para escolher o emoji de "peguei esta"'
+                    }
+                  >
+                    {emojiFazendo || 'sem emoji'}
+                  </button>
+                ) : coluna === 'meu' ? (
                   <button
                     className="assinatura"
                     onClick={() => void trocarEmojiMeu()}

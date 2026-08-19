@@ -4,6 +4,7 @@ import type { ColunaId, Mural, Status, SubtipoFonte, TipoFonte } from './tipos';
  *  pessoas isso não quer dizer nada. */
 export function rotuloDaColuna(status: ColunaId, fonte?: Pick<Mural, 'tipo' | 'subtipo'>): string {
   if (status === 'meu') return 'Feito por mim';
+  if (status === 'fazendo') return 'Fazendo';
   if (status === 'interagido') return 'Interagido';
   if (status === 'feito') return 'Concluído';
   return fonte?.tipo === 'chat' && fonte.subtipo === 'oneOnOne' ? 'Sem reação' : 'Ninguém pegou';
@@ -18,15 +19,16 @@ export function rotuloDoTipo(tipo: TipoFonte, subtipo: SubtipoFonte): string {
 
 export const CORES_DE_STATUS: Record<ColunaId, string> = {
   aberto: 'var(--marca-aberto)',
+  fazendo: 'var(--marca-fazendo)',
   interagido: 'var(--marca-interagido)',
   feito: 'var(--marca-feito)',
   meu: 'var(--marca-meu)',
 };
 
 /** Os três status do Teams. Usados onde a lista precisa ser só de status. */
-export const STATUS: Status[] = ['aberto', 'interagido', 'feito'];
+export const STATUS: Status[] = ['aberto', 'fazendo', 'interagido', 'feito'];
 
-export const COLUNAS: ColunaId[] = ['aberto', 'interagido', 'feito', 'meu'];
+export const COLUNAS: ColunaId[] = ['aberto', 'fazendo', 'interagido', 'feito', 'meu'];
 
 export function dataCurta(iso: string): string {
   const d = new Date(iso);

@@ -1,4 +1,8 @@
-export type Status = 'aberto' | 'interagido' | 'feito';
+/** `fazendo` sai de um emoji configurável (⚪ por padrão) na mensagem: é o
+ *  único status além do check que tem símbolo próprio, porque é o único que
+ *  alguém precisa ANUNCIAR — "peguei essa". `interagido` continua sendo o que
+ *  sobra: reagiram com outra coisa. */
+export type Status = 'aberto' | 'fazendo' | 'interagido' | 'feito';
 
 /** As colunas do quadro. `meu` não é um status do Teams: é a marca pessoal
  *  "eu fiz isso", que vive num campo separado justamente para o sync não a
@@ -129,6 +133,10 @@ export interface Preferencias {
    *  detecção e deixa só o botão "fiz" — o Graph não diz quem reagiu, então
    *  isso é uma convenção sua, não um dado da API. */
   emojiMeu: string;
+  /** A reação que quer dizer "alguém pegou esta": a coluna *Fazendo*. Diferente
+   *  do emojiMeu, esta é uma convenção do TIME — qualquer um que reagir com ela
+   *  move o card. Vazio desliga a coluna. */
+  emojiFazendo: string;
 }
 
 export interface RespostaConsumo {
@@ -139,6 +147,9 @@ export interface RespostaConsumo {
   /** Quem lê o Teams nesta instalação. `reportaCusto` falso esconde preço da
    *  tela: agente que não informa gasto não pode aparecer com zero dólar. */
   agente: AgenteEmUso;
+  /** Se o Mural pode ESCREVER reação no Teams. Ligada, arrastar card vale de
+   *  verdade; desligada, só os cards fora de alcance se movem. */
+  escrita: { ligada: boolean };
 }
 
 export interface ResultadoSync extends RespostaTasks {
@@ -333,4 +344,21 @@ export interface AgenteEmUso {
   id: IdDeAgente;
   nome: string;
   reportaCusto: boolean;
+}
+
+// ------------------------------------------------------- escrita no Teams
+
+/** O estado da autorização de escrita. O refresh token nunca chega aqui: a
+ *  interface sabe apenas se dá para escrever, por qual app, e se há um código
+ *  esperando ser digitado. */
+export interface RespostaEscrita {
+  ok: boolean;
+  ligada: boolean;
+  clientId: string;
+  tenant: string;
+  conectadoEm: string | null;
+  escopos: string;
+  /** Device code em andamento: o código curto e onde digitá-lo. */
+  aguardando: { codigo: string; endereco: string; expiraEm: string } | null;
+  erro: string;
 }

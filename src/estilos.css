@@ -94,6 +94,9 @@
   --text-info: var(--color-info-800);
 
   --marca-aberto: var(--color-danger-500);
+  /* Fazendo: o ambar cabe aqui, e nao no legado — "em andamento" e exatamente o
+     que essa cor diz em qualquer quadro. */
+  --marca-fazendo: var(--color-warning-500);
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-600);
   /* Feito por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
@@ -133,6 +136,7 @@
   --text-info: var(--color-info-200);
 
   --marca-aberto: var(--color-danger-500);
+  --marca-fazendo: var(--color-warning-500);
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-500);
   --marca-meu: var(--color-brand-400);

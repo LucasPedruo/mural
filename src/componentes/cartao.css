@@ -65,6 +65,16 @@
   cursor: default;
 }
 
+/* Da para arrastar sem estar fora de alcance: e o caso da escrita ligada, em que
+   o gesto escreve a reacao no Teams. O cursor e o unico sinal necessario — o
+   card nao mudou de natureza, so ganhou uma acao. */
+.cartao.movivel {
+  cursor: grab;
+}
+.cartao.movivel:active {
+  cursor: grabbing;
+}
+
 .cartao.arrastando {
   box-shadow: var(--shadow-arrastando);
   border-color: var(--border-strong);

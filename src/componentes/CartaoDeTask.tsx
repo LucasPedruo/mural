@@ -69,7 +69,7 @@ export function CartaoDeTask({
     : propria
       ? 'Criada à mão numa versão anterior: não tem mensagem no Teams, mas você pode arrastá-la'
       : podeArrastar
-        ? 'Clique para abrir no Teams · fora de alcance: arraste para mudar de coluna'
+        ? 'Clique para abrir no Teams · arraste para mudar de coluna'
         : 'Clique para abrir a mensagem no Teams';
 
   return (
@@ -99,7 +99,8 @@ export function CartaoDeTask({
             style={estilo}
             className={[
               'cartao',
-              podeArrastar ? 'fora' : 'preso',
+              task.foraDeAlcance && !propria ? 'fora' : 'preso',
+              podeArrastar ? 'movivel' : '',
               propria ? 'propria' : '',
               agrupado ? 'rajada' : '',
               selecionado ? 'selecionado' : '',
