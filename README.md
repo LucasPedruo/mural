@@ -49,9 +49,14 @@ canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação
 ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de
 exigir que você decore o que cada símbolo faz.
 
-**Os filtros** ficam acima das colunas: por **quem pediu** e por **etiqueta**. Eles
-cortam o quadro inteiro, e uma faixa avisa quando algo está escondido — contagem
-de coluna que mente é pior que filtro que não existe.
+**Os filtros** ficam acima das colunas: dois selects, por **quem pediu** e por
+**etiqueta**, com a contagem em cada opção. São selects e não pílulas porque a
+lista de quem pede cresce com o time e a de etiquetas cresce com o uso — uma barra
+que quebra em três linhas empurra o quadro para baixo da dobra, e o select tem
+altura fixa por mais longa que a lista fique.
+
+Eles cortam o quadro inteiro, e uma faixa avisa quando algo está escondido:
+contagem de coluna que mente é pior que filtro que não existe.
 
 O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
 colunas existe só para os cards que o Teams não acompanha mais.

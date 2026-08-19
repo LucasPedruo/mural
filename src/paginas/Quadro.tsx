@@ -829,41 +829,51 @@ export function Quadro() {
         </p>
       )}
 
-      {autores.length > 1 && (
+      {/* Select, e não pílulas: a lista de quem pede cresce com o time e a de
+          etiquetas cresce com o uso, e uma barra que quebra em três linhas
+          empurra o quadro para baixo da dobra. O select mantém a altura fixa por
+          mais longa que a lista fique, e a contagem cabe na própria opção. */}
+      {(autores.length > 1 || tags.length > 0) && (
         <div className="filtro">
-          <span className="rotulo">
-            <IconePessoa tamanho={13} /> quem pediu
-          </span>
-          {autores.map((a) => (
-            <button
-              key={a.autor}
-              aria-pressed={autorFiltro === a.autor}
-              onClick={() => setAutorFiltro(autorFiltro === a.autor ? null : a.autor)}
-              title={`${a.quantas} task(s) de ${a.autor}`}
-            >
-              {a.autor} <span className="quantas">{a.quantas}</span>
-            </button>
-          ))}
-        </div>
-      )}
+          {autores.length > 1 && (
+            <label className="campo-de-filtro">
+              <span className="rotulo">
+                <IconePessoa tamanho={13} /> quem pediu
+              </span>
+              <select
+                className={autorFiltro ? 'ligado' : ''}
+                value={autorFiltro ?? ''}
+                onChange={(e) => setAutorFiltro(e.target.value || null)}
+              >
+                <option value="">todos ({tasks.length})</option>
+                {autores.map((a) => (
+                  <option key={a.autor} value={a.autor}>
+                    {a.autor} ({a.quantas})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
-      {tags.length > 0 && (
-        <div className="filtro">
-          <span className="rotulo">
-            <IconeEtiqueta tamanho={13} /> etiquetas
-          </span>
-          {tags.map((t) => (
-            <button
-              key={t.tag}
-              aria-pressed={tagFiltro === t.tag.toLowerCase()}
-              onClick={() =>
-                setTagFiltro(tagFiltro === t.tag.toLowerCase() ? null : t.tag.toLowerCase())
-              }
-              title={`${t.quantas} task(s) com esta etiqueta`}
-            >
-              {t.tag} <span className="quantas">{t.quantas}</span>
-            </button>
-          ))}
+          {tags.length > 0 && (
+            <label className="campo-de-filtro">
+              <span className="rotulo">
+                <IconeEtiqueta tamanho={13} /> etiqueta
+              </span>
+              <select
+                className={tagFiltro ? 'ligado' : ''}
+                value={tagFiltro ?? ''}
+                onChange={(e) => setTagFiltro(e.target.value || null)}
+              >
+                <option value="">todas</option>
+                {tags.map((t) => (
+                  <option key={t.tag} value={t.tag.toLowerCase()}>
+                    {t.tag} ({t.quantas})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
 
