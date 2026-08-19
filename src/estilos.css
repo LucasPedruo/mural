@@ -265,6 +265,7 @@ button.perigo:hover:not(:disabled) {
 .aviso.info { background: var(--bg-info); color: var(--text-info); }
 .aviso.erro { background: var(--bg-danger); color: var(--text-danger); }
 .aviso.ok { background: var(--bg-success); color: var(--text-success); }
+.aviso.atencao { background: var(--bg-warning); color: var(--text-warning); }
 /* Barra de acao, nao alerta: aparece porque voce selecionou cards. */
 .aviso.selecao {
   background: var(--bg-brand-subtle);

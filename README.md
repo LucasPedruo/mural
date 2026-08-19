@@ -345,7 +345,12 @@ tracejada, a alça de arraste no canto e o selo *sem sinal do Teams*, e voltam �
 superfície no hover, onde a mão manda.
 
 Cor aqui já significa status, na faixa lateral. Um fundo colorido competia com
-ela em vez de somar — foi o que uma primeira tentativa em âmbar mostrou. Nos demais o
+ela em vez de somar — foi o que uma primeira tentativa em âmbar mostrou.
+
+O quadro avisa quantas são numa faixa amarela no topo, e a faixa **fecha**. O que
+fica guardado não é "fechei", é **quantas havia quando você fechou**: as mesmas 23
+não voltam a incomodar, e a 24ª traz o aviso de volta — que é a única hora em que
+ele tem algo novo a dizer. Nos demais o
 arraste nem começa: a próxima atualização desfaria a mudança, e um quadro que
 mente por dois minutos é pior que um quadro que não deixa você fazer o gesto. O
 servidor recusa esse caso mesmo que a interface deixasse passar.

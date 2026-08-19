@@ -13,7 +13,12 @@ import {
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
-import { IconeEtiqueta, IconePessoa, IconeVoltar } from '../componentes/icones';
+import {
+  IconeEtiqueta,
+  IconeFechar,
+  IconePessoa,
+  IconeVoltar,
+} from '../componentes/icones';
 import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
 import type {
   ColunaId,
@@ -80,6 +85,15 @@ export function Quadro() {
 
   // Cards recolhidos, por mural. Recolher é sobre o que você quer ver agora, não
   // sobre a task — então é preferência de tela, e mora no navegador.
+  // O aviso de "fora de alcance" guarda QUANTAS tasks havia quando você o
+  // fechou, não um sim/não. Assim ele não volta a incomodar pelas mesmas 23 que
+  // você já conhece, mas reaparece quando a 24ª sai da janela — que é a única
+  // hora em que ele tem algo novo a dizer.
+  const chaveAvisoFora = `mural:aviso-fora-de-alcance:${muralId}`;
+  const [foraCiente, setForaCiente] = useState(
+    () => Number(localStorage.getItem(chaveAvisoFora)) || 0,
+  );
+
   const chaveCards = `mural:cards-colapsados:${muralId}`;
   const [cardsColapsados, setCardsColapsados] = useState<Set<string>>(() => {
     try {
@@ -396,6 +410,11 @@ export function Quadro() {
     } catch (e) {
       setErro((e as Error).message);
     }
+  }
+
+  function fecharAvisoFora(quantas: number) {
+    localStorage.setItem(chaveAvisoFora, String(quantas));
+    setForaCiente(quantas);
   }
 
   function colapsarCartao(task: Task, fechar: boolean) {
@@ -791,12 +810,22 @@ export function Quadro() {
         </p>
       )}
 
-      {foraDeAlcance > 0 && (
-        <p className="aviso faixa info">
-          {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
-          API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
-          {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
-          <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
+      {foraDeAlcance > foraCiente && (
+        <p className="aviso faixa atencao centrada">
+          <span>
+            {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
+            API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
+            {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
+            <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
+          </span>
+          <button
+            className="fechar"
+            onClick={() => fecharAvisoFora(foraDeAlcance)}
+            title="Fechar — volta a aparecer se outra task sair da janela"
+            aria-label="Fechar o aviso"
+          >
+            <IconeFechar tamanho={14} />
+          </button>
         </p>
       )}
 
