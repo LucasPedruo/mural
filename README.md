@@ -2,15 +2,93 @@
 
 Seu canal do Teams vira um kanban. O emoji é o status.
 
-Muitos times recebem demandas por um canal do Teams e se organizam por reação:
-alguém reage com um relógio para dizer "eu pego", com um check para dizer "feito".
-Funciona — até o canal encher e ninguém mais conseguir ver o que está solto.
+## Por que existe
 
-O Mural lê esse canal e mostra quatro colunas: **ninguém pegou**, **interagido**,
-**concluído** e **feito por mim** — esta última sua, com a anotação que você lê
-na daily. Clicar num card abre a mensagem original no Teams.
+Este é um projeto pessoal, feito para me ajudar nos trabalhos da empresa.
 
-![três colunas: ninguém pegou, interagido, concluído](#)
+As demandas chegam por um canal do Teams e o time se organiza por reação:
+alguém reage com um relógio para dizer "eu pego", com um check para dizer
+"feito". Funciona — até o canal encher e ninguém mais conseguir ver o que está
+solto. E na daily eu preciso lembrar o que fiz, coisa que o Teams não guarda em
+lugar nenhum.
+
+O Mural resolve os dois: lê o canal, mostra o que está em aberto e mantém uma
+coluna com o que eu fiz, agrupada por dia, com a anotação de como resolvi.
+
+## Em 30 segundos
+
+Quatro colunas:
+
+| Coluna | O que cai nela |
+| --- | --- |
+| **Ninguém pegou** | mensagem sem reação nenhuma |
+| **Interagido** | mensagem com qualquer reação que não seja check |
+| **Concluído** | mensagem com check (✅ ☑️ ✔️) |
+| **Feito por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
+
+Clicar num card abre a mensagem original no Teams. Clicar em **Atualizar** relê
+a conversa.
+
+## Começando
+
+Você precisa de:
+
+- **Node.js 18+**
+- **[Claude Code](https://claude.com/claude-code)** instalado e autenticado
+- O **conector Microsoft 365** ativo no Claude Code (`/mcp` para conferir)
+
+```bash
+git clone https://github.com/<voce>/mural.git
+cd mural
+npm install
+npm run build
+node server.js
+```
+
+Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuração
+que verifica o Claude Code, mostra com qual conta Microsoft você está logado e
+pede a conversa que vira o quadro.
+
+No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
+servidor e abre o navegador. Para trocar a porta:
+`MURAL_PORT=5000 node server.js`.
+
+Não existe login próprio. A autenticação com a Microsoft é a do Claude Code e do
+conector — este servidor nunca vê nem guarda credencial nenhuma. Quando o token
+do conector expira, o Mural para de atualizar até você reautorizar com `/mcp`.
+
+### Escolhendo a conversa
+
+**Chats e grupos** aparecem numa lista para você clicar.
+
+**Canais de time** precisam de link: no Teams, abra o canal, clique nos "…" de
+qualquer mensagem, "Copiar link", e cole. Isso não é preguiça — a API do Graph
+não expõe rota para listar times ou canais a um conector. O link resolve porque
+carrega o time, o canal e os nomes legíveis de ambos.
+
+### Desenvolvimento
+
+```bash
+node server.js   # API na 4317
+npm run dev      # interface na 5317, com /api indo para a 4317
+```
+
+## O dia a dia
+
+**Atualizar** relê a conversa e redesenha o quadro. Leva 1 a 2 minutos e tem
+custo — veja [Quanto custa atualizar](#quanto-custa-atualizar).
+
+**Mover uma task** se faz no Teams: reaja na mensagem lá e atualize. A fonte da
+verdade é sempre a conversa. O arraste entre colunas só funciona nos cards que o
+Teams não acompanha mais (os "fora de alcance") e nas tasks que você mesmo criou.
+
+**Nova task** abre um formulário — texto, tipo e coluna — para o que não passou
+pelo canal: o que combinaram no corredor, o bug que você mesmo achou. Essas são
+livres: arraste, edite, apague. Um selo **minha** no rodapé diz de onde veio.
+
+**fiz**, no rodapé de qualquer card, joga ele para *Feito por mim*. Ou reaja no
+Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
+próxima atualização.
 
 ## Como funciona
 
@@ -35,31 +113,20 @@ que nenhum quadro.
 por leitura. O Mural guarda tudo que já passou, então uma task de semanas atrás
 continua no quadro mesmo tendo saído da janela do Teams.
 
-## Regra de status
-
-| Reação na mensagem | Coluna |
-| --- | --- |
-| nenhuma | Ninguém pegou |
-| **check** (✅ ☑️ ✔️) | Concluído |
-| **qualquer outra** | Interagido |
+<details>
+<summary><b>Por que qualquer emoji serve como status</b></summary>
 
 Não há lista de emojis para manter. Times reais não usam um emoji fixo para
 "peguei" — cada pessoa reage com o que quiser, e um emoji inédito amanhã já cai
 no lugar certo sozinho. O emoji usado aparece como badge no card, porque sem
 convenção fixa é a única forma de saber o que aconteceu ali.
 
-A fonte da verdade é sempre o Teams: para mover uma task, reaja na mensagem lá
-e clique em Atualizar. O arraste entre colunas existe, mas só para os casos em
-que o Teams não tem mais como responder — veja "tasks fora de alcance" abaixo —
-e para as tasks que você mesmo criou, que ele nunca viu.
-
-A quarta coluna, **Feito por mim**, não sai de reação nenhuma: é sua, e o
-Teams não opina sobre ela.
-
 Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
 "ninguém pegou" pressupõe um time dividindo trabalho.
+</details>
 
-## Tasks fora de alcance
+<details>
+<summary><b>Tasks fora de alcance (as de borda tracejada)</b></summary>
 
 A API devolve só as ~20 mensagens mais recentes. Quando uma task sai dessa
 janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
@@ -74,27 +141,27 @@ servidor recusa esse caso mesmo que a interface deixasse passar.
 
 Se uma task movida à mão voltar a aparecer na janela, a reação real volta a
 mandar e o resumo da atualização avisa que o status foi corrigido.
+</details>
 
-## Tasks suas
+<details>
+<summary><b>Tasks suas: por que nenhuma atualização as alcança</b></summary>
 
-Nem tudo que vira trabalho passa pelo canal: o que combinaram no corredor, o bug
-que você mesmo achou. **Nova task** abre um formulário — texto, tipo e coluna —
-e o card nasce direto no quadro.
-
-Ele tem id próprio, então nenhuma atualização o alcança: o merge só mexe em ids
-que vieram do snapshot do Teams. Por isso essas tasks são livres — arraste entre
-colunas, edite o texto, apague. Um selo **minha** no rodapé diz de onde ela veio,
-e clicar no texto abre a edição em vez do Teams, que não tem mensagem para abrir.
+A task que você cria tem id próprio, então nenhuma atualização a alcança: o
+merge só mexe em ids que vieram do snapshot do Teams. Por isso ela é livre —
+arraste entre colunas, edite o texto, apague. Clicar no texto abre a edição em
+vez do Teams, que não tem mensagem para abrir.
 
 A recíproca também vale: task que veio do Teams não pode ser editada nem apagada
 aqui. Mudar o texto criaria um quadro que discorda da conversa, e a próxima
 leitura desfaria.
+</details>
 
-## Feito por mim
+<details>
+<summary><b>Feito por mim: as regras da coluna da daily</b></summary>
 
-A quarta coluna é a da daily, **agrupada pelo dia** — Hoje, Ontem, e a data nos
-anteriores. A anotação de como você resolveu fica visível no próprio card, não
-escondida atrás de um clique: durante a reunião ninguém abre um por um.
+A coluna é **agrupada pelo dia** — Hoje, Ontem, e a data nos anteriores. A
+anotação de como você resolveu fica visível no próprio card, não escondida atrás
+de um clique: durante a reunião ninguém abre um por um.
 
 Um card chega ali de dois jeitos.
 
@@ -137,6 +204,7 @@ como no resto do quadro.
 
 Editar a anotação depois não muda o dia do agrupamento — corrigir uma vírgula
 não pode jogar o que você fez ontem para o grupo de hoje.
+</details>
 
 ## Quanto custa atualizar
 
@@ -144,33 +212,36 @@ Cada atualização roda o Claude Code de verdade, e isso é cobrado da sua conta
 O custo não é trivial: só o system prompt da ferramenta consome dezenas de
 milhares de tokens de cache antes de ler a primeira mensagem.
 
-**Toda** ida ao Claude Code entra na conta, não só a atualização do quadro: o
-onboarding também roda o modelo para verificar sua conta Microsoft e para listar
-os chats — essa última leva 2 a 3 minutos de API e custa de acordo. Cada
-execução fica registrada com a operação que a motivou (`sync`, `conta`,
-`chats`), e o total no topo do quadro soma as três; passar o mouse mostra a
-quebra. Uma leitura que falhou no meio também é registrada: os tokens foram
-cobrados do mesmo jeito, e um acumulado que só conta os sucessos mente para
-menos.
+Por isso o Mural **pergunta antes de gastar**. O diálogo mostra o custo estimado
+em dólares, os tokens e a duração, além do total que sua conta já consumiu. Quem
+não quer ser perguntado marca "não perguntar de novo" — a preferência é por conta
+Microsoft, em `data/preferencias.json`.
 
-Só as execuções de `sync` entram na **estimativa** da próxima atualização.
-Misturar as leituras do onboarding na média faria o diálogo prometer um preço
-que nunca acontece.
-
-Por isso o Mural **pergunta antes de gastar**. O diálogo mostra o custo
-estimado em dólares, os tokens e a duração, além do total que sua conta já
-consumiu. Quem não quer ser perguntado marca "não perguntar de novo" — a
-preferência é por conta Microsoft, em `data/preferencias.json`.
+<details>
+<summary><b>Como a estimativa é calculada</b></summary>
 
 A estimativa é a média das **cinco últimas atualizações do mesmo mural**; sem
 histórico próprio, cai para a média dos outros murais; sem nenhum histórico, o
-diálogo diz que não há como estimar em vez de inventar um número. Depois de
-cada atualização o custo real aparece no resumo — é o que torna a estimativa
-seguinte confiável.
+diálogo diz que não há como estimar em vez de inventar um número. Depois de cada
+atualização o custo real aparece no resumo — é o que torna a estimativa seguinte
+confiável.
+
+**Toda** ida ao Claude Code entra na conta, não só a atualização do quadro: o
+onboarding também roda o modelo para verificar sua conta Microsoft e para listar
+os chats — essa última leva 2 a 3 minutos de API e custa de acordo. Cada execução
+fica registrada com a operação que a motivou (`sync`, `conta`, `chats`), e o
+total no topo do quadro soma as três; passar o mouse mostra a quebra. Uma leitura
+que falhou no meio também é registrada: os tokens foram cobrados do mesmo jeito,
+e um acumulado que só conta os sucessos mente para menos.
+
+Só as execuções de `sync` entram na estimativa da próxima atualização. Misturar
+as leituras do onboarding na média faria o diálogo prometer um preço que nunca
+acontece.
 
 Os números vêm do evento `result` do Claude Code (`total_cost_usd` e `usage`),
 ou seja, é o custo cobrado, não uma conta nossa. O acumulado por conta fica em
 `data/consumo.json`, limitado às últimas 200 execuções.
+</details>
 
 ## Vários murais
 
@@ -184,59 +255,6 @@ lista de chats e a preferência de confirmação — e volta para a tela de
 configuração. Murais, histórico de tasks e registro de gastos ficam intactos:
 um botão de configuração não pode apagar trabalho acumulado por tabela.
 
-## Stack
-
-Interface em **React + TypeScript**, compilada pelo Vite, com
-[@hello-pangea/dnd](https://github.com/hello-pangea/dnd) para o arraste entre
-colunas. O servidor é **Node puro** — sem framework — e faz três coisas: fala
-com o Claude Code, guarda o histórico e serve o build.
-
-## Requisitos
-
-- **Node.js 18+**
-- **[Claude Code](https://claude.com/claude-code)** instalado e autenticado
-- O **conector Microsoft 365** ativo no Claude Code (`/mcp` para conferir)
-
-Não existe login próprio. A autenticação com a Microsoft é a do Claude Code e
-do conector — este servidor nunca vê nem guarda credencial nenhuma. Quando o
-token do conector expira, o Mural para de atualizar até você reautorizar
-com `/mcp`.
-
-## Instalação
-
-```bash
-git clone https://github.com/<voce>/mural.git
-cd mural
-npm install
-npm run build
-node server.js
-```
-
-Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuração
-que verifica o Claude Code, mostra com qual conta Microsoft você está logado e
-pede a conversa que vira o quadro.
-
-No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
-servidor e abre o navegador.
-
-Para trocar a porta: `MURAL_PORT=5000 node server.js`.
-
-### Desenvolvimento
-
-```bash
-node server.js   # API na 4317
-npm run dev      # interface na 5317, com /api indo para a 4317
-```
-
-## Escolhendo a conversa
-
-**Chats e grupos** aparecem numa lista para você clicar.
-
-**Canais de time** precisam de link: no Teams, abra o canal, clique nos "…" de
-qualquer mensagem, "Copiar link", e cole. Isso não é preguiça — a API do Graph
-não expõe rota para listar times ou canais a um conector. O link resolve porque
-carrega o time, o canal e os nomes legíveis de ambos.
-
 ## Limites conhecidos
 
 Vale saber antes de adotar:
@@ -249,13 +267,20 @@ Vale saber antes de adotar:
   é invisível aqui — só a reação na mensagem principal conta.
 - **20 mensagens por leitura.** É o teto da API. O histórico acumulado no disco
   compensa isso ao longo do tempo, mas na primeira execução você só verá as 20
-  mais recentes — e o que sai dessa janela vira "fora de alcance" (veja acima).
+  mais recentes — e o que sai dessa janela vira "fora de alcance".
 - **Um sync leva 1 a 2 minutos.** São ~21 chamadas ao Graph mais o resumo de
   cada mensagem. A barra de progresso mostra a etapa real.
 - **Listar chats no onboarding leva 2 a 3 minutos**, porque o Teams entrega os
   chats em páginas de 25 e cada página é uma ida à API. Só acontece uma vez.
 - **A etiqueta `bug` é um palpite do modelo**, inferido do texto da mensagem —
   não é um campo do Teams. Autor, data, link e reações, esses são literais.
+
+## Stack
+
+Interface em **React + TypeScript**, compilada pelo Vite, com
+[@hello-pangea/dnd](https://github.com/hello-pangea/dnd) para o arraste entre
+colunas. O servidor é **Node puro** — sem framework — e faz três coisas: fala
+com o Claude Code, guarda o histórico e serve o build.
 
 ## Onde ficam seus dados
 
