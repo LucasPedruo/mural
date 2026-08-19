@@ -20,6 +20,20 @@ import type {
   TotaisDeConsumo,
 } from './tipos';
 
+// Corpo que não é JSON quase nunca vem do Mural: vem de quem está NA FRENTE
+// dele. Em desenvolvimento é o proxy do Vite respondendo erro em HTML porque a
+// API não está de pé na 4317 — e dizer só "resposta ilegível" esconde o único
+// fato que resolve o problema.
+function erroDeCorpoIlegivel(status: number): string {
+  if (status === 0 || status >= 500) {
+    return (
+      `A API do Mural não respondeu (HTTP ${status}). ` +
+      "Ela roda em outro processo: confira se `node server.js` está de pé na porta 4317."
+    );
+  }
+  return `Resposta ilegível do servidor (HTTP ${status}).`;
+}
+
 // O servidor devolve { ok:false, erro } com status 4xx/5xx em falha esperada.
 // Trazer essa mensagem para o throw evita o generico "Failed to fetch" na tela.
 async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
@@ -28,7 +42,7 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     corpo = await resposta.json();
   } catch {
-    throw new Error(`Resposta ilegível do servidor (HTTP ${resposta.status}).`);
+    throw new Error(erroDeCorpoIlegivel(resposta.status));
   }
   const dados = corpo as { ok?: boolean; erro?: string };
   if (!resposta.ok || dados.ok === false) {
@@ -188,6 +202,6 @@ async function pedirBruto<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     return (await resposta.json()) as T;
   } catch {
-    throw new Error(`Resposta ilegível do servidor (HTTP ${resposta.status}).`);
+    throw new Error(erroDeCorpoIlegivel(resposta.status));
   }
 }
