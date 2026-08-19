@@ -36,6 +36,16 @@ reação* — "por outros" pressupõe um time.
 Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
 **Atualizar** relê a conversa.
 
+**A ordem das colunas é sua**: arraste uma coluna pelo cabeçalho e ela troca de
+lugar. Fica guardada por mural, no navegador, e é validada na leitura — uma versão
+nova do Mural pode ter coluna que a ordem salva não conhece, e uma lista velha no
+navegador não pode fazer coluna desaparecer do quadro.
+
+As colunas ficam numa **fila única que rola no horizontal**, sem quebrar linha: é
+o que o arraste entende como lista, e é o que faz um quadro parecer um quadro em
+vez de duas fileiras de colunas. Quem tem tela pequena colapsa o que não está
+usando — foi para isso que o colapsar existe.
+
 **Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
 fina com o rótulo de pé e a contagem. **Cada card também**: recolhido, ele mostra
 só o título e o rodapé, sem os prints, sem a continuação da rajada e sem a

@@ -1,10 +1,10 @@
-import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api';
 import { BarraDeSync } from '../componentes/BarraDeSync';
-import { Coluna, type GrupoDaColuna } from '../componentes/Coluna';
+import { Coluna, TIPO_COLUNA, type GrupoDaColuna } from '../componentes/Coluna';
 import {
   ConfirmarAtualizacao,
   formatarTokens,
@@ -89,6 +89,21 @@ export function Quadro() {
   // fechou, não um sim/não. Assim ele não volta a incomodar pelas mesmas 23 que
   // você já conhece, mas reaparece quando a 24ª sai da janela — que é a única
   // hora em que ele tem algo novo a dizer.
+  // A ordem das colunas é sua. O que fica guardado é validado na leitura: uma
+  // versão nova do Mural pode ter coluna que a ordem salva não conhece (e
+  // vice-versa), e uma lista desatualizada no navegador não pode fazer coluna
+  // desaparecer do quadro.
+  const chaveOrdem = `mural:ordem-das-colunas:${muralId}`;
+  const [ordem, setOrdem] = useState<ColunaId[]>(() => {
+    try {
+      const salva = JSON.parse(localStorage.getItem(chaveOrdem) || '[]') as ColunaId[];
+      const conhecidas = salva.filter((c) => COLUNAS.includes(c));
+      return [...conhecidas, ...COLUNAS.filter((c) => !conhecidas.includes(c))];
+    } catch {
+      return [...COLUNAS];
+    }
+  });
+
   const chaveAvisoFora = `mural:aviso-fora-de-alcance:${muralId}`;
   const [foraCiente, setForaCiente] = useState(
     () => Number(localStorage.getItem(chaveAvisoFora)) || 0,
@@ -412,6 +427,16 @@ export function Quadro() {
     }
   }
 
+  function reordenarColunas(de: number, para: number) {
+    setOrdem((atual) => {
+      const nova = [...atual];
+      const [movida] = nova.splice(de, 1);
+      nova.splice(para, 0, movida);
+      localStorage.setItem(chaveOrdem, JSON.stringify(nova));
+      return nova;
+    });
+  }
+
   function fecharAvisoFora(quantas: number) {
     localStorage.setItem(chaveAvisoFora, String(quantas));
     setForaCiente(quantas);
@@ -517,6 +542,15 @@ export function Quadro() {
   async function aoSoltar(resultado: DropResult) {
     const destino = resultado.destination;
     if (!destino) return;
+
+    // Coluna e card viajam no mesmo DragDropContext, separados por `type`. Sem
+    // este desvio, arrastar uma coluna cairia na lógica de mover task.
+    if (resultado.type === TIPO_COLUNA) {
+      if (destino.index !== resultado.source.index) {
+        reordenarColunas(resultado.source.index, destino.index);
+      }
+      return;
+    }
 
     const coluna = destino.droppableId as ColunaId;
     const task = tasks.find((t) => t.id === resultado.draggableId);
@@ -895,59 +929,65 @@ export function Quadro() {
       )}
 
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
-        <main className="colunas">
-          {COLUNAS.map((coluna) => (
-            <Coluna
-              key={coluna}
-              status={coluna}
-              rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
-              grupos={grupos[coluna]}
-              vazio={vazioDaColuna(coluna, emojiMeu)}
-              colapsada={colapsadas.has(coluna)}
-              aoColapsar={(fechar) => colapsar(coluna, fechar)}
-              acessorio={
-                coluna === 'fazendo' ? (
-                  <button
-                    className="assinatura"
-                    onClick={() => void trocarEmojiFazendo()}
-                    title={
-                      emojiFazendo
-                        ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
-                        : 'Coluna desligada — clique para escolher o emoji de "peguei esta"'
-                    }
-                  >
-                    {emojiFazendo || 'sem emoji'}
-                  </button>
-                ) : coluna === 'meu' ? (
-                  <button
-                    className="assinatura"
-                    onClick={() => void trocarEmojiMeu()}
-                    title={
-                      emojiMeu
-                        ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`
-                        : 'Nenhuma reação configurada — clique para escolher a sua'
-                    }
-                  >
-                    {emojiMeu || 'sem reação'}
-                  </button>
-                ) : undefined
-              }
-              ultimaVisita={ultimaVisita}
-              selecionando={selecionados.size > 0}
-              selecionados={selecionados}
-              aoAbrir={(t) => void abrir(t)}
-              aoMarcarComoMeu={setAnotando}
-              aoDesmarcarComoMeu={(t) => void desmarcar(t)}
-              aoSelecionar={alternarSelecao}
-              aoSeparar={(t) => void separar(t)}
-              aoEtiquetar={setEtiquetando}
-              aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
-              aoApagar={(t) => void apagar(t)}
-              colapsados={cardsColapsados}
-              aoColapsarCartao={colapsarCartao}
-            />
-          ))}
-        </main>
+        <Droppable droppableId="colunas" type={TIPO_COLUNA} direction="horizontal">
+          {(fornecido) => (
+            <main className="colunas" ref={fornecido.innerRef} {...fornecido.droppableProps}>
+              {ordem.map((coluna, i) => (
+                <Coluna
+                  key={coluna}
+                  status={coluna}
+                  indiceDaColuna={i}
+                  rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
+                  grupos={grupos[coluna]}
+                  vazio={vazioDaColuna(coluna, emojiMeu)}
+                  colapsada={colapsadas.has(coluna)}
+                  aoColapsar={(fechar) => colapsar(coluna, fechar)}
+                  acessorio={
+                    coluna === 'fazendo' ? (
+                      <button
+                        className="assinatura"
+                        onClick={() => void trocarEmojiFazendo()}
+                        title={
+                          emojiFazendo
+                            ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
+                            : 'Coluna desligada — clique para escolher o emoji de "peguei esta"'
+                        }
+                      >
+                        {emojiFazendo || 'sem emoji'}
+                      </button>
+                    ) : coluna === 'meu' ? (
+                      <button
+                        className="assinatura"
+                        onClick={() => void trocarEmojiMeu()}
+                        title={
+                          emojiMeu
+                            ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`
+                            : 'Nenhuma reação configurada — clique para escolher a sua'
+                        }
+                      >
+                        {emojiMeu || 'sem reação'}
+                      </button>
+                    ) : undefined
+                  }
+                  ultimaVisita={ultimaVisita}
+                  selecionando={selecionados.size > 0}
+                  selecionados={selecionados}
+                  aoAbrir={(t) => void abrir(t)}
+                  aoMarcarComoMeu={setAnotando}
+                  aoDesmarcarComoMeu={(t) => void desmarcar(t)}
+                  aoSelecionar={alternarSelecao}
+                  aoSeparar={(t) => void separar(t)}
+                  aoEtiquetar={setEtiquetando}
+                  aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
+                  aoApagar={(t) => void apagar(t)}
+                  colapsados={cardsColapsados}
+                  aoColapsarCartao={colapsarCartao}
+                />
+              ))}
+              {fornecido.placeholder}
+            </main>
+          )}
+        </Droppable>
       </DragDropContext>
     </>
   );

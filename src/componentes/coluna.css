@@ -4,11 +4,29 @@
   border-radius: 12px;
 }
 
+/* O cabecalho e a alca da coluna: e por ele que ela se arrasta. O cursor e a
+   alca de pontinhos dizem isso — sem sinal nenhum, um gesto que existe e um
+   gesto que ninguem descobre. */
 .coluna > header {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 12px 14px 10px;
+  cursor: grab;
+}
+.coluna > header:active {
+  cursor: grabbing;
+}
+
+.coluna > header .pegar {
+  display: inline-flex;
+  margin-right: -4px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.coluna:hover > header .pegar {
+  opacity: 1;
 }
 
 /* A contagem empurrava sozinha os controles para a direita; agora ela divide o
@@ -147,6 +165,7 @@
 }
 
 .coluna.colapsada .expandir {
+  cursor: grab;
   display: flex;
   flex-direction: column;
   align-items: center;

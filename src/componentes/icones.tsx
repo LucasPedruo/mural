@@ -213,3 +213,18 @@ export function IconePessoa(p: Props) {
     </Icone>
   );
 }
+
+/** lucide `grip-vertical` — a alça de pegar. Aparece onde existe um gesto de
+ *  arrastar que não é óbvio, como o cabeçalho da coluna. */
+export function IconePegar(p: Props) {
+  return (
+    <Icone {...p}>
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="5" r="1" />
+      <circle cx="9" cy="19" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="5" r="1" />
+      <circle cx="15" cy="19" r="1" />
+    </Icone>
+  );
+}

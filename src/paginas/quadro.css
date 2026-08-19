@@ -108,23 +108,35 @@
 
 /* Flex, e nao grid, por causa do colapsar: uma coluna fechada tem largura fixa
    enquanto as abertas dividem o que sobra — com grid isso exigiria montar o
-   template em JS, e a largura deixaria de responder ao tamanho da tela. */
+   template em JS, e a largura deixaria de responder ao tamanho da tela.
+   Uma fila UNICA que rola no horizontal, sem quebrar linha: e o que o arraste de
+   colunas entende (uma lista horizontal), e e o que faz um quadro parecer um
+   quadro em vez de duas fileiras de colunas. Quem tem tela pequena colapsa o que
+   nao esta usando — foi para isso que o colapsar existe. */
 .colunas {
   display: flex;
   align-items: flex-start;
-  flex-wrap: wrap;
   gap: 16px;
   padding: 20px 24px 40px;
+  overflow-x: auto;
 }
 
 .colunas > .coluna {
-  flex: 1 1 230px;
-  min-width: 0;
+  /* Cresce para dividir a tela, mas nunca encolhe abaixo do legivel. */
+  flex: 1 0 232px;
+  min-width: 232px;
 }
 
 /* 46px cabe o ponto de cor, a contagem e o rotulo de pe. */
 .colunas > .coluna.colapsada {
   flex: 0 0 46px;
+  min-width: 46px;
+}
+
+/* Coluna em transito: ela sai do fluxo e precisa parecer levantada da mesa. */
+.colunas > .coluna.arrastando {
+  box-shadow: var(--shadow-arrastando);
+  border-color: var(--border-strong);
 }
 
 
