@@ -21,12 +21,17 @@ interface Props {
   grupos: GrupoDaColuna[];
   ultimaVisita: string | null;
   vazio?: string;
+  /** Modo de juntar ligado: o clique num card seleciona em vez de abrir. */
+  selecionando: boolean;
+  selecionados: Set<string>;
   /** Controle próprio no cabeçalho — hoje só a coluna da daily usa, para
    *  mostrar e trocar a reação que marca os cards como seus. */
   acessorio?: ReactNode;
   aoAbrir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
+  aoSelecionar: (task: Task) => void;
+  aoSeparar: (task: Task) => void;
 }
 
 export function Coluna({
@@ -36,9 +41,13 @@ export function Coluna({
   ultimaVisita,
   acessorio,
   vazio = 'nada aqui',
+  selecionando,
+  selecionados,
   aoAbrir,
   aoMarcarComoMeu,
   aoDesmarcarComoMeu,
+  aoSelecionar,
+  aoSeparar,
 }: Props) {
   const total = grupos.reduce((s, g) => s + g.tasks.length, 0);
   const agrupada = grupos.length > 1 || (grupos[0] && grupos[0].rotulo !== '');
@@ -83,9 +92,13 @@ export function Coluna({
                     indice={indice++}
                     naColunaDaDaily={status === 'meu'}
                     ultimaVisita={ultimaVisita}
+                    selecionando={selecionando}
+                    selecionado={selecionados.has(t.id)}
                     aoAbrir={aoAbrir}
                     aoMarcarComoMeu={aoMarcarComoMeu}
                     aoDesmarcarComoMeu={aoDesmarcarComoMeu}
+                    aoSelecionar={aoSelecionar}
+                    aoSeparar={aoSeparar}
                   />
                 ))}
               </div>

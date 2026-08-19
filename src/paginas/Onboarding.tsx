@@ -21,6 +21,13 @@ function useCronometro(ativo: boolean) {
   return segundos;
 }
 
+function hojeLocal(): string {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
 /** O link copiado pela UI do Teams carrega tudo que precisamos, inclusive os
  *  nomes legíveis do time e do canal — que a API não devolve em lugar nenhum. */
 function lerLinkDoTeams(bruto: string): FonteEscolhida | null {
@@ -67,6 +74,13 @@ export function Onboarding() {
   const [escolha, setEscolha] = useState<FonteEscolhida | null>(null);
   const [erro3, setErro3] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  // A sprint nasce com o mural. Ela não precisa existir no seu time: é o ciclo
+  // que você fecha, e é o que permite zerar "Concluído" de vez em quando em vez
+  // de olhar seis meses de check acumulado.
+  const [nomeSprint, setNomeSprint] = useState('Sprint 1');
+  const [inicioSprint, setInicioSprint] = useState(hojeLocal());
+  const [diasSprint, setDiasSprint] = useState(14);
 
   const jaVerificou = useRef(false);
 
@@ -129,6 +143,15 @@ export function Onboarding() {
       // Mapear a mesma conversa de novo reabre o mural existente, com o
       // histórico dela intacto, em vez de criar um quadro duplicado e vazio.
       const d = await api.criarMural(escolha);
+      // Mural que já existia tem sprint própria em curso; sobrescrever com o
+      // formulário desta tela apagaria o ciclo que está rodando lá.
+      if (!d.jaExistia) {
+        await api.definirSprint(d.id, {
+          nome: nomeSprint.trim() || 'Sprint 1',
+          inicio: inicioSprint,
+          dias: diasSprint,
+        });
+      }
       navegar(`/m/${d.id}`);
     } catch (e) {
       setErro3((e as Error).message);
@@ -145,7 +168,7 @@ export function Onboarding() {
         <h1>Mural</h1>
       </div>
       <p className="sub">
-        Um kanban montado a partir das reações de uma conversa do Teams. Três passos e o quadro
+        Um kanban montado a partir das reações de uma conversa do Teams. Quatro passos e o quadro
         está de pé.
       </p>
 
@@ -308,6 +331,73 @@ export function Onboarding() {
                 )}
               </div>
             )}
+
+            {erro3 && <p className="aviso erro">{erro3}</p>}
+          </div>
+        )}
+      </section>
+
+      {/* 4 */}
+      <section className="passo" data-estado={escolha ? 'espera' : 'espera'}>
+        <div className="passo-topo">
+          <span className="num">4</span>
+          <h2>A sprint</h2>
+        </div>
+        <p className="detalhe">
+          {escolha ? 'o ciclo que você fecha de vez em quando' : 'aguardando o passo 3'}
+        </p>
+
+        {escolha && (
+          <div className="corpo">
+            <p className="dica">
+              Não precisa existir sprint no seu time. Isto é só um período com começo e fim: quando
+              você encerra, o que está em <strong>Concluído</strong> e em{' '}
+              <strong>Feito por mim</strong> sai do quadro e vai para o arquivo da sprint — de onde
+              os painéis leem. Sem isso, "concluído" acumula para sempre e a coluna deixa de dizer
+              alguma coisa.
+            </p>
+
+            <div className="campos-sprint">
+              <label className="rotulo" htmlFor="nome-sprint">
+                Nome
+                <input
+                  id="nome-sprint"
+                  type="text"
+                  maxLength={60}
+                  value={nomeSprint}
+                  onChange={(e) => setNomeSprint(e.target.value)}
+                />
+              </label>
+
+              <label className="rotulo" htmlFor="inicio-sprint">
+                Começou em
+                <input
+                  id="inicio-sprint"
+                  type="date"
+                  value={inicioSprint}
+                  onChange={(e) => setInicioSprint(e.target.value)}
+                />
+              </label>
+
+              <label className="rotulo" htmlFor="dias-sprint">
+                Duração
+                <select
+                  id="dias-sprint"
+                  value={diasSprint}
+                  onChange={(e) => setDiasSprint(Number(e.target.value))}
+                >
+                  <option value={7}>7 dias</option>
+                  <option value={14}>14 dias</option>
+                  <option value={21}>21 dias</option>
+                  <option value={28}>28 dias</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="dica">
+              Dá para mudar tudo isso depois, no cabeçalho do quadro. Encerrar continua sendo um
+              gesto seu: a data só serve para o painel contar o que chegou dentro do período.
+            </p>
 
             {erro3 && <p className="aviso erro">{erro3}</p>}
 

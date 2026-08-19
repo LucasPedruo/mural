@@ -1,9 +1,15 @@
 import { Draggable } from '@hello-pangea/dnd';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 
-import { CORES_DE_STATUS, dataCurta, diasDesde } from '../rotulos';
+import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
 import type { Task } from '../tipos';
 import './cartao.css';
+
+/** Quantos prints e quantas linhas de continuação o card mostra antes de
+ *  resumir o resto num "+N". Um card de rajada longa não pode virar uma coluna
+ *  inteira: ele é a chamada para abrir a conversa, não a conversa. */
+const PRINTS_VISIVEIS = 3;
+const LINHAS_VISIVEIS = 2;
 
 interface Props {
   task: Task;
@@ -11,9 +17,14 @@ interface Props {
   /** Na coluna da daily o card mostra a anotação e troca o botão por "desfazer". */
   naColunaDaDaily: boolean;
   ultimaVisita: string | null;
+  /** Modo de juntar ligado: o clique no card seleciona em vez de abrir o Teams. */
+  selecionando: boolean;
+  selecionado: boolean;
   aoAbrir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
+  aoSelecionar: (task: Task) => void;
+  aoSeparar: (task: Task) => void;
 }
 
 export function CartaoDeTask({
@@ -21,15 +32,27 @@ export function CartaoDeTask({
   indice,
   naColunaDaDaily,
   ultimaVisita,
+  selecionando,
+  selecionado,
   aoAbrir,
   aoMarcarComoMeu,
   aoDesmarcarComoMeu,
+  aoSelecionar,
+  aoSeparar,
 }: Props) {
   const ehNovo = !!ultimaVisita && task.firstSeen > ultimaVisita;
   const mudou = !!ultimaVisita && task.statusChangedAt > ultimaVisita && !ehNovo;
   const dias = diasDesde(task.createdDateTime);
   const parado = task.status === 'aberto' && dias >= 3 ? ` · parada há ${dias}d` : '';
   const propria = task.origem === 'manual';
+
+  // Uma demanda quase nunca chega como uma mensagem só: o padrão é a rajada —
+  // prints seguidos das linhas de texto que os explicam. O card mostra o texto
+  // que dá nome à task, os prints como faixas e o resto como continuação.
+  const mensagens = task.mensagens?.length ? task.mensagens : [];
+  const prints = mensagens.filter((m) => m.soPrint);
+  const linhas = mensagens.filter((m) => !m.soPrint && m.summary !== task.summary);
+  const agrupado = mensagens.length > 1;
 
   // Arrastar entre as colunas do Teams so vale para task fora de alcance ou
   // criada aqui: enquanto a mensagem aparece no Teams, a reacao de la manda e a
@@ -38,15 +61,31 @@ export function CartaoDeTask({
   // mexe no status, entao vale para qualquer card, pelo botao do rodape.
   const podeArrastar = task.podeMover;
 
-  const dicaDeArraste = propria
-    ? 'Task sua: arraste para mudar de coluna'
-    : podeArrastar
-      ? 'Fora de alcance: arraste para mudar de coluna'
-      : 'Esta mensagem ainda aparece no Teams — reaja por lá e clique em Atualizar';
+  const dica = selecionando
+    ? selecionado
+      ? 'Selecionada para juntar — clique para tirar da seleção'
+      : 'Clique para incluir na task que vai ser juntada'
+    : propria
+      ? 'Task sua: clique para editar, arraste para mudar de coluna'
+      : podeArrastar
+        ? 'Clique para abrir no Teams · fora de alcance: arraste para mudar de coluna'
+        : 'Clique para abrir a mensagem no Teams';
 
   return (
     <Draggable draggableId={task.id} index={indice} isDragDisabled={!podeArrastar}>
       {(fornecido, estado) => {
+        // O card inteiro é o alvo do clique, não só o texto: o gesto natural em
+        // cima de um card é clicar nele, e mirar na linha do título era um
+        // detalhe de implementação vazando para a mão de quem usa.
+        const abrir = (e: MouseEvent | KeyboardEvent) => {
+          if (estado.isDragging) return;
+          // Selecionar texto com o mouse não pode abrir o Teams por acidente.
+          if (window.getSelection()?.toString()) return;
+          e.stopPropagation();
+          if (selecionando) aoSelecionar(task);
+          else aoAbrir(task);
+        };
+
         const estilo: CSSProperties = {
           ...fornecido.draggableProps.style,
           ['--linha' as string]: CORES_DE_STATUS[task.meu ? 'meu' : task.status],
@@ -61,18 +100,50 @@ export function CartaoDeTask({
               'cartao',
               podeArrastar ? 'fora' : 'preso',
               propria ? 'propria' : '',
+              agrupado ? 'rajada' : '',
+              selecionado ? 'selecionado' : '',
               estado.isDragging ? 'arrastando' : '',
-            ].join(' ')}
-            title={dicaDeArraste}
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            title={dica}
+            aria-label={task.summary}
+            onClick={abrir}
+            // Enter abre; espaço fica com o dnd, que usa a tecla para pegar o
+            // card. Roubá-la aqui quebraria o arraste por teclado.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') abrir(e);
+            }}
           >
-            <button
-              className="texto"
-              type="button"
-              onClick={() => aoAbrir(task)}
-              title={propria ? 'Editar esta task' : 'Abrir a mensagem no Teams'}
-            >
-              {task.summary}
-            </button>
+            <div className="texto">{task.summary}</div>
+
+            {/* Print não é texto: mostrar "(só print)" como se fosse título faz
+                o card parecer vazio. A faixa ocupa o lugar da imagem que está
+                no Teams e diz, pela forma, que há algo para ver lá. */}
+            {prints.length > 0 && (
+              <div className="prints" aria-label={`${prints.length} print(s) na conversa`}>
+                {prints.slice(0, PRINTS_VISIVEIS).map((m) => (
+                  <span className="print" key={m.id} aria-hidden="true" />
+                ))}
+                {prints.length > PRINTS_VISIVEIS && (
+                  <span className="mais">+{prints.length - PRINTS_VISIVEIS} prints</span>
+                )}
+              </div>
+            )}
+
+            {/* O resto da rajada: as linhas que a pessoa mandou em seguida.
+                Ficam visíveis porque é nelas que costuma estar o detalhe que
+                faz a task ser entendida. */}
+            {linhas.slice(0, LINHAS_VISIVEIS).map((m) => (
+              <p className="continuacao" key={m.id}>
+                {m.summary}
+              </p>
+            ))}
+            {linhas.length > LINHAS_VISIVEIS && (
+              <p className="continuacao mais">
+                +{linhas.length - LINHAS_VISIVEIS} mensagens nesta rajada
+              </p>
+            )}
 
             {/* Na coluna da daily o card existe para ser lido: a solução vem
                 junto, não escondida atrás de um clique. */}
@@ -91,6 +162,20 @@ export function CartaoDeTask({
                   minha
                 </span>
               )}
+              {/* Quantas mensagens do Teams este card representa. Sem isso o
+                  agrupamento seria invisível, e um card que esconde quatro
+                  mensagens não pode parecer igual a um que tem uma. */}
+              {agrupado && (
+                <span
+                  className="badge neutral"
+                  title={mensagens
+                    .map((m) => `${horaCurta(m.createdDateTime)} ${m.soPrint ? 'print' : m.summary}`)
+                    .join('\n')}
+                >
+                  {mensagens.length} mensagens
+                  {task.agrupamento === 'mao' ? ' · à mão' : ''}
+                </span>
+              )}
               {/* Na coluna da daily o status real do Teams continua visível: a
                   marca pessoal move o card de lugar, não muda o que o canal diz. */}
               {naColunaDaDaily && !propria && (
@@ -106,12 +191,12 @@ export function CartaoDeTask({
                   pela reação
                 </span>
               )}
-              {task.foraDeAlcance && (
+              {task.foraDeAlcance && !propria && (
                 <span
-                  className="badge neutral"
-                  title="Saiu das mensagens que a API devolve. O Teams não atualiza mais este card."
+                  className="badge alerta"
+                  title="Saiu das ~20 mensagens que a API devolve. O Teams não conta mais nada sobre este card: quem move é você, arrastando."
                 >
-                  fora de alcance
+                  sem sinal do Teams
                 </span>
               )}
               {task.movidoAMao && <span className="badge neutral">movido à mão</span>}
@@ -129,6 +214,41 @@ export function CartaoDeTask({
               </span>
 
               <span className="acoes">
+                {/* Juntar e separar existem porque a heurística de rajada erra
+                    em alguns casos — e card errado que não dá para consertar é
+                    pior que card errado. O que você decide aqui nenhuma
+                    atualização desfaz. */}
+                {!propria && (
+                  <button
+                    className={'acao' + (selecionado ? ' ligada' : '')}
+                    type="button"
+                    title={
+                      selecionado
+                        ? 'Tirar da seleção'
+                        : 'Juntar com outro card — para quando a mesma demanda virou dois'
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      aoSelecionar(task);
+                    }}
+                  >
+                    ⧉
+                  </button>
+                )}
+                {agrupado && (
+                  <button
+                    className="acao"
+                    type="button"
+                    title="Separar: cada mensagem volta a ser um card"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      aoSeparar(task);
+                    }}
+                  >
+                    ⑃
+                  </button>
+                )}
+
                 {naColunaDaDaily ? (
                   <>
                     <button

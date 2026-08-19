@@ -35,6 +35,21 @@ export interface MeuFeito {
   via: 'emoji' | 'mao';
 }
 
+/** Uma mensagem do Teams dentro de um card. Uma demanda raramente chega como
+ *  uma mensagem só: o padrão é a rajada — dois prints e três linhas de texto do
+ *  mesmo autor, em segundos, que são UMA task. Card solto tem um item aqui. */
+export interface MensagemDaTask {
+  id: string;
+  author: string;
+  createdDateTime: string;
+  summary: string;
+  kind: 'bug' | 'sugestao';
+  reactions: string[];
+  webUrl: string;
+  /** Mensagem sem texto útil, só imagem — o print do erro. */
+  soPrint: boolean;
+}
+
 export interface Task {
   id: string;
   /** `manual` = você escreveu aqui dentro; nenhum sync alcança essa task. */
@@ -60,6 +75,12 @@ export interface Task {
   podeDesmarcar: boolean;
   movidoAMao: boolean;
   meu: MeuFeito | null;
+  /** As mensagens que formam este card, da mais antiga para a mais nova. A
+   *  primeira é a âncora: o id do card é o dela, e é ela que o clique abre. */
+  mensagens: MensagemDaTask[];
+  /** 'auto' = o Mural juntou a rajada; 'mao' = você juntou ou separou, e nenhuma
+   *  leitura desfaz isso. null = mensagem solta. */
+  agrupamento: 'auto' | 'mao' | null;
 }
 
 /** O que o formulário de task própria manda para o servidor. */
@@ -129,6 +150,9 @@ export interface ResultadoSync extends RespostaTasks {
   retomadas: string[];
   /** Ganharam a marca "feito por mim" pela sua reação nesta leitura. */
   marcados: string[];
+  /** Cards que ganharam mensagens novas da mesma rajada — o autor continuou
+   *  escrevendo depois da última leitura. */
+  cresceram: string[];
   total: number;
   consumo: Consumo | null;
   totaisDoUsuario: TotaisDeConsumo;
@@ -161,4 +185,89 @@ export interface FonteEscolhida {
   teamId?: string;
   channelId?: string;
   chatId?: string;
+}
+
+// ------------------------------------------------------------------- sprints
+
+/** Um ciclo com começo e fim. Existe para que "concluído" possa ser zerado de
+ *  vez em quando: um quadro que acumula seis meses de check não serve para
+ *  olhar. Quem não trabalha em sprint usa isso como o período que fecha. */
+export interface Sprint {
+  nome: string;
+  /** Dia local, no formato ano-mês-dia. */
+  inicio: string;
+  fim: string;
+  dias: number;
+  criadaEm: string;
+}
+
+export interface SprintEncerrada extends Sprint {
+  encerradaEm: string;
+  /** Quantos cards foram para o arquivo desta sprint. */
+  arquivadas: number;
+}
+
+export interface RespostaSprint {
+  atual: Sprint | null;
+  encerradas: SprintEncerrada[];
+}
+
+export interface ResultadoEncerramento extends RespostaTasks {
+  arquivadas: number;
+  sprints: RespostaSprint;
+}
+
+// ------------------------------------------------------------------- painéis
+
+export interface LinhaDeSprint {
+  nome: string;
+  inicio: string;
+  fim: string;
+  atual: boolean;
+  encerradaEm: string | null;
+  arquivadas: number;
+  chegaram: number;
+  bugs: number;
+  sugestoes: number;
+  concluidas: number;
+  minhas: number;
+  emAberto: number;
+  /** Quantas mensagens do Teams os cards desta sprint somam. A distância entre
+   *  isso e 'chegaram' é o tamanho do ruído que o agrupamento absorveu. */
+  mensagens: number;
+}
+
+export interface ItemDaDaily {
+  id: string;
+  summary: string;
+  kind: 'bug' | 'sugestao';
+  solucao: string;
+  em: string;
+  via: 'emoji' | 'mao';
+  status: Status;
+  origem: 'teams' | 'manual';
+  autor: string;
+  arquivada: boolean;
+  sprint: string | null;
+  mensagens: number;
+  webUrl: string;
+}
+
+export interface DiaDaDaily {
+  /** Dia local, no formato ano-mês-dia. */
+  dia: string;
+  itens: ItemDaDaily[];
+}
+
+export interface RespostaPainel {
+  sprints: LinhaDeSprint[];
+  /** O que chegou fora de qualquer sprint — histórico anterior ao ciclo. */
+  foraDeSprint: { chegaram: number; bugs: number; concluidas: number } | null;
+  daily: {
+    porDia: DiaDaDaily[];
+    total: number;
+    bugs: number;
+    diasAtivos: number;
+    arquivadas: number;
+  };
 }

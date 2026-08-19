@@ -1,4 +1,8 @@
 .cartao {
+  /* O card inteiro é o alvo do clique, então ele é também o contexto de
+     posicionamento dos enfeites que ficam nas bordas. */
+  position: relative;
+  cursor: pointer;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-left: 3px solid var(--linha);
@@ -10,15 +14,45 @@
 .cartao:hover {
   border-color: var(--border-strong);
   border-left-color: var(--linha);
+  box-shadow: var(--shadow-card-hover, var(--shadow-card));
+}
+.cartao:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* Fora de alcance: o Teams nao conta mais nada sobre este card, entao ele e o
-   unico que pode ser movido a mao. A borda tracejada anuncia isso antes do
-   usuario tentar arrastar. */
+   unico que pode ser movido a mao — e o quadro precisa dizer isso de longe, nao
+   so quando a pessoa passa o mouse. Tracejado sozinho nao segurava o recado:
+   agora vem com cor propria, hachura e alca de arraste. */
 .cartao.fora {
   border-style: dashed;
-  border-left-style: solid;
+  border-color: var(--marca-legado);
+  border-left: 3px solid var(--linha);
   cursor: grab;
+  /* Hachura levíssima: a textura diz "este card é de outra natureza" antes de
+     qualquer badge ser lido, e sobrevive ao card estar em qualquer coluna. */
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--tinta-legado) 0 6px,
+    transparent 6px 13px
+  );
+}
+/* A alça de arraste: só nestes cards e nos seus o gesto existe, então só neles
+   ela aparece. É o que substitui a explicação em texto. */
+.cartao.fora::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: 11px;
+  width: 9px;
+  height: 13px;
+  opacity: 0.5;
+  background-image: radial-gradient(circle, var(--marca-legado) 1.1px, transparent 1.2px);
+  background-size: 4px 4px;
+}
+.cartao.fora:hover::before {
+  opacity: 1;
 }
 .cartao.fora:active {
   cursor: grabbing;
@@ -32,26 +66,117 @@
   border-color: var(--border-strong);
 }
 
-/* O texto e um botao para abrir no Teams: precisa ser alcancavel por teclado,
-   mas nao pode parecer um botao dentro do card. */
+/* O titulo. Nao e mais um botao: o alvo do clique e o card, porque mirar na
+   linha de texto era um detalhe de implementacao vazando para a mao de quem usa. */
 .cartao .texto {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
   color: var(--text-primary);
-  font: inherit;
   font-size: 13.5px;
-  cursor: pointer;
+  line-height: 1.45;
 }
-.cartao .texto:hover {
-  background: none;
-  color: var(--text-primary);
+.cartao:hover .texto {
   text-decoration: underline;
   text-underline-offset: 2px;
+  text-decoration-color: var(--border-strong);
+}
+
+/* ------------------------------------------------------------------ rajada */
+
+/* O lugar da imagem que está no Teams. Um card que diz só "(só print)" parece
+   vazio; a faixa dá a ele o peso da coisa que existe do outro lado do clique. */
+.cartao .prints {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cartao .print {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  overflow: hidden;
+}
+
+/* A moldura vazia desenhada em CSS: o disco e a montanha que toda miniatura de
+   imagem tem. Nada de asset — e nada de emoji, que muda de forma por sistema. */
+.cartao .print::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.cartao .print::after {
+  content: '';
+  position: absolute;
+  left: 21px;
+  bottom: 7px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 9px solid var(--border-strong);
+}
+
+/* O brilho que atravessa a faixa: sem ele a barra cinza parece um erro de
+   layout; com ele, parece conteúdo que está em outro lugar. */
+.cartao .print {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    var(--bg-surface-3) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: print-brilho 2.6s ease-in-out infinite;
+}
+.cartao:hover .print {
+  border-color: var(--border-strong);
+}
+
+@keyframes print-brilho {
+  0% { background-position: 130% 0; }
+  60%, 100% { background-position: -30% 0; }
+}
+
+/* Animação em quadro cheio de card é distração, não informação. */
+@media (prefers-reduced-motion: reduce) {
+  .cartao .print {
+    animation: none;
+  }
+}
+
+.cartao .prints .mais,
+.cartao .continuacao.mais {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* As linhas que vieram depois na mesma rajada. Menores que o título, porque o
+   título é o que dá nome à task — mas visíveis, porque o detalhe que faz a
+   task ser entendida quase sempre está aqui. */
+.cartao .continuacao {
+  margin: 6px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--border-default);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* Selecionado para juntar. */
+.cartao.selecionado {
+  border-color: var(--marca-meu);
+  border-style: solid;
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .cartao .rodape {
@@ -140,6 +265,15 @@
   opacity: 1;
 }
 .cartao .acao:hover {
+  color: var(--marca-meu);
+  border-color: var(--marca-meu);
+  background: var(--bg-brand-subtle);
+}
+
+/* Ação ligada — o card está na seleção do juntar. Fica visível sem hover: uma
+   seleção que desaparece quando o mouse sai não é uma seleção. */
+.cartao .acao.ligada {
+  opacity: 1;
   color: var(--marca-meu);
   border-color: var(--marca-meu);
   background: var(--bg-brand-subtle);

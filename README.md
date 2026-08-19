@@ -26,8 +26,12 @@ Quatro colunas:
 | **Concluído** | mensagem com check (✅ ☑️ ✔️) |
 | **Feito por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
 
-Clicar num card abre a mensagem original no Teams. Clicar em **Atualizar** relê
-a conversa.
+Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
+**Atualizar** relê a conversa.
+
+Um card não é uma mensagem: é uma **demanda**. Quando alguém manda dois prints e
+três linhas de texto em seguida, aquilo vira um card só — veja
+[Rajadas](#rajadas-quando-a-demanda-chega-em-pedaços).
 
 ## Começando
 
@@ -46,8 +50,9 @@ node server.js
 ```
 
 Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuração
-que verifica o Claude Code, mostra com qual conta Microsoft você está logado e
-pede a conversa que vira o quadro.
+que verifica o Claude Code, mostra com qual conta Microsoft você está logado,
+pede a conversa que vira o quadro e a sprint — o ciclo que você fecha de vez em
+quando, que existe mesmo que seu time não use a palavra.
 
 No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
 servidor e abre o navegador. Para trocar a porta:
@@ -90,6 +95,89 @@ livres: arraste, edite, apague. Um selo **minha** no rodapé diz de onde veio.
 Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
 próxima atualização.
 
+**Juntar e separar** (⧉ e ⑃ no rodapé) consertam o agrupamento quando ele erra:
+⧉ marca cards para virarem um, ⑃ desmancha um card em suas mensagens.
+
+**Encerrar sprint**, no cabeçalho, arquiva o que já terminou e zera as duas
+colunas de trabalho concluído. **Painéis** mostra o que chegou em cada sprint e
+tudo que você fez, dia a dia.
+
+## Rajadas: quando a demanda chega em pedaços
+
+Ninguém escreve uma task bem formada num canal do Teams. Chegam dois prints,
+depois uma linha explicando, depois "e também isso" — cinco mensagens que são
+uma demanda. Tratar cada mensagem como um card enchia o quadro de cartões
+dizendo apenas "só print".
+
+O Mural junta a **rajada**: mensagens do mesmo autor, consecutivas, com menos de
+três minutos entre uma e a seguinte, que o modelo confirmou serem o mesmo
+assunto. O card fica com o texto que dá nome à demanda — não necessariamente o
+da primeira mensagem, porque a rajada costuma começar pelos prints — e mostra os
+prints como faixas e as outras linhas como continuação. O rodapé diz quantas
+mensagens ele representa.
+
+<details>
+<summary><b>Quem decide o agrupamento, e por que não é o modelo</b></summary>
+
+O JS acha as rajadas **candidatas**: mesmo autor, consecutivas, dentro da janela
+de três minutos. O modelo só pode **dividir** uma candidata, respondendo
+`mesmaDemandaQueAnterior: false` — o padrão do prompt. Ele não consegue juntar
+autores diferentes nem horários distantes, porque isso nem chega a ele como
+candidata.
+
+A assimetria é de propósito. Errar dividindo deixa um card solto no quadro, que
+você junta com um clique. Errar juntando **esconde uma tarefa dentro de outra**,
+e ninguém percebe. Então na dúvida o prompt divide.
+
+O **id do card é o da primeira mensagem da rajada**. Isso tem duas
+consequências boas: o card existente continua sendo o mesmo quando o autor
+manda a quarta mensagem meia hora depois, e o `tasks.json` de antes desta
+mudança continua valendo sem migração nenhuma — quem não tem `mensagens` é lido
+como uma rajada de um item.
+
+**Um card nunca é absorvido por outro.** Ele só cresce, ganhando mensagens que
+apareceram depois. Se duas leituras separadas transformaram a mesma rajada em
+dois cards, fundir os dois é decisão sua, no ⧉ — e o que você decide ali nenhuma
+atualização desfaz, do mesmo jeito que o arraste à mão.
+
+A **reação pode estar em qualquer mensagem** da rajada: as pessoas reagem na que
+estão vendo, não na que o Mural elegeu como principal. Por isso o status do card
+sai da união das reações do grupo — um check em qualquer uma conclui o card.
+</details>
+
+## Sprint
+
+Uma sprint aqui é só um **ciclo com começo e fim**, e o seu time não precisa usar
+a palavra. Ela existe para responder a uma pergunta que o quadro sozinho não
+responde: *concluído desde quando?* Sem ciclo, a coluna Concluído acumula meses
+e deixa de dizer alguma coisa.
+
+Você define a sprint no onboarding — nome, data de início e duração — e pode
+corrigir tudo depois, na pílula do cabeçalho do quadro.
+
+**Encerrar sprint** faz três coisas: tira do quadro os cards de *Concluído* e de
+*Feito por mim*, guarda todos no arquivo daquela sprint, e abre a sprint seguinte
+começando hoje ("Sprint 7" vira "Sprint 8" sozinha).
+
+Nada é apagado. Os cards arquivados continuam em `sprints.json` com as anotações
+da daily inteiras, e é de lá que os dois painéis leem. O que muda é que o merge
+passa a **ignorar aquelas mensagens para sempre** — sem isso, a mensagem que
+ainda está na janela das ~20 voltaria como task nova na leitura seguinte, e a
+coluna que você acabou de zerar se encheria de novo.
+
+## Painéis
+
+**Por sprint** conta quantas demandas chegaram em cada ciclo, quantas eram bug,
+quantas fecharam e quantas ficaram. A conta é pela data da mensagem no Teams, não
+pela data do arquivamento: encerrar uma sprint não muda o que ela recebeu. Ao lado
+do total aparece quantas *mensagens* aqueles cards somam — a distância entre os
+dois números é o tamanho do ruído que o agrupamento de rajadas absorveu.
+
+**Minha daily** é tudo que você marcou como seu, agrupado pelo dia da marcação,
+com a anotação de como resolveu — incluindo o que já saiu do quadro em sprints
+encerradas. O botão **copiar** de cada dia devolve a lista em texto, para colar
+no chat de quem faltou na reunião.
+
 ## Como funciona
 
 ```
@@ -126,15 +214,18 @@ Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
 </details>
 
 <details>
-<summary><b>Tasks fora de alcance (as de borda tracejada)</b></summary>
+<summary><b>Tasks fora de alcance (as de borda âmbar)</b></summary>
 
 A API devolve só as ~20 mensagens mais recentes. Quando uma task sai dessa
 janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
 check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
 "em aberto" para sempre.
 
-Esses cards ganham borda tracejada e, junto com as tasks que você mesmo criou,
-são os **únicos que você pode arrastar** entre as colunas do Teams. Nos demais o
+Esses cards têm aparência própria — borda âmbar tracejada, uma hachura de fundo,
+alça de arraste no canto e o selo *sem sinal do Teams* — porque, junto com as
+tasks que você mesmo criou, são os **únicos que você pode arrastar** entre as
+colunas do Teams. Tracejado sozinho não segurava esse recado: o card só se
+explicava quando a pessoa tentava arrastar os outros e nada acontecia. Nos demais o
 arraste nem começa: a próxima atualização desfaria a mudança, e um quadro que
 mente por dois minutos é pior que um quadro que não deixa você fazer o gesto. O
 servidor recusa esse caso mesmo que a interface deixasse passar.
@@ -274,6 +365,15 @@ Vale saber antes de adotar:
   chats em páginas de 25 e cada página é uma ida à API. Só acontece uma vez.
 - **A etiqueta `bug` é um palpite do modelo**, inferido do texto da mensagem —
   não é um campo do Teams. Autor, data, link e reações, esses são literais.
+- **O agrupamento de rajada também é palpite**, e vai errar de vez em quando. Ele
+  erra para o lado seguro (divide na dúvida), e ⧉ e ⑃ existem justamente porque
+  card errado que não dá para consertar é pior que card errado.
+- **Encerrar uma sprint é definitivo para aquelas mensagens.** O card sai do
+  quadro e o merge passa a ignorá-lo: se alguém reagir depois naquela mensagem,
+  o Mural não fica sabendo. Vale para o que estava em *Feito por mim* mesmo que o
+  Teams ainda mostrasse a demanda como aberta — a marca é sua, e encerrar a
+  sprint respeita ela. Para desfazer, só editando `sprints.json` e
+  `tasks.json` na mão.
 
 ## Stack
 
@@ -291,6 +391,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais.json` | índice dos murais e suas conversas |
 | `murais/<id>/tasks.json` | o histórico daquele mural, com as tasks suas e as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
+| `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — os painéis vivem daqui |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `conta.json`, `chats.json` | cache do onboarding |
 | `consumo.json` | tokens e custo por conta e por operação, usado para estimar |

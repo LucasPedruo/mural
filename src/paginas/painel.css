@@ -1,0 +1,315 @@
+/* Os dois painéis: o que chegou por sprint e o que você fez, dia a dia. Ambos
+   leem o mesmo histórico do quadro, incluindo as sprints já encerradas. */
+
+.pagina-painel {
+  min-height: 100vh;
+}
+
+.topo-painel {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  background: var(--bg-header-flutuante);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.topo-painel .marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.topo-painel h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topo-painel .abas {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.topo-painel .aba {
+  border: 0;
+  background: none;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.topo-painel .aba[aria-selected='true'] {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+
+.pagina-painel .conteudo {
+  padding: 22px 24px 60px;
+  max-width: 1100px;
+}
+
+.pagina-painel .carregando,
+.pagina-painel .vazio {
+  padding: 40px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.pagina-painel .explicacao {
+  margin: 0 0 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+  max-width: 68ch;
+}
+
+/* ------------------------------------------------------------ por sprint */
+
+/* Grade em vez de <table>: as colunas precisam alinhar, mas cada linha também
+   precisa respirar como um bloco — e nenhuma célula tem colspan. */
+.pagina-painel .tabela {
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.pagina-painel .linha {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.6fr) 1fr 1.5fr 0.6fr 0.8fr 0.8fr 0.9fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.pagina-painel .linha.cabecalho {
+  border-top: 0;
+  background: var(--bg-surface-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: lowercase;
+}
+
+.pagina-painel .linha.atual {
+  background: var(--bg-brand-subtle);
+}
+
+.pagina-painel .linha.fora {
+  color: var(--text-muted);
+}
+
+.pagina-painel .linha .nome {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-weight: 500;
+}
+
+.pagina-painel .linha .periodo {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.pagina-painel .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagina-painel .barra-celula {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pagina-painel .barra {
+  flex: 1;
+  height: 6px;
+  min-width: 40px;
+  border-radius: 999px;
+  background: var(--bg-surface-3);
+  overflow: hidden;
+}
+
+.pagina-painel .barra .preenchida {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--marca-interagido);
+}
+
+.pagina-painel .sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.pagina-painel .linha .nome .sub {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------- a daily */
+
+.pagina-painel .numeros {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.pagina-painel .numero {
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.pagina-painel .numero b {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.pagina-painel .dia-daily {
+  margin-bottom: 22px;
+}
+
+.pagina-painel .cabeca-dia {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+
+.pagina-painel .cabeca-dia h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.pagina-painel .cabeca-dia .quantos {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagina-painel .cabeca-dia .risco {
+  flex: 1;
+  height: 1px;
+  background: var(--border-default);
+}
+
+.pagina-painel .copiar {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: var(--text-muted);
+}
+
+.pagina-painel .itens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pagina-painel .itens li {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--marca-meu);
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+
+.pagina-painel .itens li.bug {
+  border-left-color: var(--marca-aberto);
+}
+
+.pagina-painel .itens .titulo {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-primary);
+}
+
+/* A anotação é o conteúdo desta tela, não um detalhe: na daily é ela que você
+   fala em voz alta. */
+.pagina-painel .itens .solucao {
+  margin: 7px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-surface-2);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.pagina-painel .itens .solucao.sem-nota {
+  background: none;
+  padding: 4px 0 0;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.pagina-painel .itens .meta {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.pagina-painel .itens .sprint {
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 860px) {
+  .pagina-painel .linha {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 4px;
+  }
+  .pagina-painel .linha.cabecalho {
+    display: none;
+  }
+  .pagina-painel .num {
+    text-align: left;
+  }
+}

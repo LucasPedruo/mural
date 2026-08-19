@@ -48,10 +48,52 @@
   cursor: default;
 }
 
+/* A sprint no cabecalho. Pilula, e nao botao comum, porque ela e um estado do
+   mural que por acaso da para editar — o mesmo vocabulario do "gasto". */
+.topo-quadro .sprint {
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.topo-quadro .sprint:hover {
+  border-color: var(--marca-meu);
+  color: var(--text-primary);
+}
+
+/* Link que precisa parecer botao: os paineis sao outra pagina, mas no cabecalho
+   ele mora entre botoes. */
+.topo-quadro .botao-link {
+  font-size: 12.5px;
+  line-height: 1.4;
+  padding: 6px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.topo-quadro .botao-link:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
 .faixa {
   border-radius: 0;
   padding: 11px 24px;
   border-bottom: 1px solid var(--border-default);
+}
+
+/* A faixa da selecao carrega os dois botoes do gesto; eles nao podem herdar o
+   tamanho do texto da faixa. */
+.faixa.selecao button {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.faixa.selecao .primario:disabled {
+  opacity: 0.5;
 }
 
 .colunas {

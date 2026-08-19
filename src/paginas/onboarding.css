@@ -176,3 +176,35 @@ code {
   padding: 1px 5px;
   border-radius: 4px;
 }
+
+/* Os tres campos da sprint numa linha: o passo 4 e o mais curto do onboarding e
+   nao pode parecer um formulario. */
+.campos-sprint {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.campos-sprint .rotulo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.campos-sprint input,
+.campos-sprint select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+
+.campos-sprint input[type='text'] {
+  min-width: 180px;
+}

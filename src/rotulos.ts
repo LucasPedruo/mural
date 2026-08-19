@@ -51,6 +51,27 @@ export function rotuloDoDia(iso: string): string {
   return dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
 
+/** A hora de uma mensagem dentro da rajada. O dia já está no rodapé do card:
+ *  aqui o que importa é a distância entre uma mensagem e a seguinte. */
+export function horaCurta(iso: string): string {
+  return new Date(iso).toTimeString().slice(0, 5);
+}
+
+/** Os painéis falam em dia local (ano-mês-dia), não em instante: é assim que o
+ *  servidor recorta sprint e daily. Estas duas leem esse formato. */
+export function diaParaData(dia: string): Date {
+  const [ano, mes, d] = dia.split('-').map(Number);
+  return new Date(ano, (mes || 1) - 1, d || 1);
+}
+
+export function rotuloDoDiaISO(dia: string): string {
+  return rotuloDoDia(diaParaData(dia).toISOString());
+}
+
+export function dataDoDiaISO(dia: string): string {
+  return diaParaData(dia).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
 /** Chave de agrupamento por dia local — a string ISO não serve, porque o
  *  fuso empurraria o fim da tarde para o dia seguinte. */
 export function diaLocal(iso: string): string {

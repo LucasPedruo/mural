@@ -14,6 +14,7 @@
 }
 
 .campo textarea,
+.campo input[type='date'],
 .campo input[type='text'] {
   width: 100%;
   font: inherit;
@@ -26,7 +27,13 @@
   resize: vertical;
 }
 
+.campo input[type='date'] {
+  width: auto;
+  font-variant-numeric: tabular-nums;
+}
+
 .campo textarea:focus,
+.campo input[type='date']:focus,
 .campo input[type='text']:focus {
   border-color: var(--border-strong);
 }

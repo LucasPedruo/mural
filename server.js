@@ -132,6 +132,244 @@ function arquivoSnapshot(id) {
   return path.join(pastaDoMural(id), 'snapshot.json');
 }
 
+function arquivoSprints(id) {
+  return path.join(pastaDoMural(id), 'sprints.json');
+}
+
+// ------------------------------------------------------------------- sprints
+
+// A sprint aqui e so um ciclo com comeco e fim: o time nem precisa usar a
+// palavra. Ela existe para que "concluido" possa ser zerado de vez em quando —
+// um quadro que acumula seis meses de check nao serve para olhar.
+const DIAS_DE_SPRINT_PADRAO = 14;
+
+function lerSprints(muralId) {
+  const s = lerJson(arquivoSprints(muralId), { atual: null, encerradas: [] });
+  if (!Array.isArray(s.encerradas)) s.encerradas = [];
+  return s;
+}
+
+function gravarSprints(muralId, s) {
+  fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
+  gravarJsonAtomico(arquivoSprints(muralId), s);
+}
+
+// Dia LOCAL, nao UTC: a sprint comeca no dia que a pessoa marcou no calendario
+// dela, e comparar com o `createdDateTime` cru jogaria o fim da tarde para o dia
+// seguinte.
+function diaLocalDe(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+function hojeLocal() {
+  return diaLocalDe(new Date().toISOString());
+}
+
+function diaValido(valor, padrao) {
+  const t = String(valor || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : padrao;
+}
+
+function somarDias(dia, dias) {
+  const [a, m, d] = dia.split('-').map(Number);
+  const data = new Date(a, m - 1, d + dias);
+  return diaLocalDe(data.toISOString());
+}
+
+// "Sprint 42" vira "Sprint 43". Sem numero no fim, ganha um — encerrar uma
+// sprint tem de abrir a seguinte sozinho, senao o quadro fica sem ciclo e o
+// proximo encerramento nao tem onde arquivar.
+function proximoNomeDeSprint(nome) {
+  const m = String(nome || '').match(/^(.*?)(\d+)(\D*)$/);
+  if (m) return `${m[1]}${Number(m[2]) + 1}${m[3]}`;
+  return `${String(nome || 'Sprint').trim()} 2`;
+}
+
+function definirSprint(muralId, corpo) {
+  const s = lerSprints(muralId);
+  const nome = String(corpo.nome || '').trim() || 'Sprint 1';
+  const inicio = diaValido(corpo.inicio, s.atual?.inicio || hojeLocal());
+  const dias = Math.min(120, Math.max(1, Math.round(Number(corpo.dias) || DIAS_DE_SPRINT_PADRAO)));
+  s.atual = {
+    nome,
+    inicio,
+    dias,
+    fim: somarDias(inicio, dias - 1),
+    criadaEm: s.atual?.criadaEm || new Date().toISOString(),
+  };
+  gravarSprints(muralId, s);
+  return s.atual;
+}
+
+// A lista de sprints sem os cards arquivados dentro: a tela de cima so precisa
+// dos nomes e das datas, e mandar o arquivo inteiro em cada leitura do quadro
+// seria carregar meses de historico para desenhar um botao.
+function sprintsResumidas(s) {
+  return {
+    atual: s.atual || null,
+    encerradas: s.encerradas.map((e) => ({
+      nome: e.nome,
+      inicio: e.inicio,
+      fim: e.fim,
+      dias: e.dias,
+      encerradaEm: e.encerradaEm,
+      arquivadas: (e.tasks || []).length,
+    })),
+  };
+}
+
+// Encerrar a sprint tira do quadro o que ja terminou — Concluido e Feito por
+// mim — e guarda dentro da sprint encerrada. NADA e apagado: os dois paineis
+// leem dali, inclusive a anotacao da daily.
+//
+// O merge passa a ignorar essas mensagens para sempre (`db.arquivados`). Sem
+// isso, a mensagem que continua na janela das ~20 voltaria como task NOVA na
+// leitura seguinte, e a coluna que voce acabou de zerar se enche de novo.
+function encerrarSprint(muralId) {
+  const s = lerSprints(muralId);
+  if (!s.atual) throw new Error('Este mural nao tem sprint definida.');
+
+  const db = lerTasks(muralId);
+  if (!db.arquivados) db.arquivados = {};
+  const agora = new Date().toISOString();
+  const arquivadas = [];
+
+  for (const t of Object.values(db.tasks)) {
+    if (t.status !== 'feito' && !t.meu) continue;
+    arquivadas.push({ ...t, sprint: s.atual.nome, arquivadaEm: agora });
+    // Task sua nunca esteve no Teams: nao ha mensagem para o merge ressuscitar,
+    // e marcar o id dela em `arquivados` so sujaria o arquivo.
+    if (t.origem !== 'manual') {
+      for (const m of mensagensDaTask(t)) db.arquivados[m.id] = s.atual.nome;
+      db.arquivados[t.id] = s.atual.nome;
+    }
+    delete db.tasks[t.id];
+  }
+
+  s.encerradas.unshift({ ...s.atual, encerradaEm: agora, tasks: arquivadas });
+  s.atual = {
+    nome: proximoNomeDeSprint(s.atual.nome),
+    inicio: hojeLocal(),
+    dias: s.atual.dias || DIAS_DE_SPRINT_PADRAO,
+    fim: somarDias(hojeLocal(), (s.atual.dias || DIAS_DE_SPRINT_PADRAO) - 1),
+    criadaEm: agora,
+  };
+
+  gravarTasks(muralId, db);
+  gravarSprints(muralId, s);
+  return { arquivadas: arquivadas.length, sprints: sprintsResumidas(s) };
+}
+
+// ------------------------------------------------------------------- paineis
+
+// Tudo que ja passou pelo mural: o que esta no quadro agora mais o que as
+// sprints encerradas guardaram. Os paineis precisam das duas metades — a conta de
+// "quantos chegaram na sprint 3" nao pode mudar porque a sprint 3 foi fechada.
+function historicoCompleto(muralId) {
+  const db = lerTasks(muralId);
+  const sprints = lerSprints(muralId);
+  const vivas = Object.values(db.tasks).map((t) => ({ ...t, arquivada: false, sprint: null }));
+  const arquivadas = sprints.encerradas.flatMap((e) =>
+    (e.tasks || []).map((t) => ({ ...t, arquivada: true, sprint: t.sprint || e.nome })),
+  );
+  return { db, sprints, tasks: [...vivas, ...arquivadas] };
+}
+
+function janelasDeSprint(sprints) {
+  const janelas = [];
+  if (sprints.atual) janelas.push({ ...sprints.atual, atual: true, encerradaEm: null, arquivadas: 0 });
+  for (const e of sprints.encerradas) {
+    janelas.push({ ...e, atual: false, arquivadas: (e.tasks || []).length, tasks: undefined });
+  }
+  return janelas;
+}
+
+function painelDoMural(muralId) {
+  const { sprints, tasks } = historicoCompleto(muralId);
+  const janelas = janelasDeSprint(sprints);
+
+  const dia = (t) => diaLocalDe(t.createdDateTime);
+  const dentroDe = (j) => tasks.filter((t) => dia(t) >= j.inicio && dia(t) <= j.fim);
+
+  const linhas = janelas.map((j) => {
+    const dentro = dentroDe(j);
+    return {
+      nome: j.nome,
+      inicio: j.inicio,
+      fim: j.fim,
+      atual: j.atual,
+      encerradaEm: j.encerradaEm || null,
+      arquivadas: j.arquivadas,
+      chegaram: dentro.length,
+      bugs: dentro.filter((t) => t.kind === 'bug').length,
+      sugestoes: dentro.filter((t) => t.kind !== 'bug').length,
+      concluidas: dentro.filter((t) => t.status === 'feito' || t.meu).length,
+      minhas: dentro.filter((t) => t.meu).length,
+      emAberto: dentro.filter((t) => !t.meu && t.status !== 'feito').length,
+      mensagens: dentro.reduce((s, t) => s + mensagensDaTask(t).length, 0),
+    };
+  });
+
+  // O que chegou antes de existir sprint neste mural nao pode desaparecer da
+  // conta: some numa linha propria em vez de sumir da soma.
+  const cobertas = new Set();
+  for (const j of janelas) for (const t of dentroDe(j)) cobertas.add(t.id);
+  const soltas = tasks.filter((t) => !cobertas.has(t.id));
+
+  // A daily le por dia da MARCA, nao da mensagem: o que importa na reuniao e o
+  // dia em que voce fez, nao o dia em que o pedido chegou.
+  const feitas = tasks
+    .filter((t) => t.meu && t.meu.em)
+    .sort((a, b) => String(b.meu.em).localeCompare(String(a.meu.em)));
+
+  const porDia = [];
+  for (const t of feitas) {
+    const chave = diaLocalDe(t.meu.em);
+    let grupo = porDia[porDia.length - 1];
+    if (!grupo || grupo.dia !== chave) {
+      grupo = { dia: chave, itens: [] };
+      porDia.push(grupo);
+    }
+    grupo.itens.push({
+      id: t.id,
+      summary: t.summary,
+      kind: t.kind === 'bug' ? 'bug' : 'sugestao',
+      solucao: t.meu.solucao || '',
+      em: t.meu.em,
+      via: t.meu.via,
+      status: t.status,
+      origem: t.origem === 'manual' ? 'manual' : 'teams',
+      autor: t.author,
+      arquivada: !!t.arquivada,
+      sprint: t.sprint || (sprints.atual ? sprints.atual.nome : null),
+      mensagens: mensagensDaTask(t).length,
+      webUrl: t.webUrl || '',
+    });
+  }
+
+  return {
+    sprints: linhas,
+    foraDeSprint: soltas.length
+      ? {
+          chegaram: soltas.length,
+          bugs: soltas.filter((t) => t.kind === 'bug').length,
+          concluidas: soltas.filter((t) => t.status === 'feito' || t.meu).length,
+        }
+      : null,
+    daily: {
+      porDia,
+      total: feitas.length,
+      bugs: feitas.filter((t) => t.kind === 'bug').length,
+      diasAtivos: porDia.length,
+      arquivadas: feitas.filter((t) => t.arquivada).length,
+    },
+  };
+}
+
 // ------------------------------------------------------------------ migracao
 
 // Versao antiga guardava um unico mural em data/config.json + data/tasks.json.
@@ -387,6 +625,8 @@ function tasksParaTela(muralId) {
     ...t,
     origem: t.origem === 'manual' ? 'manual' : 'teams',
     meu: t.meu || null,
+    mensagens: mensagensDaTask(t),
+    agrupamento: t.agrupamento || null,
     emojis: emojisDoCard(t.reactions),
     foraDeAlcance: foraDeAlcance(t, db.lastSync),
     podeMover: podeMover(t, db.lastSync),
@@ -505,6 +745,332 @@ function desmarcarComoMeu(muralId, id) {
   gravarTasks(muralId, db);
 }
 
+// ---------------------------------------------------------------------- rajadas
+
+// Uma demanda quase nunca chega como uma mensagem so. O padrao real e a rajada:
+// dois prints e tres linhas de texto, do mesmo autor, em segundos — cinco
+// mensagens que sao UMA task. Sem agrupar, o quadro conta cinco cards e quatro
+// deles dizem apenas "(so print)".
+//
+// Quem decide o agrupamento e este codigo, nao o modelo. O JS acha as rajadas
+// candidatas (mesmo autor, consecutivas, dentro da janela) e o LLM so pode
+// DIVIDIR uma candidata, pelo campo `mesmaDemandaQueAnterior`. Ele nao consegue
+// juntar autores diferentes nem horarios distantes, porque isso nem chega a ele
+// como candidata. O pior erro possivel do modelo e deixar um card solto — que
+// voce junta com um clique — nunca fundir duas demandas num card so.
+const JANELA_RAJADA_MS = 3 * 60 * 1000;
+
+const SENTINELA_PRINT = '(só print — abrir para ver)';
+
+function ehSoPrint(m) {
+  if (typeof m.soPrint === 'boolean') return m.soPrint;
+  return String(m.summary || '').trim() === SENTINELA_PRINT;
+}
+
+function normalizarAutor(nome) {
+  return String(nome || '').trim().toLowerCase();
+}
+
+function mensagemDoSnapshot(m, agora) {
+  return {
+    id: String(m.id),
+    author: m.author || '?',
+    createdDateTime: m.createdDateTime || agora,
+    summary: m.summary || '(sem resumo)',
+    kind: m.kind === 'bug' ? 'bug' : 'sugestao',
+    reactions: Array.isArray(m.reactions) ? m.reactions : [],
+    webUrl: m.webUrl || '',
+    soPrint: ehSoPrint(m),
+  };
+}
+
+// Task gravada antes deste campo existir — e toda task sua — nao tem
+// `mensagens`: ela E uma mensagem. Ler assim evita migrar o arquivo: o campo
+// aparece sozinho na primeira atualizacao, e nada quebra enquanto nao aparece.
+function mensagensDaTask(t) {
+  if (Array.isArray(t.mensagens) && t.mensagens.length) return t.mensagens;
+  return [{
+    id: t.id,
+    author: t.author,
+    createdDateTime: t.createdDateTime,
+    summary: t.summary,
+    kind: t.kind,
+    reactions: t.reactions || [],
+    webUrl: t.webUrl || '',
+    soPrint: ehSoPrint(t),
+  }];
+}
+
+// Toda mensagem que ja virou card fica presa nele — sozinha ou dentro de um
+// grupo. E isso que impede o quadro de piscar: se o modelo mudar de ideia na
+// leitura seguinte, o agrupamento de antes continua valendo.
+//
+// A consequencia importante e que um card NUNCA e absorvido por outro: ele so
+// cresce, ganhando mensagens novas da mesma rajada que apareceram depois. Nada
+// que voce escreveu — anotacao da daily, movimento a mao — pode se perder num
+// reagrupamento, porque reagrupamento nao existe. Fundir dois cards que ja
+// existem so acontece se voce pedir, em /api/juntar.
+function mensagensJaConhecidas(db) {
+  const dono = new Map();
+  for (const t of Object.values(db.tasks)) {
+    if (t.origem === 'manual') continue;
+    for (const m of mensagensDaTask(t)) dono.set(m.id, t.id);
+    dono.set(t.id, t.id);
+  }
+  return dono;
+}
+
+function podeContinuarRajada(grupo, bruto, msg) {
+  const ultima = grupo.mensagens[grupo.mensagens.length - 1];
+  if (!ultima) return false;
+  // Grupo que voce mesmo montou ou separou nao aceita palpite: a mao mandou
+  // ali, e a leitura seguinte nao pode refazer o gesto por cima.
+  if (grupo.travado) return false;
+  if (normalizarAutor(ultima.author) !== normalizarAutor(msg.author)) return false;
+  // O default do prompt e dividir: so `true` explicito junta.
+  if (bruto.mesmaDemandaQueAnterior !== true) return false;
+  const dt = new Date(msg.createdDateTime).getTime() - new Date(ultima.createdDateTime).getTime();
+  return Number.isFinite(dt) && dt >= 0 && dt <= JANELA_RAJADA_MS;
+}
+
+function ordenarMensagens(mensagens) {
+  return mensagens.slice().sort(
+    (a, b) =>
+      String(a.createdDateTime).localeCompare(String(b.createdDateTime)) ||
+      String(a.id).localeCompare(String(b.id)),
+  );
+}
+
+// A mensagem do Teams pode ter sido editada depois; a versao nova ganha. Manter
+// as antigas que nao vieram na janela e o que permite um grupo sobreviver quando
+// so parte dele ainda esta nas ~20 mensagens.
+function fundirMensagens(antigas, novas) {
+  const por = new Map();
+  for (const m of antigas) por.set(m.id, m);
+  for (const m of novas) por.set(m.id, m);
+  return ordenarMensagens([...por.values()]);
+}
+
+function agruparRajadas(snapshot, db, agora) {
+  const dono = mensagensJaConhecidas(db);
+  const ordenado = snapshot
+    .filter((m) => m && m.id)
+    .slice()
+    .sort(
+      (a, b) =>
+        String(a.createdDateTime || '').localeCompare(String(b.createdDateTime || '')) ||
+        String(a.id).localeCompare(String(b.id)),
+    );
+
+  const grupos = [];
+  const porAncora = new Map();
+  let atual = null;
+
+  const noGrupo = (ancora, msg) => {
+    const existente = porAncora.get(ancora);
+    if (existente) {
+      existente.mensagens.push(msg);
+      return existente;
+    }
+    const g = { ancora, mensagens: [msg], travado: db.tasks[ancora]?.agrupamento === 'mao' };
+    grupos.push(g);
+    porAncora.set(ancora, g);
+    return g;
+  };
+
+  for (const bruto of ordenado) {
+    const msg = mensagemDoSnapshot(bruto, agora);
+    const conhecido = dono.get(msg.id);
+
+    // Ja tem dono: volta para ele, mesmo que a ancora tenha saido da janela.
+    if (conhecido) {
+      atual = noGrupo(conhecido, msg);
+      continue;
+    }
+    if (atual && podeContinuarRajada(atual, bruto, msg)) {
+      atual.mensagens.push(msg);
+      continue;
+    }
+    atual = noGrupo(msg.id, msg);
+  }
+
+  return grupos;
+}
+
+// O titulo do card sai da primeira mensagem com texto de verdade, nao da
+// primeira mensagem: a rajada costuma comecar pelos prints, e "so print" nao
+// diz o que a task e.
+function mensagemPrincipal(mensagens) {
+  return (
+    mensagens.find((m) => !m.soPrint && m.summary && m.summary !== '(sem resumo)') || mensagens[0]
+  );
+}
+
+function resumoDoGrupo(mensagens) {
+  const principal = mensagemPrincipal(mensagens);
+  if (principal && !principal.soPrint) return principal.summary;
+  const prints = mensagens.filter((m) => m.soPrint).length;
+  return prints > 1 ? `${prints} prints — abrir para ver` : SENTINELA_PRINT;
+}
+
+// A reacao pode estar em qualquer mensagem da rajada: as pessoas reagem na que
+// estao vendo, nao na "principal" — que so existe para o Mural. Por isso o
+// status do card sai da UNIAO das reacoes do grupo.
+function reacoesDoGrupo(mensagens) {
+  const vistas = new Set();
+  const uniao = [];
+  for (const m of mensagens) {
+    for (const e of m.reactions || []) {
+      const chave = normalizarEmoji(e);
+      if (vistas.has(chave)) continue;
+      vistas.add(chave);
+      uniao.push(e);
+    }
+  }
+  return uniao;
+}
+
+function kindDoGrupo(mensagens, padrao) {
+  if (mensagens.some((m) => m.kind === 'bug')) return 'bug';
+  return padrao || 'sugestao';
+}
+
+// Campos que saem inteiramente das mensagens do grupo. Recalcular tudo de uma
+// vez, aqui, e o que garante que juntar, separar e crescer produzam o mesmo card
+// que uma leitura limpa produziria.
+function aplicarMensagensNaTask(t, mensagens) {
+  const todas = ordenarMensagens(mensagens);
+  const primeira = todas[0];
+  t.mensagens = todas;
+  t.summary = resumoDoGrupo(todas);
+  t.reactions = reacoesDoGrupo(todas);
+  t.kind = kindDoGrupo(todas, t.kind);
+  t.author = primeira.author || t.author;
+  t.createdDateTime = primeira.createdDateTime || t.createdDateTime;
+  t.webUrl = primeira.webUrl || t.webUrl;
+  return t;
+}
+
+// ------------------------------------------------- juntar e separar a mao
+
+const ORDEM_DE_STATUS = { aberto: 0, interagido: 1, feito: 2 };
+
+function statusMaisAvancado(a, b) {
+  return (ORDEM_DE_STATUS[a] ?? 0) >= (ORDEM_DE_STATUS[b] ?? 0) ? a : b;
+}
+
+// A heuristica vai errar em alguns casos, e card errado que nao da para
+// consertar e pior que card errado. Estas duas rotas sao a saida — e o que elas
+// decidem vence a automatica: `agrupamento: 'mao'` nunca e desfeito por leitura
+// nenhuma, do mesmo jeito que `movidoAMao`.
+function juntarTasks(muralId, ids) {
+  const db = lerTasks(muralId);
+  const escolhidas = [...new Set(ids.map(String))].map((id) => {
+    const t = db.tasks[id];
+    if (!t) throw new Error('Uma das tasks escolhidas nao existe mais.');
+    if (t.origem === 'manual') {
+      throw new Error('Task sua nao entra num grupo: ela nao tem mensagem no Teams para juntar.');
+    }
+    return t;
+  });
+  if (escolhidas.length < 2) throw new Error('Escolha pelo menos duas tasks para juntar.');
+
+  escolhidas.sort((a, b) => String(a.createdDateTime).localeCompare(String(b.createdDateTime)));
+  const ancora = escolhidas[0];
+  const agora = new Date().toISOString();
+
+  let mensagens = [];
+  let status = ancora.status;
+  let meu = null;
+  let movidoAMao = false;
+  let firstSeen = ancora.firstSeen;
+  let lastSeen = ancora.lastSeen;
+
+  for (const t of escolhidas) {
+    mensagens = mensagens.concat(mensagensDaTask(t));
+    status = statusMaisAvancado(status, t.status);
+    movidoAMao = movidoAMao || !!t.movidoAMao;
+    if (String(t.firstSeen) < String(firstSeen)) firstSeen = t.firstSeen;
+    if (String(t.lastSeen) > String(lastSeen)) lastSeen = t.lastSeen;
+    // Anotacao da daily nao pode se perder num gesto de organizacao: as duas
+    // viram uma, na ordem em que foram escritas.
+    if (t.meu) {
+      if (!meu) meu = { ...t.meu };
+      else {
+        const primeiro = String(t.meu.em) < String(meu.em) ? t.meu : meu;
+        const segundo = primeiro === meu ? t.meu : meu;
+        meu = {
+          em: primeiro.em,
+          via: primeiro.via === 'emoji' && segundo.via === 'emoji' ? 'emoji' : 'mao',
+          solucao: [primeiro.solucao, segundo.solucao].filter(Boolean).join('\n'),
+        };
+      }
+    }
+  }
+
+  for (const t of escolhidas) if (t.id !== ancora.id) delete db.tasks[t.id];
+
+  const juntada = {
+    ...ancora,
+    status,
+    statusAnterior: ancora.status !== status ? ancora.status : ancora.statusAnterior,
+    statusChangedAt: ancora.status !== status ? agora : ancora.statusChangedAt,
+    firstSeen,
+    lastSeen,
+    movidoAMao,
+    meu,
+    agrupamento: 'mao',
+  };
+  aplicarMensagensNaTask(juntada, mensagens);
+  db.tasks[ancora.id] = juntada;
+  gravarTasks(muralId, db);
+  return ancora.id;
+}
+
+function separarTask(muralId, id) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id)];
+  if (!t) throw new Error('Task desconhecida.');
+  const mensagens = mensagensDaTask(t);
+  if (mensagens.length < 2) throw new Error('Esta task e uma mensagem so — nao ha o que separar.');
+
+  const agora = new Date().toISOString();
+  const [primeira, ...resto] = ordenarMensagens(mensagens);
+
+  // A ancora fica com a primeira mensagem e com a anotacao: dividir texto que
+  // voce escreveu entre cards seria adivinhar a qual metade ele pertencia.
+  aplicarMensagensNaTask(t, [primeira]);
+  t.agrupamento = 'mao';
+
+  for (const m of resto) {
+    // Cada mensagem volta a ser um card com o id dela — e, por isso, com dono
+    // proprio no mapa da proxima leitura: o agrupamento automatico nao a
+    // reabsorve.
+    db.tasks[m.id] = aplicarMensagensNaTask(
+      {
+        id: m.id,
+        origem: 'teams',
+        status: statusDe(m.reactions),
+        firstSeen: t.firstSeen,
+        statusChangedAt: agora,
+        statusAnterior: null,
+        lastSeen: t.lastSeen,
+        movidoAMao: t.movidoAMao,
+        meu: null,
+        agrupamento: 'mao',
+        kind: m.kind,
+        author: m.author,
+        createdDateTime: m.createdDateTime,
+        webUrl: m.webUrl,
+      },
+      [m],
+    );
+  }
+
+  gravarTasks(muralId, db);
+  return resto.length + 1;
+}
+
 // ----------------------------------------------------------------------- merge
 
 // Mescla o snapshot (janela de ~20) sobre o historico acumulado. Tasks que
@@ -537,63 +1103,73 @@ function merge(db, snapshot, agora, assinatura) {
   const mudaram = [];
   const retomadas = [];
   const marcados = [];
+  const cresceram = [];
+  if (!db.arquivados) db.arquivados = {};
 
-  for (const m of snapshot) {
-    if (!m || !m.id) continue;
+  // O snapshot vem mensagem por mensagem; daqui para baixo o que existe e o
+  // card — que pode ser uma rajada de varias mensagens do mesmo autor.
+  for (const g of agruparRajadas(snapshot, db, agora)) {
+    // Mensagem arquivada no encerramento de uma sprint nao volta ao quadro. Sem
+    // isso a proxima leitura ressuscitaria como "nova" tudo que voce fechou.
+    if (db.arquivados[g.ancora]) continue;
+    const vindas = g.mensagens.filter((m) => !db.arquivados[m.id]);
+    if (!vindas.length) continue;
 
-    const status = statusDe(m.reactions);
-    const antigo = db.tasks[m.id];
+    const antigo = db.tasks[g.ancora];
 
     if (!antigo) {
-      db.tasks[m.id] = {
-        id: m.id,
-        author: m.author || '?',
-        createdDateTime: m.createdDateTime || agora,
-        summary: m.summary || '(sem resumo)',
-        kind: m.kind === 'bug' ? 'bug' : 'sugestao',
-        reactions: m.reactions || [],
-        webUrl: m.webUrl || '',
-        status,
-        firstSeen: agora,
-        statusChangedAt: agora,
-        statusAnterior: null,
-        lastSeen: agora,
-        movidoAMao: false,
-        meu: null,
-      };
-      novos.push(m.id);
-      aplicarAssinatura(db.tasks[m.id], agora, assinatura, marcados);
+      const t = aplicarMensagensNaTask(
+        {
+          id: g.ancora,
+          origem: 'teams',
+          agrupamento: vindas.length > 1 ? 'auto' : null,
+          firstSeen: agora,
+          statusChangedAt: agora,
+          statusAnterior: null,
+          lastSeen: agora,
+          movidoAMao: false,
+          meu: null,
+        },
+        vindas,
+      );
+      t.status = statusDe(t.reactions);
+      db.tasks[g.ancora] = t;
+      novos.push(g.ancora);
+      aplicarAssinatura(t, agora, assinatura, marcados);
       continue;
     }
 
-    // Campos que o Teams pode ter editado depois.
-    antigo.summary = m.summary || antigo.summary;
-    antigo.reactions = m.reactions || [];
-    antigo.author = m.author || antigo.author;
-    antigo.webUrl = m.webUrl || antigo.webUrl;
-    antigo.kind = m.kind === 'bug' ? 'bug' : antigo.kind;
+    // Cresceu: o autor mandou mais uma mensagem na mesma rajada depois da
+    // ultima leitura. O card e o mesmo — a ancora nao muda — mas o resumo e as
+    // reacoes podem ter mudado, e vale avisar no resumo da atualizacao.
+    const antes = mensagensDaTask(antigo).length;
+    aplicarMensagensNaTask(antigo, fundirMensagens(mensagensDaTask(antigo), vindas));
+    if (antigo.mensagens.length > antes) cresceram.push(g.ancora);
+    if (antigo.agrupamento !== 'mao' && antigo.mensagens.length > 1) antigo.agrupamento = 'auto';
     antigo.lastSeen = agora;
+
+    const status = statusDe(antigo.reactions);
 
     // A task voltou a aparecer na janela: o Teams volta a mandar. Se ela tinha
     // sido movida a mao enquanto estava fora de alcance, a reacao real vence —
     // a fonte da verdade e sempre o Teams.
     if (antigo.movidoAMao) {
       antigo.movidoAMao = false;
-      if (antigo.status !== status) retomadas.push(m.id);
+      if (antigo.status !== status) retomadas.push(g.ancora);
     }
 
     if (antigo.status !== status) {
       antigo.statusAnterior = antigo.status;
       antigo.status = status;
       antigo.statusChangedAt = agora;
-      mudaram.push(m.id);
+      mudaram.push(g.ancora);
     }
 
     aplicarAssinatura(antigo, agora, assinatura, marcados);
   }
 
   db.lastSync = agora;
-  return { novos, mudaram, retomadas, marcados, total: snapshot.length };
+  return { novos, mudaram, retomadas, marcados, cresceram, total: snapshot.length };
 }
 
 // ------------------------------------------------------------------ claude run
@@ -1266,6 +1842,79 @@ async function rotear(req, res) {
           }
         : null,
     });
+  }
+
+  // ---- rajadas: juntar e separar a mao ----
+
+  // O agrupamento automatico erra em alguns casos — e card errado que nao da
+  // para consertar e pior que card errado. Estas duas rotas sao a saida, e o que
+  // elas decidem nao e desfeito por leitura nenhuma.
+  if (p === '/api/juntar' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      if (!Array.isArray(corpo.ids)) throw new Error('Mande os ids das tasks a juntar.');
+      const id = juntarTasks(muralId, corpo.ids);
+      return json(res, 200, { ok: true, id, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/separar' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      const quantas = separarTask(muralId, corpo.id);
+      return json(res, 200, { ok: true, quantas, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // ---- sprint ----
+
+  if (p === '/api/sprint' && req.method === 'GET') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    return json(res, 200, { ok: true, ...sprintsResumidas(lerSprints(muralId)) });
+  }
+
+  if (p === '/api/sprint' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      definirSprint(muralId, await lerCorpoJson(req));
+      return json(res, 200, { ok: true, ...sprintsResumidas(lerSprints(muralId)) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // Encerrar arquiva o que terminou e abre a sprint seguinte. E irreversivel
+  // pela interface, mas nao destrutivo: os cards continuam no sprints.json,
+  // e e de la que os dois paineis leem.
+  if (p === '/api/sprint/encerrar' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const r = encerrarSprint(muralId);
+      return json(res, 200, { ok: true, ...r, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/painel') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    try {
+      return json(res, 200, { ok: true, ...painelDoMural(muralId) });
+    } catch (e) {
+      return json(res, 500, { ok: false, erro: e.message });
+    }
   }
 
   // ---- onboarding ----

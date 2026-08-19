@@ -1,6 +1,6 @@
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api';
 import { BarraDeSync } from '../componentes/BarraDeSync';
@@ -11,14 +11,16 @@ import {
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
+import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { DialogoDeTask } from '../componentes/DialogoDeTask';
-import { COLUNAS, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
+import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
 import type {
   ColunaId,
   Mural,
   NovaTask,
   Progresso,
   RespostaConsumo,
+  RespostaSprint,
   Status,
   Task,
 } from '../tipos';
@@ -57,17 +59,27 @@ export function Quadro() {
   const [editando, setEditando] = useState<Task | 'nova' | null>(null);
   const [anotando, setAnotando] = useState<Task | null>(null);
 
+  const [sprint, setSprint] = useState<RespostaSprint | null>(null);
+  const [editandoSprint, setEditandoSprint] = useState(false);
+
+  // Seleção do "juntar". Vazia = modo desligado, e o clique no card volta a
+  // abrir o Teams. Um Set porque a ordem não importa: a âncora do card juntado
+  // é sempre a mensagem mais antiga, não a primeira que você clicou.
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo] = await Promise.all([
+      const [tarefas, info, custo, ciclo] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
+        api.sprint(muralId),
       ]);
       setMural(info.mural);
       setTasks(tarefas.tasks);
       setLastSync(tarefas.lastSync);
       setConsumo(custo);
+      setSprint(ciclo);
       document.title = `${info.mural.nome} · Mural`;
     } catch (e) {
       setErro((e as Error).message);
@@ -178,6 +190,14 @@ export function Quadro() {
           `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Feito por mim`,
         );
       }
+      // Uma rajada pode continuar depois da leitura: o autor manda mais uma
+      // linha e o card cresce em vez de nascer outro. Sem avisar, o quadro
+      // parece não ter visto a mensagem nova.
+      if (r.cresceram?.length) {
+        partes.push(
+          `${r.cresceram.length} ganhou/ganharam mensagem nova da mesma rajada`,
+        );
+      }
       // O custo real desta execução entra no resumo: a estimativa foi mostrada
       // antes, e ver o valor cobrado é o que torna a próxima estimativa crível.
       if (r.consumo) {
@@ -267,6 +287,81 @@ export function Quadro() {
     try {
       const r = await api.desmarcarComoMeu(muralId, task.id);
       setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // ---- rajadas: juntar e separar ---------------------------------------
+
+  // O agrupamento automático erra em alguns casos — e card errado que não dá
+  // para consertar é pior que card errado. Estes dois gestos são a saída, e o
+  // que eles decidem nenhuma atualização desfaz.
+  function alternarSelecao(task: Task) {
+    setSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(task.id)) proximo.delete(task.id);
+      else proximo.add(task.id);
+      return proximo;
+    });
+  }
+
+  async function juntarSelecionadas() {
+    const ids = [...selecionados];
+    if (ids.length < 2) return;
+    setErro(null);
+    try {
+      const r = await api.juntar(muralId, ids);
+      setTasks(r.tasks);
+      setSelecionados(new Set());
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function separar(task: Task) {
+    setErro(null);
+    try {
+      const r = await api.separar(muralId, task.id);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // ---- sprint ----------------------------------------------------------
+
+  async function salvarSprint(dados: { nome: string; inicio: string; dias: number }) {
+    setEditandoSprint(false);
+    setErro(null);
+    try {
+      setSprint(await api.definirSprint(muralId, dados));
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function encerrarSprint() {
+    const atual = sprint?.atual;
+    if (!atual) return;
+    const terminadas = tasks.filter((t) => t.meu || t.status === 'feito').length;
+    const confirmado = window.confirm(
+      `Encerrar a ${atual.nome}?\n\n` +
+        `${terminadas} card(s) de Concluído e de Feito por mim saem do quadro e vão para o ` +
+        'arquivo desta sprint. Nada é apagado: os painéis leem de lá, com as anotações da ' +
+        'daily.\n\nA sprint seguinte começa hoje.',
+    );
+    if (!confirmado) return;
+    setErro(null);
+    try {
+      const r = await api.encerrarSprint(muralId);
+      setTasks(r.tasks);
+      setSprint(r.sprints);
+      setResumo(
+        r.arquivadas === 0
+          ? `${atual.nome} encerrada — não havia nada concluído para arquivar`
+          : `${atual.nome} encerrada: ${r.arquivadas} card(s) arquivado(s)`,
+      );
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -411,6 +506,32 @@ export function Quadro() {
             {formatarUsd(consumo.totais.custoUsd)} gastos
           </span>
         )}
+        {/* A sprint fica no cabeçalho porque é ali que ela age: é o botão ao
+            lado que a encerra e zera o que já terminou. */}
+        <button
+          className="sprint"
+          onClick={() => setEditandoSprint(true)}
+          title={
+            sprint?.atual
+              ? `${sprint.atual.nome}: ${dataDoDiaISO(sprint.atual.inicio)} a ${dataDoDiaISO(sprint.atual.fim)}. Clique para corrigir.`
+              : 'Definir o ciclo que você fecha de vez em quando'
+          }
+        >
+          {sprint?.atual
+            ? `${sprint.atual.nome} · até ${dataDoDiaISO(sprint.atual.fim)}`
+            : 'definir sprint'}
+        </button>
+        {sprint?.atual && (
+          <button
+            onClick={() => void encerrarSprint()}
+            title="Arquiva Concluído e Feito por mim, e abre a sprint seguinte"
+          >
+            Encerrar sprint
+          </button>
+        )}
+        <Link className="botao-link" to={`/m/${muralId}/painel`} title="Sprints e daily">
+          Painéis
+        </Link>
         <button onClick={() => setEditando('nova')} title="Criar uma task que não veio do Teams">
           Nova task
         </button>
@@ -451,6 +572,15 @@ export function Quadro() {
         />
       )}
 
+      {editandoSprint && (
+        <DialogoDeSprint
+          sprint={sprint?.atual ?? null}
+          primeiraVez={!sprint?.atual}
+          aoSalvar={(d) => void salvarSprint(d)}
+          aoCancelar={() => setEditandoSprint(false)}
+        />
+      )}
+
       {anotando && (
         <DialogoDeSolucao
           task={anotando}
@@ -463,13 +593,29 @@ export function Quadro() {
 
       {erro && <p className="aviso erro faixa">{erro}</p>}
 
+      {selecionados.size > 0 && (
+        <p className="aviso faixa selecao">
+          {selecionados.size === 1
+            ? '1 card selecionado — escolha outro para juntar os dois num só.'
+            : `${selecionados.size} cards selecionados. Juntar cria um card só, com a mensagem mais antiga como âncora; a anotação da daily vai junto.`}
+          <button
+            className="primario"
+            disabled={selecionados.size < 2}
+            onClick={() => void juntarSelecionadas()}
+          >
+            Juntar em um card
+          </button>
+          <button onClick={() => setSelecionados(new Set())}>Cancelar</button>
+        </p>
+      )}
+
       {foraDeAlcance > 0 && (
-        <p className="aviso info faixa">
+        <p className="aviso faixa legado">
           {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
           API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
-          {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. Só{' '}
-          {foraDeAlcance === 1 ? 'esse card' : 'esses cards'} (borda tracejada) e as tasks criadas
-          por você podem ser arrastados entre as colunas do Teams.
+          {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards de{' '}
+          <strong>borda âmbar tracejada</strong>, os únicos que você move arrastando, junto com as
+          tasks criadas por você.
         </p>
       )}
 
@@ -498,9 +644,13 @@ export function Quadro() {
                 ) : undefined
               }
               ultimaVisita={ultimaVisita}
+              selecionando={selecionados.size > 0}
+              selecionados={selecionados}
               aoAbrir={(t) => void abrir(t)}
               aoMarcarComoMeu={setAnotando}
               aoDesmarcarComoMeu={(t) => void desmarcar(t)}
+              aoSelecionar={alternarSelecao}
+              aoSeparar={(t) => void separar(t)}
             />
           ))}
         </main>

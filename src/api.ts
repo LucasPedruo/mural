@@ -7,7 +7,10 @@ import type {
   NovaTask,
   Preferencias,
   RespostaConsumo,
+  RespostaPainel,
+  RespostaSprint,
   RespostaTasks,
+  ResultadoEncerramento,
   ResultadoSync,
   SomaDeConsumo,
   Status,
@@ -74,6 +77,31 @@ export const api = {
     const r = await pedir<ResultadoSync>(`/api/sync?mural=${muralId}`, { method: 'POST' });
     return { ...r, totaisDoUsuario: comQuebraPorOperacao(r.totaisDoUsuario) };
   },
+
+  // --- rajadas ---
+  // O agrupamento automático erra em alguns casos, e card errado que não dá
+  // para consertar é pior que card errado. O que estes dois gestos decidem
+  // nenhuma leitura desfaz.
+
+  juntar: (muralId: string, ids: string[]) =>
+    pedir<RespostaTasks & { id: string }>(`/api/juntar?mural=${muralId}`, json({ ids })),
+
+  separar: (muralId: string, id: string) =>
+    pedir<RespostaTasks & { quantas: number }>(`/api/separar?mural=${muralId}`, json({ id })),
+
+  // --- sprint ---
+
+  sprint: (muralId: string) => pedir<RespostaSprint>(`/api/sprint?mural=${muralId}`),
+
+  definirSprint: (muralId: string, sprint: { nome: string; inicio: string; dias: number }) =>
+    pedir<RespostaSprint>(`/api/sprint?mural=${muralId}`, json(sprint)),
+
+  // Arquiva o que terminou e abre a sprint seguinte. Não é destrutivo: os cards
+  // continuam no disco, e é deles que os painéis vivem.
+  encerrarSprint: (muralId: string) =>
+    pedir<ResultadoEncerramento>(`/api/sprint/encerrar?mural=${muralId}`, { method: 'POST' }),
+
+  painel: (muralId: string) => pedir<RespostaPainel>(`/api/painel?mural=${muralId}`),
 
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
