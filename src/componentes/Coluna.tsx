@@ -21,6 +21,11 @@ interface Props {
   grupos: GrupoDaColuna[];
   ultimaVisita: string | null;
   vazio?: string;
+  /** Colapsada: a coluna vira uma faixa fina com o rótulo de pé e a contagem.
+   *  Continua aceitando cards soltos nela — é o que permite guardar algo numa
+   *  coluna que você não quer olhar agora. */
+  colapsada: boolean;
+  aoColapsar: (colapsar: boolean) => void;
   /** Modo de juntar ligado: o clique num card seleciona em vez de abrir. */
   selecionando: boolean;
   selecionados: Set<string>;
@@ -44,6 +49,8 @@ export function Coluna({
   ultimaVisita,
   acessorio,
   vazio = 'nada aqui',
+  colapsada,
+  aoColapsar,
   selecionando,
   selecionados,
   aoAbrir,
@@ -62,6 +69,33 @@ export function Coluna({
   // do grupo: repetir o 0 a cada bloco embaralharia o arraste.
   let indice = 0;
 
+  // Colapsada, a coluna guarda o mínimo para ser reconhecida e reaberta — e
+  // continua sendo alvo de soltar, porque arrastar para uma coluna fechada é
+  // justamente o gesto de "guarda isso aí que eu não quero ver agora".
+  if (colapsada) {
+    return (
+      <section className="coluna colapsada">
+        <button className="expandir" onClick={() => aoColapsar(false)} title={`Expandir ${rotulo}`}>
+          <span className="ponto" style={{ background: CORES_DE_STATUS[status] }} />
+          <span className="contagem">{total}</span>
+          <span className="rotulo-de-pe">{rotulo}</span>
+        </button>
+
+        <Droppable droppableId={status}>
+          {(fornecido, estado) => (
+            <div
+              ref={fornecido.innerRef}
+              {...fornecido.droppableProps}
+              className={'faixa' + (estado.isDraggingOver ? ' recebendo' : '')}
+            >
+              {fornecido.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </section>
+    );
+  }
+
   return (
     <section className="coluna">
       <header>
@@ -71,6 +105,13 @@ export function Coluna({
         </span>
         {acessorio}
         <span className="contagem">{total}</span>
+        <button
+          className="colapsar"
+          onClick={() => aoColapsar(true)}
+          title={`Colapsar ${rotulo} — ela continua recebendo cards arrastados`}
+        >
+          ⟨
+        </button>
       </header>
 
       <Droppable droppableId={status}>

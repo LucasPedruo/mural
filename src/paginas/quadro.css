@@ -96,32 +96,25 @@
   opacity: 0.5;
 }
 
+/* Flex, e nao grid, por causa do colapsar: uma coluna fechada tem largura fixa
+   enquanto as abertas dividem o que sobra — com grid isso exigiria montar o
+   template em JS, e a largura deixaria de responder ao tamanho da tela. */
 .colunas {
-  display: grid;
-  /* Quantas colunas depende de mostrar ou nao as ignoradas: uma coluna de
-     descartes nao pode roubar largura das quatro que sao trabalho. */
-  grid-template-columns: repeat(var(--quantas-colunas, 5), 1fr);
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 20px 24px 40px;
-  align-items: start;
 }
 
-@media (max-width: 1600px) {
-  .colunas {
-    grid-template-columns: repeat(3, 1fr);
-  }
+.colunas > .coluna {
+  flex: 1 1 230px;
+  min-width: 0;
 }
 
-@media (max-width: 1100px) {
-  .colunas {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 720px) {
-  .colunas {
-    grid-template-columns: 1fr;
-  }
+/* 46px cabe o ponto de cor, a contagem e o rotulo de pe. */
+.colunas > .coluna.colapsada {
+  flex: 0 0 46px;
 }
 
 /* Estado da escrita. Pilula, como a sprint e o gasto: e um estado do mural que
@@ -177,15 +170,3 @@
   opacity: 0.7;
 }
 
-/* Mostrar/esconder as ignoradas. Mesmo vocabulario da sprint e da escrita. */
-.topo-quadro .ignoradas {
-  font-size: 12px;
-  border-radius: 999px;
-  padding: 4px 11px;
-  background: var(--bg-surface);
-  color: var(--text-muted);
-}
-.topo-quadro .ignoradas[aria-pressed='true'] {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}

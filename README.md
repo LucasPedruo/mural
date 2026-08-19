@@ -26,7 +26,7 @@ As colunas:
 | **Interagido** | mensagem com qualquer outra reação que não seja check |
 | **Concluído por outros** | mensagem com check (✅ ☑️ ✔️) que não é sua |
 | **Feito por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
-| **Ignoradas** | o que você decidiu que não é pra você — escondida até você pedir |
+| **Ignoradas** | o que você decidiu que não é pra você — nasce colapsada |
 
 *Concluído por outros* se chama assim porque o que **você** fez sai dali para
 *Feito por mim*: o que resta é o trabalho do resto do time. Numa conversa de duas
@@ -35,6 +35,12 @@ reação* — "por outros" pressupõe um time.
 
 Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
 **Atualizar** relê a conversa.
+
+**Qualquer coluna colapsa** — o `⟨` no cabeçalho dela vira uma faixa fina com o
+rótulo de pé e a contagem. Quem trabalha por sprint não olha *Interagido* toda
+hora, e o espaço vai para as colunas que são trabalho agora. A coluna fechada
+**continua recebendo cards arrastados**: é o gesto de guardar sem abrir. A escolha
+é por mural e fica no navegador.
 
 Com a [escrita ligada](#escrever-no-teams), **arrastar um card escreve a reação
 na mensagem** — e o time vê. Sem ela, o Mural só lê, e quem move as tasks é a
@@ -249,9 +255,10 @@ moram em campos próprios justamente para nenhuma leitura as apagar.
 
 **Ignorar** (⊘ no card) é para o que não é pra você: chegou no canal, alguém vai
 cuidar, e não precisa ocupar espaço no seu quadro. O card sai das colunas de
-trabalho e vai para *Ignoradas* — que fica **escondida** até você pedir, porque
-uma coluna de descartes não pode roubar largura das que são trabalho. Nada é
-escrito no Teams: ignorar em público seria outra coisa, e não é essa.
+trabalho e vai para *Ignoradas* — que nasce **colapsada**, porque uma coluna de
+descartes não pode roubar largura das que são trabalho. Ao ignorar o primeiro card
+ela abre uma vez, para você ver onde ele foi. Nada é escrito no Teams: ignorar
+em público seria outra coisa, e não é essa.
 
 **Apagar de vez** existe dentro de *Ignoradas*, e é o **único gesto irreversível
 do Mural**: o card sai do histórico e a mensagem entra na lista de arquivados,

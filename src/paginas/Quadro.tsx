@@ -78,13 +78,23 @@ export function Quadro() {
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
 
-  // A coluna das ignoradas fica escondida por padrão: ela é onde se põe o que
-  // não se quer ver, e deixá-la sempre aberta roubaria largura das quatro que
-  // são trabalho. A preferência é por mural.
-  const chaveIgnoradas = `mural:mostrar-ignoradas:${muralId}`;
-  const [mostrarIgnoradas, setMostrarIgnoradas] = useState(
-    () => localStorage.getItem(chaveIgnoradas) === 'sim',
-  );
+  // Qualquer coluna pode ser colapsada: quem trabalha por sprint não olha
+  // "Interagido" toda hora, e quem só quer ver o que está em aberto fecha o
+  // resto. A coluna fechada continua recebendo cards arrastados — é o gesto de
+  // guardar sem abrir.
+  //
+  // *Ignoradas* nasce colapsada: ela é onde se põe o que não se quer ver, e
+  // aberta por padrão roubaria largura das colunas que são trabalho.
+  const chaveColapsadas = `mural:colunas-colapsadas:${muralId}`;
+  const [colapsadas, setColapsadas] = useState<Set<ColunaId>>(() => {
+    const salvo = localStorage.getItem(chaveColapsadas);
+    if (!salvo) return new Set<ColunaId>(['ignorada']);
+    try {
+      return new Set<ColunaId>(JSON.parse(salvo) as ColunaId[]);
+    } catch {
+      return new Set<ColunaId>(['ignorada']);
+    }
+  });
 
   // Seleção do "juntar". Vazia = modo desligado, e o clique no card volta a
   // abrir o Teams. Um Set porque a ordem não importa: a âncora do card juntado
@@ -354,8 +364,9 @@ export function Quadro() {
     try {
       const r = await api.ignorar(muralId, task.id, marcar);
       setTasks(r.tasks);
-      // Ignorar com a coluna escondida faria o card desaparecer sem explicação.
-      if (marcar && !mostrarIgnoradas) trocarIgnoradas(true);
+      // Ignorar com a coluna fechada faria o card desaparecer sem explicação: ela
+      // abre uma vez, para você ver onde ele foi.
+      if (marcar) colapsar('ignorada', false);
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -378,9 +389,14 @@ export function Quadro() {
     }
   }
 
-  function trocarIgnoradas(mostrar: boolean) {
-    setMostrarIgnoradas(mostrar);
-    localStorage.setItem(chaveIgnoradas, mostrar ? 'sim' : 'nao');
+  function colapsar(coluna: ColunaId, fechar: boolean) {
+    setColapsadas((atual) => {
+      const proximo = new Set(atual);
+      if (fechar) proximo.add(coluna);
+      else proximo.delete(coluna);
+      localStorage.setItem(chaveColapsadas, JSON.stringify([...proximo]));
+      return proximo;
+    });
   }
 
   // ---- rajadas: juntar e separar ---------------------------------------
@@ -599,10 +615,6 @@ export function Quadro() {
     return resultado;
   }, [tasks, tagFiltro]);
 
-  const contagemIgnoradas = tasks.filter((t) => t.ignorada).length;
-  // A coluna das ignoradas só ocupa espaço quando você pede — ou quando acabou
-  // de ignorar algo, para o card não desaparecer sem explicação.
-  const colunasVisiveis = COLUNAS.filter((c) => c !== 'ignorada' || mostrarIgnoradas);
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
@@ -677,14 +689,6 @@ export function Quadro() {
         )}
         {/* O estado da escrita fica no cabeçalho porque ele muda o que o
             arraste significa em todo o quadro. */}
-        <button
-          className="ignoradas"
-          aria-pressed={mostrarIgnoradas}
-          onClick={() => trocarIgnoradas(!mostrarIgnoradas)}
-          title="A coluna do que você decidiu que não é pra você"
-        >
-          ignoradas {contagemIgnoradas > 0 ? contagemIgnoradas : ''}
-        </button>
         <button
           className={'escrita' + (escrita?.ligada ? ' ligada' : '')}
           onClick={() => setLigandoEscrita(true)}
@@ -805,17 +809,16 @@ export function Quadro() {
       )}
 
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
-        <main
-          className="colunas"
-          style={{ ['--quantas-colunas' as string]: colunasVisiveis.length }}
-        >
-          {colunasVisiveis.map((coluna) => (
+        <main className="colunas">
+          {COLUNAS.map((coluna) => (
             <Coluna
               key={coluna}
               status={coluna}
               rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
               grupos={grupos[coluna]}
               vazio={vazioDaColuna(coluna, emojiMeu)}
+              colapsada={colapsadas.has(coluna)}
+              aoColapsar={(fechar) => colapsar(coluna, fechar)}
               acessorio={
                 coluna === 'fazendo' ? (
                   <button
