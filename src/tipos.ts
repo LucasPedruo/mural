@@ -153,9 +153,6 @@ export interface RespostaConsumo {
   /** Quem lê o Teams nesta instalação. `reportaCusto` falso esconde preço da
    *  tela: agente que não informa gasto não pode aparecer com zero dólar. */
   agente: AgenteEmUso;
-  /** Se o Mural pode ESCREVER reação no Teams. Ligada, arrastar card vale de
-   *  verdade; desligada, só os cards fora de alcance se movem. */
-  escrita: { ligada: boolean };
 }
 
 export interface ResultadoSync extends RespostaTasks {
@@ -368,19 +365,3 @@ export interface AgenteEmUso {
   reportaCusto: boolean;
 }
 
-// ------------------------------------------------------- escrita no Teams
-
-/** O estado da autorização de escrita. O refresh token nunca chega aqui: a
- *  interface sabe apenas se dá para escrever, por qual app, e se há um código
- *  esperando ser digitado. */
-export interface RespostaEscrita {
-  ok: boolean;
-  ligada: boolean;
-  clientId: string;
-  tenant: string;
-  conectadoEm: string | null;
-  escopos: string;
-  /** Device code em andamento: o código curto e onde digitá-lo. */
-  aguardando: { codigo: string; endereco: string; expiraEm: string } | null;
-  erro: string;
-}

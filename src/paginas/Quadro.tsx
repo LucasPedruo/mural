@@ -10,7 +10,6 @@ import {
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
-import { DialogoDeEscrita } from '../componentes/DialogoDeEscrita';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
@@ -20,7 +19,6 @@ import type {
   Mural,
   Progresso,
   RespostaConsumo,
-  RespostaEscrita,
   RespostaSprint,
   Status,
   TagComContagem,
@@ -67,10 +65,6 @@ export function Quadro() {
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
   const [editandoSprint, setEditandoSprint] = useState(false);
 
-  // A escrita no Teams é o que faz o arraste valer de verdade: ligada, o gesto
-  // põe a reação na mensagem em vez de virar uma opinião local do quadro.
-  const [escrita, setEscrita] = useState<RespostaEscrita | null>(null);
-  const [ligandoEscrita, setLigandoEscrita] = useState(false);
 
   // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
   // está sendo etiquetada e o filtro ligado.
@@ -103,15 +97,13 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, escreve, etiquetas] = await Promise.all([
+      const [tarefas, info, custo, ciclo, etiquetas] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
-        api.escrita(),
         api.tags(muralId),
       ]);
-      setEscrita(escreve);
       setTags(etiquetas.tags);
       setMural(info.mural);
       setTasks(tarefas.tasks);
@@ -687,19 +679,6 @@ export function Quadro() {
             Encerrar sprint
           </button>
         )}
-        {/* O estado da escrita fica no cabeçalho porque ele muda o que o
-            arraste significa em todo o quadro. */}
-        <button
-          className={'escrita' + (escrita?.ligada ? ' ligada' : '')}
-          onClick={() => setLigandoEscrita(true)}
-          title={
-            escrita?.ligada
-              ? 'Escrita ligada: arrastar um card põe a reação na mensagem do Teams'
-              : 'O Mural só lê o Teams. Clique para ligar a escrita e fazer o arraste valer.'
-          }
-        >
-          {escrita?.ligada ? 'escrita ligada' : 'só leitura'}
-        </button>
         <Link className="botao-link" to={`/m/${muralId}/painel`} title="Sprints e daily">
           Painéis
         </Link>
@@ -724,19 +703,6 @@ export function Quadro() {
           existentes={tags}
           aoSalvar={(t) => void salvarTags(t)}
           aoCancelar={() => setEtiquetando(null)}
-        />
-      )}
-
-      {ligandoEscrita && escrita && (
-        <DialogoDeEscrita
-          estado={escrita}
-          aoMudar={(novo) => {
-            setEscrita(novo);
-            // Ligar ou desligar muda quem pode arrastar: o quadro relê para os
-            // cards passarem a aceitar (ou recusar) o gesto na hora.
-            void carregar();
-          }}
-          aoFechar={() => setLigandoEscrita(false)}
         />
       )}
 
@@ -782,10 +748,7 @@ export function Quadro() {
           {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
           API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
           {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
-          <strong>sem fundo, de borda tracejada</strong>
-          {escrita?.ligada
-            ? '. Com a escrita ligada, qualquer card se move arrastando — nesses, o quadro é a única fonte.'
-            : ': os únicos que você move arrastando.'}
+          <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
         </p>
       )}
 

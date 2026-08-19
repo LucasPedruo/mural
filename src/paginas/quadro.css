@@ -117,24 +117,6 @@
   flex: 0 0 46px;
 }
 
-/* Estado da escrita. Pilula, como a sprint e o gasto: e um estado do mural que
-   por acaso da para mudar clicando. Desligada nao e erro — e o padrao. */
-.topo-quadro .escrita {
-  font-size: 12px;
-  border-radius: 999px;
-  padding: 4px 11px;
-  background: var(--bg-surface);
-  color: var(--text-muted);
-}
-.topo-quadro .escrita:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-.topo-quadro .escrita.ligada {
-  color: var(--marca-meu);
-  border-color: var(--marca-meu);
-  background: var(--bg-brand-subtle);
-}
 
 /* A barra de etiquetas. Fica acima das colunas porque filtra todas elas. */
 .filtro-de-tags {

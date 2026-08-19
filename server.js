@@ -8,7 +8,8 @@
 // inventado nem perdido.
 //
 // Nao ha login proprio: a autenticacao com a Microsoft e a do agente e do MCP
-// que ele usa para o Graph. Este servidor nunca ve nem guarda credencial.
+// que ele usa para o Graph. Este servidor nunca ve nem guarda credencial, e o
+// Mural so LE o Teams — nao existe caminho de escrita aqui.
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -20,14 +21,6 @@ import { fileURLToPath } from 'node:url';
 // Quem fala com o Teams e um agente de IA ja autenticado — Claude Code, Codex,
 // Gemini CLI ou outro. Qual deles e escolha de quem instala, e mora aqui para
 // nao virar um `if` espalhado pelo servidor.
-import {
-  ESCOPOS as ESCOPOS_DE_ESCRITA,
-  iniciarDeviceCode,
-  renovar as renovarToken,
-  setReaction,
-  trocarDeviceCode,
-  unsetReaction,
-} from './graph.js';
 import {
   adaptadorEscolhido,
   adaptadores,
@@ -55,8 +48,6 @@ const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
 const CONSUMO_FILE = path.join(DATA_DIR, 'consumo.json');
 const PREFS_FILE = path.join(DATA_DIR, 'preferencias.json');
 const AGENTES_FILE = path.join(DATA_DIR, 'agentes.json');
-// O unico arquivo do Mural que guarda credencial. Ver graph.js.
-const GRAPH_FILE = path.join(DATA_DIR, 'graph.json');
 
 const PORT = Number(process.env.MURAL_PORT) || 4317;
 
@@ -686,18 +677,12 @@ function foraDeAlcance(t, lastSync) {
   return !!lastSync && t.lastSeen !== lastSync;
 }
 
-// Quem pode trocar de coluna arrastando.
-//
-// Com a escrita ligada, qualquer card que veio do Teams pode: o gesto escreve a
-// reacao na mensagem, entao ele nao e mais uma opiniao do quadro que a proxima
-// leitura desmente.
-//
-// Sem escrita, so as que o Teams nao acompanha mais e as `manual` do historico
-// antigo. Nas demais a reacao de la manda, e o proximo sync desfaria o gesto.
-function podeMover(t, lastSync, escreve = false) {
-  if (t.origem === 'manual') return true;
-  if (escreve) return true;
-  return foraDeAlcance(t, lastSync);
+// Quem pode trocar de coluna arrastando: as que o Teams nao acompanha mais e as
+// `manual` do historico antigo. Nas demais a reacao de la manda, e o proximo sync
+// desfaria o gesto — um quadro que mente por dois minutos e pior que um quadro
+// que nao deixa voce fazer o gesto.
+function podeMover(t, lastSync) {
+  return t.origem === 'manual' || foraDeAlcance(t, lastSync);
 }
 
 // Tirar a marca a mao so vale quando o Teams nao vai repo-la no proximo sync:
@@ -711,7 +696,6 @@ function podeDesmarcar(t, lastSync) {
 function tasksParaTela(muralId) {
   const db = lerTasks(muralId);
   const prefs = prefsDoUsuario(usuarioAtual());
-  const escreve = escritaLigada();
   const lista = Object.values(db.tasks).map((t) => ({
     ...t,
     origem: t.origem === 'manual' ? 'manual' : 'teams',
@@ -722,7 +706,7 @@ function tasksParaTela(muralId) {
     agrupamento: t.agrupamento || null,
     emojis: emojisDoCard(t.reactions, prefs.emojiFazendo),
     foraDeAlcance: foraDeAlcance(t, db.lastSync),
-    podeMover: podeMover(t, db.lastSync, escreve),
+    podeMover: podeMover(t, db.lastSync),
     podeDesmarcar: podeDesmarcar(t, db.lastSync),
   }));
   return { lastSync: db.lastSync, tasks: lista };
@@ -1169,212 +1153,6 @@ function separarTask(muralId, id) {
 
   gravarTasks(muralId, db);
   return resto.length + 1;
-}
-
-// ------------------------------------------------------------ escrita no Teams
-
-// Ate aqui o Mural era um espelho: lia o Teams e desenhava. Com a escrita ligada
-// ele passa a poder mexer no que espelha — arrastar um card poe a reacao na
-// mensagem, e o time ve. Isso muda uma promessa do projeto, e a mudanca e
-// deliberada: este e o unico lugar que guarda credencial (data/graph.json).
-//
-// Sem a escrita ligada nada disso existe e o quadro se comporta como antes.
-
-const CHECK_PADRAO = '✅';
-
-// Quanto tempo o servidor fica perguntando ao Azure se alguem digitou o codigo.
-const LIMITE_DE_ESPERA_MS = 15 * 60 * 1000;
-
-// A espera do device code vive so na memoria: e um codigo de 15 minutos, e
-// gravar em disco significaria retomar uma autorizacao que ninguem lembra ter
-// comecado.
-let esperaDeEscrita = null;
-
-function lerGraph() {
-  return lerJson(GRAPH_FILE, {});
-}
-
-function gravarGraph(config) {
-  gravarJsonAtomico(GRAPH_FILE, config);
-}
-
-function escritaLigada() {
-  const g = lerGraph();
-  return !!(g.clientId && g.refreshToken);
-}
-
-/** O que a interface precisa saber: se da para escrever, por quem, e se ha uma
- *  autorizacao em andamento. O refresh token NUNCA sai daqui. */
-function estadoDaEscrita() {
-  const g = lerGraph();
-  return {
-    ligada: escritaLigada(),
-    clientId: g.clientId || '',
-    tenant: g.tenant || '',
-    conectadoEm: g.conectadoEm || null,
-    escopos: g.escopos || '',
-    aguardando: esperaDeEscrita
-      ? {
-          codigo: esperaDeEscrita.codigo,
-          endereco: esperaDeEscrita.endereco,
-          expiraEm: esperaDeEscrita.expiraEm,
-        }
-      : null,
-    erro: esperaDeEscrita ? esperaDeEscrita.erro || '' : '',
-  };
-}
-
-/** Access token valido, renovando quando falta menos de um minuto. Renovar
- *  antes de precisar evita que o primeiro arraste depois de uma hora parada
- *  falhe com "expirado" e a pessoa ache que a escrita nao funciona. */
-async function tokenDeEscrita() {
-  const g = lerGraph();
-  if (!g.clientId || !g.refreshToken) {
-    throw new Error('A escrita no Teams nao esta ligada. Conecte na barra do quadro.');
-  }
-  const folga = 60 * 1000;
-  if (g.accessToken && g.expiraEm && new Date(g.expiraEm).getTime() - Date.now() > folga) {
-    return g.accessToken;
-  }
-  const novos = await renovarToken({
-    clientId: g.clientId,
-    tenant: g.tenant,
-    refreshToken: g.refreshToken,
-  });
-  gravarGraph({
-    ...g,
-    accessToken: novos.accessToken,
-    // O Azure as vezes nao reemite o refresh token; perder o antigo aqui
-    // desligaria a escrita sozinha na renovacao seguinte.
-    refreshToken: novos.refreshToken || g.refreshToken,
-    expiraEm: novos.expiraEm,
-    escopos: novos.escopos,
-  });
-  return novos.accessToken;
-}
-
-async function ligarEscrita(corpo) {
-  const clientId = String(corpo.clientId || '').trim();
-  const tenant = String(corpo.tenant || '').trim() || 'organizations';
-  if (!clientId) throw new Error('Informe o Application (client) ID do app registrado no Azure.');
-
-  const inicio = await iniciarDeviceCode({ clientId, tenant });
-
-  esperaDeEscrita = {
-    clientId,
-    tenant,
-    deviceCode: inicio.deviceCode,
-    codigo: inicio.codigoDoUsuario,
-    endereco: inicio.endereco,
-    expiraEm: new Date(Date.now() + inicio.expiraEmSegundos * 1000).toISOString(),
-    intervalo: Math.max(3, inicio.intervaloSegundos) * 1000,
-    limite: Date.now() + Math.min(LIMITE_DE_ESPERA_MS, inicio.expiraEmSegundos * 1000),
-    erro: '',
-  };
-
-  perguntarAoAzure();
-  return estadoDaEscrita();
-}
-
-// Laco de espera. Enquanto ninguem digitou o codigo o Azure responde
-// "authorization_pending", que nao e erro — e por isso o unico jeito de terminar
-// e o token chegar, o codigo expirar ou alguem cancelar.
-function perguntarAoAzure() {
-  const espera = esperaDeEscrita;
-  if (!espera) return;
-
-  setTimeout(async () => {
-    if (esperaDeEscrita !== espera) return; // cancelado ou substituido
-    if (Date.now() > espera.limite) {
-      espera.erro = 'O codigo expirou antes de ser autorizado. Peca outro.';
-      espera.expirou = true;
-      return;
-    }
-    try {
-      const r = await trocarDeviceCode({
-        clientId: espera.clientId,
-        tenant: espera.tenant,
-        deviceCode: espera.deviceCode,
-      });
-      if (!r.pronto) {
-        if (r.esperarMais) espera.intervalo += 5000;
-        return perguntarAoAzure();
-      }
-      gravarGraph({
-        clientId: espera.clientId,
-        tenant: espera.tenant,
-        accessToken: r.tokens.accessToken,
-        refreshToken: r.tokens.refreshToken,
-        expiraEm: r.tokens.expiraEm,
-        escopos: r.tokens.escopos,
-        conectadoEm: new Date().toISOString(),
-      });
-      esperaDeEscrita = null;
-    } catch (e) {
-      espera.erro = e.message;
-      espera.expirou = true;
-    }
-  }, espera.intervalo);
-}
-
-function desligarEscrita() {
-  esperaDeEscrita = null;
-  try { fs.unlinkSync(GRAPH_FILE); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-}
-
-/** As reacoes que cada coluna significa. "Interagido" nao esta aqui de
- *  proposito: ele nao e um estado que se escolhe, e o que sobra quando alguem
- *  reage com outra coisa — nao existe emoji que signifique "interagido". */
-function reacoesPara(status, t, emojiFazendo) {
-  const checksPresentes = (t.reactions || []).filter(ehCheck);
-  const tirarChecks = checksPresentes.length ? checksPresentes : [CHECK_PADRAO];
-
-  if (status === 'feito') return { por: [CHECK_PADRAO], tirar: [emojiFazendo] };
-  if (status === 'fazendo') return { por: [emojiFazendo], tirar: tirarChecks };
-  if (status === 'aberto') return { por: [], tirar: [...tirarChecks, emojiFazendo] };
-  return null;
-}
-
-/** Escreve na ANCORA da rajada: e a mensagem que o card representa, a que o
- *  clique abre e a que sobrevive se a rajada crescer.
- *
- *  Tirar reacao so tira A SUA — o Graph nao deixa mexer na de outra pessoa.
- *  Entao arrastar para fora de Concluido nao funciona se o check foi de um
- *  colega: a proxima leitura traz o card de volta, e isso e o Teams mandando,
- *  como em todo o resto do Mural. */
-async function escreverReacaoNoTeams(mural, t, status, emojiFazendo) {
-  const plano = reacoesPara(status, t, emojiFazendo);
-  if (!plano) throw new Error('Este status nao tem reacao para escrever.');
-
-  const accessToken = await tokenDeEscrita();
-  const comum = { fonte: mural, mensagemId: t.id, accessToken };
-
-  // Tira antes de por: se as duas reacoes ficassem na mensagem ao mesmo tempo, a
-  // leitura seguinte teria de escolher uma — e o quadro piscaria no meio.
-  for (const emoji of plano.tirar) {
-    if (!emoji) continue;
-    await unsetReaction({ ...comum, emoji });
-  }
-  for (const emoji of plano.por) {
-    await setReaction({ ...comum, emoji });
-  }
-}
-
-/** Como as reacoes do card ficam depois da escrita. O quadro precisa saber isso
- *  na hora: sem previsao, o badge do card discordaria da mensagem ate a proxima
- *  leitura.
- *
- *  E previsao, nao certeza — tirar reacao so tira a sua. Se o check era de um
- *  colega, ele continua la e a leitura seguinte corrige o card. */
-function reacoesPrevistas(t, status, emojiFazendo) {
-  const plano = reacoesPara(status, t, emojiFazendo);
-  if (!plano) return t.reactions || [];
-  const tirar = new Set(plano.tirar.filter(Boolean).map(normalizarEmoji));
-  const ficam = (t.reactions || []).filter((e) => !tirar.has(normalizarEmoji(e)));
-  for (const emoji of plano.por) {
-    if (!ficam.some((e) => normalizarEmoji(e) === normalizarEmoji(emoji))) ficam.push(emoji);
-  }
-  return ficam;
 }
 
 // ----------------------------------------------------------------------- merge
@@ -2023,7 +1801,6 @@ async function rotear(req, res) {
       // Agente que nao informa custo nao pode ter preco na tela: a interface
       // esconde o total e a confirmacao de gasto em vez de mostrar zero.
       agente: { id: ad.id, nome: ad.nome, reportaCusto: ad.reportaCusto },
-      escrita: { ligada: escritaLigada() },
     });
   }
 
@@ -2064,26 +1841,20 @@ async function rotear(req, res) {
     }
   }
 
-  // Arrastar um card significa duas coisas diferentes, e a diferenca importa.
-  //
-  // Com a ESCRITA LIGADA o gesto e verdade: o Mural poe a reacao na mensagem do
-  // Teams, o time ve, e a proxima leitura concorda com o quadro. Nada de
-  // "movido a mao", porque nao ha nada a corrigir depois.
-  //
-  // Sem a escrita, so vale para o que o Teams nao acompanha mais — se a mensagem
-  // ainda esta na janela, a reacao de la manda e a proxima leitura desfaria o
-  // gesto. Um quadro que mente por dois minutos e pior que um que nao deixa
-  // fazer o gesto.
+  // Mover a mao so vale para task fora de alcance. Se ela ainda aparece no Teams,
+  // a reacao de la manda e o proximo sync desfaria a mudanca — deixar mover ali
+  // criaria um quadro que mente por 2 minutos e depois se corrige sozinho.
   if (p === '/api/mover' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
-      const mural = acharMural(muralId);
-      if (!mural) throw new Error('Mural nao encontrado.');
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
 
       const corpo = await lerCorpoJson(req);
       const tarefaId = String(corpo.id || '');
       const novo = String(corpo.status || '');
       if (!STATUS_VALIDOS.includes(novo)) throw new Error('Status invalido.');
+      // "Interagido" nunca foi um estado que se escolhe, com ou sem escrita: e o
+      // que sobra quando alguem reage com outra coisa.
       if (novo === 'interagido') {
         throw new Error(
           '"Interagido" nao e um estado que se escolhe: e o que sobra quando alguem reage ' +
@@ -2094,21 +1865,11 @@ async function rotear(req, res) {
       const db = lerTasks(muralId);
       const t = db.tasks[tarefaId];
       if (!t) throw new Error('Task desconhecida.');
-
-      const prefs = prefsDoUsuario(usuarioAtual());
-      const podeEscrever = t.origem !== 'manual' && escritaLigada();
-
-      if (!podeEscrever && !podeMover(t, db.lastSync)) {
+      if (!podeMover(t, db.lastSync)) {
         throw new Error(
           'Esta task ainda aparece no Teams — reaja na mensagem de la e atualize. ' +
-          'Ou ligue a escrita no Teams, e ai arrastar passa a valer de verdade.'
+          'Mover a mao so vale para as que sairam do alcance.'
         );
-      }
-
-      // A escrita vem ANTES de mexer no historico: se o Teams recusar, o quadro
-      // nao pode ter guardado uma mudanca que nao aconteceu.
-      if (podeEscrever) {
-        await escreverReacaoNoTeams(mural, t, novo, prefs.emojiFazendo);
       }
 
       if (t.status !== novo) {
@@ -2116,15 +1877,7 @@ async function rotear(req, res) {
         t.status = novo;
         t.statusChangedAt = new Date().toISOString();
       }
-      // "A mao" descreve o card que o Teams nao acompanha. Se a reacao foi
-      // escrita, ele acompanha — e marcar como manual faria a leitura seguinte
-      // anunciar uma correcao que nao houve.
-      t.movidoAMao = !podeEscrever;
-      // A reacao escrita agora e a que a proxima leitura vai encontrar; deixar o
-      // card sem ela ate lá faria o badge do quadro discordar da mensagem.
-      if (podeEscrever) {
-        t.reactions = reacoesPrevistas(t, novo, prefs.emojiFazendo);
-      }
+      t.movidoAMao = true;
       gravarTasks(muralId, db);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
@@ -2291,30 +2044,6 @@ async function rotear(req, res) {
     } catch (e) {
       return json(res, 500, { ok: false, erro: e.message });
     }
-  }
-
-  // ---- escrita no Teams ----
-
-  // Ligar a escrita e o unico momento em que o Mural pede uma credencial. O
-  // fluxo e device code: o servidor pede um codigo, voce digita no navegador da
-  // Microsoft, e o que fica em disco e um refresh token — nenhum segredo de
-  // aplicacao, nada que de para usar de outra maquina sem sua conta.
-  if (p === '/api/escrita' && req.method === 'GET') {
-    return json(res, 200, { ok: true, ...estadoDaEscrita() });
-  }
-
-  if (p === '/api/escrita' && req.method === 'POST') {
-    try {
-      const estado = await ligarEscrita(await lerCorpoJson(req));
-      return json(res, 200, { ok: true, ...estado });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/escrita' && req.method === 'DELETE') {
-    desligarEscrita();
-    return json(res, 200, { ok: true, ...estadoDaEscrita() });
   }
 
   // ---- onboarding ----

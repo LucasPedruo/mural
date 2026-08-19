@@ -9,7 +9,6 @@ import type {
   Preferencias,
   RespostaAgentes,
   RespostaConsumo,
-  RespostaEscrita,
   RespostaPainel,
   RespostaSprint,
   RespostaTasks,
@@ -126,17 +125,6 @@ export const api = {
       `/api/tags?mural=${muralId}`,
       json({ id, tags }),
     ),
-
-  // --- escrita no Teams ---
-  // O único lugar em que o Mural pede credencial. Ligada, arrastar um card
-  // escreve a reação na mensagem e o time vê.
-
-  escrita: () => pedirBruto<RespostaEscrita>('/api/escrita'),
-
-  ligarEscrita: (clientId: string, tenant: string) =>
-    pedir<RespostaEscrita>('/api/escrita', json({ clientId, tenant })),
-
-  desligarEscrita: () => pedir<RespostaEscrita>('/api/escrita', { method: 'DELETE' }),
 
   // --- sprint ---
 

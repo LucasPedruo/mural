@@ -42,9 +42,8 @@ hora, e o espaço vai para as colunas que são trabalho agora. A coluna fechada
 **continua recebendo cards arrastados**: é o gesto de guardar sem abrir. A escolha
 é por mural e fica no navegador.
 
-Com a [escrita ligada](#escrever-no-teams), **arrastar um card escreve a reação
-na mensagem** — e o time vê. Sem ela, o Mural só lê, e quem move as tasks é a
-reação no Teams.
+O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
+colunas existe só para os cards que o Teams não acompanha mais.
 
 Um card não é uma mensagem: é uma **demanda**. Quando alguém manda dois prints e
 três linhas de texto em seguida, aquilo vira um card só — veja
@@ -78,15 +77,10 @@ No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
 servidor e abre o navegador. Para trocar a porta:
 `MURAL_PORT=5000 node server.js`.
 
-Não existe login próprio. Para **ler** o Teams, a autenticação é a do agente e do
-MCP dele — o servidor não vê credencial nenhuma nesse caminho. Quando o token
+Não existe login próprio. A autenticação com a Microsoft é a do agente e do MCP
+dele — **este servidor nunca vê nem guarda credencial nenhuma**. Quando o token
 expira, o Mural para de atualizar até você reautorizar no agente (no Claude Code,
 `/mcp`).
-
-Para **escrever** é diferente, e vale ser dito sem rodeio: se você ligar a
-escrita, o servidor passa a guardar um token seu em `data/graph.json`. É opcional,
-está desligado por padrão, e a seção [Escrever no Teams](#escrever-no-teams)
-explica a troca.
 
 ## Qual agente lê o Teams
 
@@ -153,13 +147,12 @@ npm run dev      # interface na 5317, com /api indo para a 4317
 **Atualizar** relê a conversa e redesenha o quadro. Leva 1 a 2 minutos e tem
 custo — veja [Quanto custa atualizar](#quanto-custa-atualizar).
 
-**Mover uma task** depende da escrita. Ligada, você arrasta o card e o Mural põe a
-reação na mensagem: ⚪ em *Fazendo*, ✅ em *Concluído*, nenhuma das duas em
-*Ninguém pegou*. Desligada, quem move é a reação no Teams — o arraste só funciona
-nos cards que o Teams não acompanha mais, os "fora de alcance".
+**Mover uma task** se faz no Teams: reaja na mensagem lá e atualize. A fonte da
+verdade é sempre a conversa. O arraste entre colunas só funciona nos cards que o
+Teams não acompanha mais — os "fora de alcance".
 
-Para *Interagido* não se arrasta: não existe emoji que signifique "interagido".
-É o que sobra quando alguém reage com outra coisa.
+Nem para eles vale arrastar até *Interagido*: não existe emoji que signifique
+"interagido", é o que sobra quando alguém reage com outra coisa.
 
 **fiz**, no rodapé de qualquer card, joga ele para *Feito por mim*. Ou reaja no
 Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
@@ -274,47 +267,6 @@ o painel soma por etiqueta atravessando as sprints.
 Ao encerrar a sprint, as ignoradas são arquivadas junto com o que terminou: elas
 já foram decididas, e arrastar a mesma lista de descartes de sprint em sprint não
 serve a nada.
-
-## Escrever no Teams
-
-Por padrão o Mural é um **espelho**: lê o canal e desenha. Ligando a escrita ele
-passa a poder mexer no que espelha — arrastar um card põe a reação na mensagem, e
-o time vê no Teams sem abrir o Mural.
-
-O que isso custa, em uma frase: **este é o único lugar do projeto que guarda
-credencial.** Um token seu fica em `data/graph.json`. Não há segredo de aplicação
-envolvido, o servidor escuta só em `127.0.0.1`, e você revoga quando quiser em
-`myaccount.microsoft.com` → Aplicativos e serviços.
-
-Por que direto do servidor e não pelo agente de IA: escrever reação é um `POST`
-de 200ms. Pelo agente seria meio minuto e tokens cobrados por gesto de arrastar
-card — o mesmo trabalho de registrar um app no Azure, com pior resultado.
-
-### Ligando
-
-1. No [portal do Azure](https://portal.azure.com), **App registrations** → *New
-   registration*. Qualquer nome, conta do tipo *Accounts in this organizational
-   directory*.
-2. Em **Authentication**, ligue *Allow public client flows*. É isso que habilita o
-   fluxo de device code — sem segredo de cliente guardado em lugar nenhum.
-3. Em **API permissions**, adicione as delegadas `ChannelMessage.Send` e
-   `ChatMessage.Send` (e `Chat.ReadWrite` se o mural for de um chat). Nenhuma
-   delas exige consentimento de admin.
-4. No quadro, clique em **só leitura** no cabeçalho, cole o *Application (client)
-   ID*, peça o código e digite-o na página que a Microsoft abre.
-
-### Os limites disso
-
-- **A reação sai como sendo você**, porque é sua conta que autorizou. Não existe
-  "o Mural reagiu": para o time, foi você que reagiu.
-- **Tirar reação só tira a sua.** Arrastar um card para fora de *Concluído* não
-  funciona se o check foi de um colega: o dele continua na mensagem e a próxima
-  leitura traz o card de volta. É o Teams mandando, como em todo o resto.
-- **A reação vai na âncora da rajada** — a primeira mensagem do card, a mesma que
-  o clique abre.
-- **O quadro se adianta.** Depois de escrever, o card muda de coluna na hora, sem
-  esperar a próxima leitura. Se o Teams recusar a escrita, nada muda no
-  histórico e o erro aparece na tela.
 
 ## Como funciona
 
@@ -521,9 +473,6 @@ Vale saber antes de adotar:
 - **Ignorar é só seu.** O time não vê que você ignorou algo — não há reação nem
   mensagem para isso. Se a demanda era sua e você ignorou, ela continua em aberto
   para todo mundo no Teams.
-- **Tirar reação só tira a sua.** O Graph não deixa mexer na reação de outra
-  pessoa, então arrastar para fora de *Concluído* não funciona quando o check foi
-  de um colega.
 - **Não dá para ler respostas de thread.** Um "pego essa" escrito como resposta
   é invisível aqui — só a reação na mensagem principal conta.
 - **20 mensagens por leitura.** É o teto da API. O histórico acumulado no disco
@@ -564,7 +513,6 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — os painéis vivem daqui |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `agentes.json` | qual agente de IA lê o Teams, e os ajustes dele |
-| `graph.json` | o token de escrita, se você ligou — **o único segredo no disco** |
 | `conta.json`, `chats.json` | cache do onboarding |
 | `consumo.json` | tokens e custo por conta e por operação, usado para estimar |
 | `preferencias.json` | se pede confirmação antes de atualizar e o seu emoji de assinatura |
