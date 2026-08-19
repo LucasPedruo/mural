@@ -44,10 +44,24 @@ fs.mkdirSync(MURAIS_DIR, { recursive: true });
 // manter, e um emoji novo que apareca amanha ja cai no lugar certo sozinho.
 const CHECKS = ['✅', '☑️', '✔️', '✔', '☑'];
 
+// Variação de emoji (U+FE0F/U+FE0E) nao muda o significado, e o Teams devolve
+// o mesmo emoji com e sem ela dependendo de quem reagiu.
+function normalizarEmoji(emoji) {
+  return (emoji || '').replace(/[️︎]/g, '');
+}
+
 function ehCheck(emoji) {
-  // Variação de emoji (U+FE0F) e tom de pele nao mudam o significado.
-  const limpo = (emoji || '').replace(/[️︎]/g, '');
-  return CHECKS.some((c) => c.replace(/[️︎]/g, '') === limpo);
+  const limpo = normalizarEmoji(emoji);
+  return CHECKS.some((c) => normalizarEmoji(c) === limpo);
+}
+
+// O Graph NAO diz quem reagiu: `reactions[].users` volta com displayName, id e
+// email nulos. Entao "fui eu que fiz" nao tem como sair da API — sai de uma
+// convencao que voce controla: um emoji que so voce usa naquele canal.
+function temEmojiDeAssinatura(reactions, assinatura) {
+  const alvo = normalizarEmoji(assinatura);
+  if (!alvo) return false;
+  return (reactions || []).some((e) => normalizarEmoji(e) === alvo);
 }
 
 function statusDe(reactions) {
@@ -171,11 +185,33 @@ function lerPreferencias() {
   return p && typeof p.porUsuario === 'object' ? p : { porUsuario: {} };
 }
 
+// O emoji de assinatura: a reacao que, na SUA mao, quer dizer "fui eu que fiz".
+// Nao pode ser o check — esse todo mundo usa, e o significado dele ja e outro.
+const EMOJI_MEU_PADRAO = '🟢';
+
 function prefsDoUsuario(usuario) {
   const todas = lerPreferencias();
   // Confirmar e o padrao: gastar dinheiro sem avisar nao pode ser opt-out
   // silencioso de quem instalou.
-  return { confirmarAntesDeAtualizar: true, ...(todas.porUsuario[usuario] || {}) };
+  return {
+    confirmarAntesDeAtualizar: true,
+    emojiMeu: EMOJI_MEU_PADRAO,
+    ...(todas.porUsuario[usuario] || {}),
+  };
+}
+
+// Um emoji, nao uma frase: isto vira comparacao com o que o Teams devolve.
+// Vazio desliga a deteccao automatica e deixa so o botao "fiz".
+function validarEmojiMeu(valor, atual) {
+  if (valor === undefined) return atual;
+  const limpo = String(valor).trim().slice(0, 8);
+  if (limpo && ehCheck(limpo)) {
+    throw new Error(
+      'O check ja significa "concluido" para o canal inteiro. ' +
+      'Escolha um emoji que so voce use.'
+    );
+  }
+  return limpo;
 }
 
 // O evento `result` do stream-json traz o custo real da execucao. Sem ele nao
@@ -195,12 +231,25 @@ function extrairConsumo(ev) {
   };
 }
 
-function registrarConsumo(usuario, muralId, consumo, mensagensLidas) {
+// Toda ida ao Claude Code custa, nao so a atualizacao do quadro: verificar a
+// conta e listar os chats no onboarding tambem sao leituras cobradas. `operacao`
+// diz qual foi — todas entram no acumulado, mas so as de 'sync' servem para
+// estimar a proxima atualizacao (misturar as baratas do onboarding na media
+// faria o dialogo prometer um preco que nao acontece).
+const OPERACOES = ['sync', 'conta', 'chats'];
+
+// Execucoes gravadas antes deste campo existir eram todas de sync.
+function operacaoDe(e) {
+  return OPERACOES.includes(e.operacao) ? e.operacao : 'sync';
+}
+
+function registrarConsumo(usuario, muralId, consumo, mensagensLidas, operacao = 'sync') {
   const db = lerConsumo();
   const doUsuario = db.porUsuario[usuario] || { execucoes: [] };
 
   doUsuario.execucoes.push({
     muralId,
+    operacao,
     quando: new Date().toISOString(),
     mensagensLidas,
     ...consumo,
@@ -214,10 +263,8 @@ function registrarConsumo(usuario, muralId, consumo, mensagensLidas) {
   gravarJsonAtomico(CONSUMO_FILE, db);
 }
 
-function totaisDoUsuario(usuario) {
-  const doUsuario = lerConsumo().porUsuario[usuario];
-  if (!doUsuario) return { execucoes: 0, tokensTotal: 0, custoUsd: 0 };
-  return doUsuario.execucoes.reduce(
+function somarConsumo(execucoes) {
+  return execucoes.reduce(
     (acc, e) => ({
       execucoes: acc.execucoes + 1,
       tokensTotal: acc.tokensTotal + (e.tokensTotal || 0),
@@ -227,6 +274,18 @@ function totaisDoUsuario(usuario) {
   );
 }
 
+// O total e de tudo que foi cobrado; a quebra por operacao mostra quanto do
+// gasto foi quadro e quanto foi onboarding.
+function totaisDoUsuario(usuario) {
+  const doUsuario = lerConsumo().porUsuario[usuario];
+  const todas = doUsuario ? doUsuario.execucoes : [];
+  const porOperacao = {};
+  for (const op of OPERACOES) {
+    porOperacao[op] = somarConsumo(todas.filter((e) => operacaoDe(e) === op));
+  }
+  return { ...somarConsumo(todas), porOperacao };
+}
+
 // Estimativa = media das ultimas execucoes DESTE mural; sem historico proprio,
 // cai para o de qualquer mural; sem nenhum, devolve null. Um numero inventado
 // seria pior que admitir que a primeira vez e desconhecida.
@@ -234,8 +293,13 @@ function estimarProximaAtualizacao(usuario, muralId) {
   const doUsuario = lerConsumo().porUsuario[usuario];
   if (!doUsuario || !doUsuario.execucoes.length) return null;
 
-  const doMural = doUsuario.execucoes.filter((e) => e.muralId === muralId);
-  const base = (doMural.length ? doMural : doUsuario.execucoes).slice(-5);
+  // So atualizacoes entram na media: as leituras do onboarding custam outra
+  // coisa e puxariam a estimativa para um numero que nunca acontece.
+  const syncs = doUsuario.execucoes.filter((e) => operacaoDe(e) === 'sync');
+  if (!syncs.length) return null;
+
+  const doMural = syncs.filter((e) => e.muralId === muralId);
+  const base = (doMural.length ? doMural : syncs).slice(-5);
   if (!base.length) return null;
 
   const media = (campo) => base.reduce((s, e) => s + (e[campo] || 0), 0) / base.length;
@@ -297,17 +361,148 @@ function gravarTasks(muralId, db) {
 // mensagens que a API devolve. Dali em diante o Teams nao conta mais nada sobre
 // ela, entao o quadro para de receber atualizacoes automaticas desse card.
 function foraDeAlcance(t, lastSync) {
+  // Task criada aqui dentro nunca esteve na janela do Teams, entao "saiu dela"
+  // nao quer dizer nada: ela e movivel por natureza, nao por ter se perdido.
+  if (t.origem === 'manual') return false;
   return !!lastSync && t.lastSeen !== lastSync;
+}
+
+// Quem pode trocar de coluna a mao: as que o Teams nao acompanha mais e as que
+// nasceram aqui. Nas demais a reacao manda, e o proximo sync desfaria o gesto.
+function podeMover(t, lastSync) {
+  return t.origem === 'manual' || foraDeAlcance(t, lastSync);
+}
+
+// Tirar a marca a mao so vale quando o Teams nao vai repo-la no proximo sync:
+// se o card esta na coluna por causa da sua reacao, e la que ela tem de sair.
+// Fora de alcance o Teams nao conta mais nada, entao a mao volta a mandar.
+function podeDesmarcar(t, lastSync) {
+  if (!t.meu) return false;
+  return t.meu.via !== 'emoji' || foraDeAlcance(t, lastSync);
 }
 
 function tasksParaTela(muralId) {
   const db = lerTasks(muralId);
   const lista = Object.values(db.tasks).map((t) => ({
     ...t,
+    origem: t.origem === 'manual' ? 'manual' : 'teams',
+    meu: t.meu || null,
     emojis: emojisDoCard(t.reactions),
     foraDeAlcance: foraDeAlcance(t, db.lastSync),
+    podeMover: podeMover(t, db.lastSync),
+    podeDesmarcar: podeDesmarcar(t, db.lastSync),
   }));
   return { lastSync: db.lastSync, tasks: lista };
+}
+
+// ------------------------------------------------------------- tasks proprias
+
+// Nem tudo que vira trabalho passa pelo canal: o que combinaram no corredor, o
+// bug que voce mesmo achou. Essas tasks nascem aqui, tem id proprio e o sync
+// nunca as toca — o merge so mexe em ids que vieram do snapshot.
+function nomeDoUsuario() {
+  const conta = lerJson(CONTA_FILE, {});
+  return conta.displayName || conta.mail || 'você';
+}
+
+function textoDeTask(valor, campo) {
+  const t = String(valor || '').trim();
+  if (!t) throw new Error(`Escreva ${campo}.`);
+  return t.slice(0, 1000);
+}
+
+function criarTaskManual(muralId, corpo) {
+  const summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
+  const status = STATUS_VALIDOS.includes(corpo.status) ? corpo.status : 'aberto';
+
+  const db = lerTasks(muralId);
+  const agora = new Date().toISOString();
+  const id = 'manual-' + crypto.randomUUID();
+
+  db.tasks[id] = {
+    id,
+    origem: 'manual',
+    author: nomeDoUsuario(),
+    createdDateTime: agora,
+    summary,
+    kind: corpo.kind === 'bug' ? 'bug' : 'sugestao',
+    reactions: [],
+    webUrl: '',
+    status,
+    firstSeen: agora,
+    statusChangedAt: agora,
+    statusAnterior: null,
+    lastSeen: agora,
+    movidoAMao: false,
+    meu: null,
+  };
+  gravarTasks(muralId, db);
+  return id;
+}
+
+// So task manual pode ser editada ou apagada: mexer no texto de uma mensagem do
+// Teams criaria um quadro que discorda da conversa, e o proximo sync desfaria.
+function taskManual(db, id) {
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  if (t.origem !== 'manual') {
+    throw new Error('Esta task veio do Teams — edite a mensagem por lá e atualize.');
+  }
+  return t;
+}
+
+function editarTaskManual(muralId, corpo) {
+  const db = lerTasks(muralId);
+  const t = taskManual(db, corpo.id);
+
+  t.summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
+  t.kind = corpo.kind === 'bug' ? 'bug' : 'sugestao';
+  if (STATUS_VALIDOS.includes(corpo.status) && corpo.status !== t.status) {
+    t.statusAnterior = t.status;
+    t.status = corpo.status;
+    t.statusChangedAt = new Date().toISOString();
+  }
+  gravarTasks(muralId, db);
+}
+
+function removerTaskManual(muralId, id) {
+  const db = lerTasks(muralId);
+  taskManual(db, id);
+  delete db.tasks[String(id)];
+  gravarTasks(muralId, db);
+}
+
+// "Feito por mim" NAO e um status do Teams — e uma marca pessoal, e por isso
+// mora num campo separado. Assim a reacao continua mandando no status real e o
+// proximo sync nao apaga o que voce anotou para contar na daily.
+function marcarComoMeu(muralId, id, solucao) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  t.meu = {
+    // A data de quando voce marcou, nao de quando reescreveu a anotacao: senao
+    // corrigir uma virgula jogaria o card de ontem para o grupo de hoje.
+    em: (t.meu && t.meu.em) || new Date().toISOString(),
+    solucao: String(solucao || '').trim().slice(0, 2000),
+    // Escrever a anotacao num card que a reacao trouxe nao o torna manual: se
+    // voce tirar o 🟢 la, ele sai daqui — a nao ser pela regra da anotacao.
+    via: (t.meu && t.meu.via) || 'mao',
+  };
+  gravarTasks(muralId, db);
+}
+
+function desmarcarComoMeu(muralId, id) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  if (!podeDesmarcar(t, db.lastSync)) {
+    throw new Error(
+      'Este card esta aqui por causa da sua reacao na mensagem. ' +
+      'Tire a reacao no Teams e atualize — desmarcar aqui duraria ate o proximo sync.'
+    );
+  }
+  t.meu = null;
+  gravarTasks(muralId, db);
 }
 
 // ----------------------------------------------------------------------- merge
@@ -315,10 +510,33 @@ function tasksParaTela(muralId) {
 // Mescla o snapshot (janela de ~20) sobre o historico acumulado. Tasks que
 // sairam da janela PERMANECEM no arquivo — e esse o ganho principal: a API so
 // devolve 20, o arquivo lembra de tudo que ja passou.
-function merge(db, snapshot, agora) {
+// A sua reacao entra e sai do quadro sozinha, junto com o resto do merge. O dia
+// que agrupa o card na daily e o da LEITURA que viu a reacao, nao o da reacao em
+// si: o Teams nao devolve quando ela foi feita. Reagir na sexta e sincronizar na
+// segunda joga o card para segunda — e por isso o dia fica editavel no card.
+function aplicarAssinatura(t, agora, assinatura, marcados) {
+  const assinado = temEmojiDeAssinatura(t.reactions, assinatura);
+
+  if (assinado && !t.meu) {
+    t.meu = { em: agora, solucao: '', via: 'emoji' };
+    marcados.push(t.id);
+    return;
+  }
+
+  if (!assinado && t.meu && t.meu.via === 'emoji') {
+    // Tirar a reacao no Teams tira o card da coluna — menos quando ja existe
+    // anotacao. Texto que voce escreveu nao pode sumir por causa de um clique
+    // numa reacao; nesse caso a marca so deixa de ser automatica.
+    if (t.meu.solucao) t.meu.via = 'mao';
+    else t.meu = null;
+  }
+}
+
+function merge(db, snapshot, agora, assinatura) {
   const novos = [];
   const mudaram = [];
   const retomadas = [];
+  const marcados = [];
 
   for (const m of snapshot) {
     if (!m || !m.id) continue;
@@ -341,8 +559,10 @@ function merge(db, snapshot, agora) {
         statusAnterior: null,
         lastSeen: agora,
         movidoAMao: false,
+        meu: null,
       };
       novos.push(m.id);
+      aplicarAssinatura(db.tasks[m.id], agora, assinatura, marcados);
       continue;
     }
 
@@ -368,10 +588,12 @@ function merge(db, snapshot, agora) {
       antigo.statusChangedAt = agora;
       mudaram.push(m.id);
     }
+
+    aplicarAssinatura(antigo, agora, assinatura, marcados);
   }
 
   db.lastSync = agora;
-  return { novos, mudaram, retomadas, total: snapshot.length };
+  return { novos, mudaram, retomadas, marcados, total: snapshot.length };
 }
 
 // ------------------------------------------------------------------ claude run
@@ -458,13 +680,20 @@ function moldeDeWebUrl(f) {
 }
 
 // Roda o Claude headless e espera que ele grave `arquivoSaida`. Usado pelos
-// passos curtos do onboarding, que nao precisam de barra de progresso.
-function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
+// passos curtos do onboarding, que nao precisam de barra de progresso — mas
+// custam dinheiro igual, entao saem em stream-json so para o evento `result`
+// contar o gasto. Sem isso, listar chats (2 a 3 minutos de API) apareceria
+// como leitura gratuita no registro, e nao e.
+function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 * 1000) {
   return new Promise((resolve, reject) => {
+    // A conta e lida antes porque o passo 'conta' apaga o proprio arquivo que
+    // identifica o usuario: sem isso o gasto dele cairia sempre em "desconhecido".
+    const usuarioAntes = usuarioAtual();
     try { fs.unlinkSync(arquivoSaida); } catch {}
 
     const proc = spawn('claude', [
       '-p',
+      '--output-format', 'stream-json', '--verbose',
       '--allowedTools', 'mcp__claude_ai_Microsoft_365__get_me,' +
                         'mcp__claude_ai_Microsoft_365__teams_list_chats,Write',
       '--permission-mode', 'acceptEdits',
@@ -473,9 +702,22 @@ function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
     proc.stdin.write(prompt);
     proc.stdin.end();
 
-    let stderr = '';
+    let stderr = '', buffer = '', consumo = null;
     proc.stderr.on('data', (d) => (stderr += d));
-    proc.stdout.resume(); // sem consumir, o processo trava com o buffer cheio
+    // Sem consumir o stdout o processo trava com o buffer cheio; de quebra e
+    // dali que sai o custo real desta leitura.
+    proc.stdout.on('data', (d) => {
+      buffer += d;
+      const linhas = buffer.split('\n');
+      buffer = linhas.pop();
+      for (const l of linhas) {
+        if (!l.trim()) continue;
+        try {
+          const ev = JSON.parse(l);
+          if (ev.type === 'result') consumo = extrairConsumo(ev);
+        } catch { /* linha parcial ou ruido: o que importa e o evento result */ }
+      }
+    });
 
     const timer = setTimeout(() => {
       proc.kill();
@@ -484,6 +726,17 @@ function rodarClaudeSimples(prompt, arquivoSaida, timeoutMs = 5 * 60 * 1000) {
 
     proc.on('close', (code) => {
       clearTimeout(timer);
+
+      // Registra antes de olhar o codigo de saida: se a leitura falhou no fim,
+      // os tokens ja foram cobrados do mesmo jeito.
+      if (consumo) {
+        const agora = usuarioAtual();
+        registrarConsumo(
+          agora === 'desconhecido' ? usuarioAntes : agora,
+          null, consumo, 0, operacao,
+        );
+      }
+
       if (code !== 0) {
         return reject(new Error(
           'O Claude Code saiu com erro (codigo ' + code + '). ' + stderr.slice(0, 300)
@@ -559,7 +812,15 @@ function rodarSync(muralId) {
 
     proc.on('close', (code) => {
       clearTimeout(timer);
+      const lidas = progresso ? progresso.lidas : 0;
       syncEmAndamento = null; progresso = null;
+
+      // Uma leitura que falhou no fim ja gastou os tokens. Registrar antes de
+      // qualquer saida por erro e o que impede o acumulado de mentir para menos.
+      const usuario = usuarioAtual();
+      if (consumoDaExecucao) {
+        registrarConsumo(usuario, muralId, consumoDaExecucao, lidas, 'sync');
+      }
 
       if (code !== 0) {
         return reject(new Error(`O Claude saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
@@ -576,19 +837,15 @@ function rodarSync(muralId) {
 
       try {
         const db = lerTasks(muralId);
-        const r = merge(db, snapshot, new Date().toISOString());
+        const r = merge(
+          db, snapshot, new Date().toISOString(),
+          prefsDoUsuario(usuario).emojiMeu,
+        );
         gravarTasks(muralId, db);
 
         const indice = lerIndice();
         const m = indice.murais.find((x) => x.id === muralId);
         if (m) { m.ultimoSync = db.lastSync; gravarIndice(indice); }
-
-        // Registra mesmo se o merge nao mudou nada: o custo foi pago de todo
-        // jeito, e e disso que sai a estimativa da proxima.
-        const usuario = usuarioAtual();
-        if (consumoDaExecucao) {
-          registrarConsumo(usuario, muralId, consumoDaExecucao, snapshot.length);
-        }
 
         resolve({
           ...r,
@@ -709,12 +966,18 @@ function servirIndex(res) {
 
 function lerCorpoJson(req) {
   return new Promise((resolve, reject) => {
-    let dados = '';
+    // Acumula bytes, nao texto: um emoji tem 4 bytes e pode cair na fronteira
+    // de dois chunks. Concatenar como string ali quebra o caractere ao meio, e
+    // e justamente um emoji que o corpo carrega quando voce troca a assinatura.
+    const pedacos = [];
+    let bytes = 0;
     req.on('data', (d) => {
-      dados += d;
-      if (dados.length > 64 * 1024) { req.destroy(); reject(new Error('Corpo grande demais.')); }
+      pedacos.push(d);
+      bytes += d.length;
+      if (bytes > 64 * 1024) { req.destroy(); reject(new Error('Corpo grande demais.')); }
     });
     req.on('end', () => {
+      const dados = Buffer.concat(pedacos).toString('utf8');
       try { resolve(JSON.parse(dados || '{}')); } catch { reject(new Error('JSON invalido.')); }
     });
     req.on('error', reject);
@@ -783,12 +1046,15 @@ async function rotear(req, res) {
   if (p === '/api/murais' && req.method === 'GET') {
     const indice = lerIndice();
     const murais = indice.murais.map((m) => {
-      let totais = { aberto: 0, interagido: 0, feito: 0 };
+      let totais = { aberto: 0, interagido: 0, feito: 0, meu: 0 };
       let foraDeAlcance = 0;
       try {
         const db = lerTasks(m.id);
         for (const t of Object.values(db.tasks)) {
-          if (totais[t.status] !== undefined) totais[t.status]++;
+          // Card marcado como seu sai da coluna do Teams e conta so na sua —
+          // e a mesma regra do quadro, senao a home diria outro numero.
+          if (t.meu) totais.meu++;
+          else if (totais[t.status] !== undefined) totais[t.status]++;
           if (foraDeAlcance_(t, db.lastSync)) foraDeAlcance++;
         }
       } catch { /* historico ilegivel nao pode derrubar a lista inteira */ }
@@ -860,9 +1126,15 @@ async function rotear(req, res) {
       const corpo = await lerCorpoJson(req);
       const usuario = usuarioAtual();
       const todas = lerPreferencias();
+      // Cada campo so muda se veio no corpo: salvar o emoji nao pode religar a
+      // confirmacao que a pessoa desmarcou, nem o contrario.
+      const atuais = prefsDoUsuario(usuario);
       todas.porUsuario[usuario] = {
-        ...prefsDoUsuario(usuario),
-        confirmarAntesDeAtualizar: corpo.confirmarAntesDeAtualizar !== false,
+        ...atuais,
+        confirmarAntesDeAtualizar: corpo.confirmarAntesDeAtualizar === undefined
+          ? atuais.confirmarAntesDeAtualizar
+          : corpo.confirmarAntesDeAtualizar !== false,
+        emojiMeu: validarEmojiMeu(corpo.emojiMeu, atuais.emojiMeu),
       };
       gravarJsonAtomico(PREFS_FILE, todas);
       return json(res, 200, { ok: true, preferencias: todas.porUsuario[usuario] });
@@ -897,10 +1169,10 @@ async function rotear(req, res) {
       const db = lerTasks(muralId);
       const t = db.tasks[tarefaId];
       if (!t) throw new Error('Task desconhecida.');
-      if (!foraDeAlcance_(t, db.lastSync)) {
+      if (!podeMover(t, db.lastSync)) {
         throw new Error(
           'Esta task ainda aparece no Teams — reaja na mensagem de la e atualize. ' +
-          'Mover a mao so vale para as que sairam do alcance.'
+          'Mover a mao so vale para as que sairam do alcance e para as suas proprias.'
         );
       }
 
@@ -911,6 +1183,59 @@ async function rotear(req, res) {
       }
       t.movidoAMao = true;
       gravarTasks(muralId, db);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // ---- tasks proprias ----
+
+  // Task que voce escreve aqui dentro: o que nao passou pelo canal mas e
+  // trabalho igual. Nasce com id proprio, entao nenhum sync a alcanca.
+  if (p === '/api/task' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const id = criarTaskManual(muralId, await lerCorpoJson(req));
+      return json(res, 200, { ok: true, id, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/task' && req.method === 'PUT') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      editarTaskManual(muralId, await lerCorpoJson(req));
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/task' && req.method === 'DELETE') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      removerTaskManual(muralId, url.searchParams.get('id') || '');
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // Marca pessoal "fiz isso", com a anotacao que voce le na daily. Vale para
+  // qualquer card — inclusive os que o Teams ainda acompanha — porque nao mexe
+  // no status: nao ha o que o proximo sync possa desfazer.
+  if (p === '/api/meu' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      if (corpo.marcar === false) desmarcarComoMeu(muralId, corpo.id);
+      else marcarComoMeu(muralId, corpo.id, corpo.solucao);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
@@ -983,7 +1308,8 @@ async function rotear(req, res) {
     try {
       const conta = await rodarClaudeSimples(
         montarPrompt('verificar-conta.md', { ARQUIVO_SAIDA: CONTA_FILE }),
-        CONTA_FILE
+        CONTA_FILE,
+        'conta'
       );
       if (conta.erro) return json(res, 200, { ok: false, erro: conta.erro });
       return json(res, 200, { ok: true, conta });
@@ -1000,7 +1326,8 @@ async function rotear(req, res) {
           ARQUIVO_SAIDA: CHATS_FILE,
           USUARIO_ATUAL: conta.displayName || 'a pessoa logada',
         }),
-        CHATS_FILE
+        CHATS_FILE,
+        'chats'
       );
       if (chats.erro) return json(res, 200, { ok: false, erro: chats.erro });
       return json(res, 200, { ok: true, chats });

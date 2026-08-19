@@ -61,3 +61,50 @@
   color: var(--text-muted);
   font-size: 12.5px;
 }
+
+.coluna .grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Cabeçalho de dia dentro da coluna "Feito por mim": na daily você conta o de
+   ontem e o de hoje, e a separação precisa ser visível sem virar outro card. */
+.coluna .dia {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.coluna .grupo:first-child .dia {
+  padding-top: 4px;
+}
+
+.coluna .dia .risco {
+  flex: 1;
+  height: 1px;
+  background: var(--border-default);
+}
+
+.coluna .dia .quantos {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A reação que marca os cards como seus. Fica no cabeçalho da coluna porque é
+   ali que ela age — e porque o emoji sozinho não se explica. */
+.coluna .assinatura {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.3;
+  background: var(--bg-surface);
+}
+.coluna .assinatura:hover {
+  border-color: var(--marca-meu);
+}

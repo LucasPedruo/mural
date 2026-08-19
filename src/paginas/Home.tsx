@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
-import { CORES_DE_STATUS, rotuloDaColuna, rotuloDoTipo, tempoRelativo } from '../rotulos';
+import { COLUNAS, CORES_DE_STATUS, rotuloDaColuna, rotuloDoTipo, tempoRelativo } from '../rotulos';
 import type { MuralNaLista } from '../tipos';
 import './home.css';
 
@@ -93,7 +93,9 @@ export function Home() {
             </div>
 
             <div className="numeros">
-              {(['aberto', 'interagido', 'feito'] as const).map((s) => (
+              {/* Inclui "Feito por mim": um card marcado sai da coluna do
+                  Teams, então sem essa pílula a soma da linha não fecharia. */}
+              {COLUNAS.map((s) => (
                 <span className="pilula" key={s} title={rotuloDaColuna(s, m)}>
                   <span className="ponto" style={{ background: CORES_DE_STATUS[s] }} />
                   {m.totais[s]}

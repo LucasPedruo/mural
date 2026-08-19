@@ -86,3 +86,65 @@
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
+
+/* Task escrita aqui dentro: sem tracejado, porque ela nunca "se perdeu" do
+   Teams — nasceu movível. O selo "minha" no rodapé é quem diz o que ela é. */
+.cartao.propria {
+  cursor: grab;
+  border-style: solid;
+}
+.cartao.propria:active {
+  cursor: grabbing;
+}
+
+/* A anotação da daily. Fica visível no card porque é para ler de relance
+   enquanto alguém fala — abrir um por um durante a reunião não acontece. */
+.cartao .solucao {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-surface-2);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.cartao .solucao .sem-nota {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cartao .acoes {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Mesma discrição do atalho "web": só aparece no hover, para o rodapé não
+   virar uma barra de ferramentas. */
+.cartao .acao {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: none;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+.cartao:hover .acao,
+.cartao .acao:focus-visible {
+  opacity: 1;
+}
+.cartao .acao:hover {
+  color: var(--marca-meu);
+  border-color: var(--marca-meu);
+  background: var(--bg-brand-subtle);
+}
+
+.cartao .abrir-web {
+  margin-left: 0;
+}
