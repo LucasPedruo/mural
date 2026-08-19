@@ -17,6 +17,9 @@ interface Props {
   indice: number;
   /** Na coluna da daily o card mostra a anotação e troca o botão por "desfazer". */
   naColunaDaDaily: boolean;
+  /** Na coluna das ignoradas o card troca as ações por "desfazer" e "apagar":
+   *  ali não há trabalho a fazer, só decisão a rever. */
+  naColunaDeIgnoradas: boolean;
   ultimaVisita: string | null;
   /** Modo de juntar ligado: o clique no card seleciona em vez de abrir o Teams. */
   selecionando: boolean;
@@ -26,12 +29,16 @@ interface Props {
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
+  aoEtiquetar: (task: Task) => void;
+  aoIgnorar: (task: Task, ignorar: boolean) => void;
+  aoApagar: (task: Task) => void;
 }
 
 export function CartaoDeTask({
   task,
   indice,
   naColunaDaDaily,
+  naColunaDeIgnoradas,
   ultimaVisita,
   selecionando,
   selecionado,
@@ -40,6 +47,9 @@ export function CartaoDeTask({
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
+  aoEtiquetar,
+  aoIgnorar,
+  aoApagar,
 }: Props) {
   const ehNovo = !!ultimaVisita && task.firstSeen > ultimaVisita;
   const mudou = !!ultimaVisita && task.statusChangedAt > ultimaVisita && !ehNovo;
@@ -103,6 +113,7 @@ export function CartaoDeTask({
               podeArrastar ? 'movivel' : '',
               propria ? 'propria' : '',
               agrupado ? 'rajada' : '',
+              task.ignorada ? 'ignorada' : '',
               selecionado ? 'selecionado' : '',
               estado.isDragging ? 'arrastando' : '',
             ]
@@ -210,6 +221,13 @@ export function CartaoDeTask({
                 </span>
               )}
               {task.movidoAMao && <span className="badge neutral">movido à mão</span>}
+              {/* Etiquetas suas. Ficam antes das reações porque são o que você
+                  escreveu, e as reações são o que o Teams contou. */}
+              {task.tags.map((tag) => (
+                <span className="badge etiqueta" key={tag}>
+                  {tag}
+                </span>
+              ))}
               {/* Sem emoji fixo para "peguei", ver a reação usada é a única
                   forma de saber o que aconteceu na mensagem. */}
               {task.emojis.map((emoji, i) => (
@@ -259,7 +277,60 @@ export function CartaoDeTask({
                   </button>
                 )}
 
-                {naColunaDaDaily ? (
+                {/* Etiquetar vale em qualquer coluna: a etiqueta é sobre o
+                    assunto da task, não sobre o estado dela. */}
+                <button
+                  className="acao"
+                  type="button"
+                  title="Etiquetas"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    aoEtiquetar(task);
+                  }}
+                >
+                  #
+                </button>
+
+                {naColunaDeIgnoradas ? (
+                  <>
+                    <button
+                      className="acao"
+                      type="button"
+                      title="Devolver para o quadro"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        aoIgnorar(task, false);
+                      }}
+                    >
+                      ↩
+                    </button>
+                    <button
+                      className="acao perigo"
+                      type="button"
+                      title="Apagar de vez — a mensagem não volta em nenhuma atualização"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        aoApagar(task);
+                      }}
+                    >
+                      apagar
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="acao"
+                    type="button"
+                    title="Não é pra mim — tira o card do quadro sem tocar no Teams"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      aoIgnorar(task, true);
+                    }}
+                  >
+                    ⊘
+                  </button>
+                )}
+
+                {naColunaDeIgnoradas ? null : naColunaDaDaily ? (
                   <>
                     <button
                       className="acao"

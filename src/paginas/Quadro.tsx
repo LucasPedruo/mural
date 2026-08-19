@@ -13,6 +13,7 @@ import {
 import { DialogoDeEscrita } from '../componentes/DialogoDeEscrita';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
+import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
 import type {
   ColunaId,
@@ -22,6 +23,7 @@ import type {
   RespostaEscrita,
   RespostaSprint,
   Status,
+  TagComContagem,
   Task,
 } from '../tipos';
 import './quadro.css';
@@ -29,6 +31,9 @@ import './quadro.css';
 /** Mensagem de coluna vazia. A da daily não é "nada aqui": é uma instrução,
  *  porque a coluna só enche quando a sua reação aparece — ou quando você marca. */
 function vazioDaColuna(coluna: ColunaId, emojiMeu: string): string | undefined {
+  if (coluna === 'ignorada') {
+    return 'nada ignorado — use ⊘ num card para tirar do quadro o que não é seu';
+  }
   if (coluna !== 'meu') return undefined;
   return emojiMeu
     ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou use "fiz" num card`
@@ -67,6 +72,20 @@ export function Quadro() {
   const [escrita, setEscrita] = useState<RespostaEscrita | null>(null);
   const [ligandoEscrita, setLigandoEscrita] = useState(false);
 
+  // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
+  // está sendo etiquetada e o filtro ligado.
+  const [tags, setTags] = useState<TagComContagem[]>([]);
+  const [etiquetando, setEtiquetando] = useState<Task | null>(null);
+  const [tagFiltro, setTagFiltro] = useState<string | null>(null);
+
+  // A coluna das ignoradas fica escondida por padrão: ela é onde se põe o que
+  // não se quer ver, e deixá-la sempre aberta roubaria largura das quatro que
+  // são trabalho. A preferência é por mural.
+  const chaveIgnoradas = `mural:mostrar-ignoradas:${muralId}`;
+  const [mostrarIgnoradas, setMostrarIgnoradas] = useState(
+    () => localStorage.getItem(chaveIgnoradas) === 'sim',
+  );
+
   // Seleção do "juntar". Vazia = modo desligado, e o clique no card volta a
   // abrir o Teams. Um Set porque a ordem não importa: a âncora do card juntado
   // é sempre a mensagem mais antiga, não a primeira que você clicou.
@@ -74,14 +93,16 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, escreve] = await Promise.all([
+      const [tarefas, info, custo, ciclo, escreve, etiquetas] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
         api.escrita(),
+        api.tags(muralId),
       ]);
       setEscrita(escreve);
+      setTags(etiquetas.tags);
       setMural(info.mural);
       setTasks(tarefas.tasks);
       setLastSync(tarefas.lastSync);
@@ -312,6 +333,56 @@ export function Quadro() {
     }
   }
 
+  // ---- marcas pessoais: etiquetar, ignorar, apagar ---------------------
+
+  async function salvarTags(novas: string[]) {
+    const task = etiquetando;
+    setEtiquetando(null);
+    if (!task) return;
+    setErro(null);
+    try {
+      const r = await api.salvarTags(muralId, task.id, novas);
+      setTasks(r.tasks);
+      setTags(r.tags);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function ignorar(task: Task, marcar: boolean) {
+    setErro(null);
+    try {
+      const r = await api.ignorar(muralId, task.id, marcar);
+      setTasks(r.tasks);
+      // Ignorar com a coluna escondida faria o card desaparecer sem explicação.
+      if (marcar && !mostrarIgnoradas) trocarIgnoradas(true);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function apagar(task: Task) {
+    const confirmado = window.confirm(
+      `Apagar "${task.summary}" de vez?\n\n` +
+        'O card sai do histórico e a mensagem entra na lista de arquivados: nenhuma ' +
+        'atualização vai trazê-la de volta, mesmo que ela continue no Teams.\n\n' +
+        'Isto não tem como desfazer pela interface.',
+    );
+    if (!confirmado) return;
+    setErro(null);
+    try {
+      const r = await api.apagar(muralId, task.id);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  function trocarIgnoradas(mostrar: boolean) {
+    setMostrarIgnoradas(mostrar);
+    localStorage.setItem(chaveIgnoradas, mostrar ? 'sim' : 'nao');
+  }
+
   // ---- rajadas: juntar e separar ---------------------------------------
 
   // O agrupamento automático erra em alguns casos — e card errado que não dá
@@ -404,6 +475,21 @@ export function Quadro() {
       return;
     }
 
+    // Ignorar é uma decisão, não um status: soltar aqui só marca, sem tocar no
+    // Teams.
+    if (coluna === 'ignorada') {
+      if (!task.ignorada) await ignorar(task, true);
+      return;
+    }
+
+    // Saindo das ignoradas: a marca sai e o card volta para a coluna que a
+    // reação manda. Se ele for móvel e você largou noutra coluna, a mudança de
+    // status vai junto.
+    if (task.ignorada) {
+      await ignorar(task, false);
+      if (!task.podeMover || task.status === coluna) return;
+    }
+
     // "Interagido" não é um destino: não existe emoji que signifique isso. É o
     // que sobra quando alguém reage com outra coisa.
     if (coluna === 'interagido') {
@@ -469,12 +555,22 @@ export function Quadro() {
   // senão a mesma task apareceria duas vezes no quadro.
   const grupos = useMemo(() => {
     const porColuna: Record<ColunaId, Task[]> = {
-      aberto: [], fazendo: [], interagido: [], feito: [], meu: [],
+      aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
-    for (const t of tasks) {
-      if (t.meu) porColuna.meu.push(t);
+    // O filtro de etiqueta corta o quadro inteiro: a pergunta que ele responde é
+    // "o que existe de Financeiro", e essa pergunta não tem coluna.
+    const visiveis = tagFiltro
+      ? tasks.filter((t) => t.tags.some((x) => x.toLowerCase() === tagFiltro))
+      : tasks;
+
+    for (const t of visiveis) {
+      // Ignorada vence a marca de "fiz": se você decidiu que não é sua, ela não
+      // aparece na daily por causa de um clique antigo.
+      if (t.ignorada) porColuna.ignorada.push(t);
+      else if (t.meu) porColuna.meu.push(t);
       else (porColuna[t.status] ?? porColuna.aberto).push(t);
     }
+    porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
 
     // Abertas: mais antigas primeiro — o que está parado há mais tempo sobe.
     porColuna.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
@@ -501,9 +597,13 @@ export function Quadro() {
     resultado.meu = porDia;
 
     return resultado;
-  }, [tasks]);
+  }, [tasks, tagFiltro]);
 
-  const foraDeAlcance = tasks.filter((t) => t.foraDeAlcance).length;
+  const contagemIgnoradas = tasks.filter((t) => t.ignorada).length;
+  // A coluna das ignoradas só ocupa espaço quando você pede — ou quando acabou
+  // de ignorar algo, para o card não desaparecer sem explicação.
+  const colunasVisiveis = COLUNAS.filter((c) => c !== 'ignorada' || mostrarIgnoradas);
+  const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
 
@@ -578,6 +678,14 @@ export function Quadro() {
         {/* O estado da escrita fica no cabeçalho porque ele muda o que o
             arraste significa em todo o quadro. */}
         <button
+          className="ignoradas"
+          aria-pressed={mostrarIgnoradas}
+          onClick={() => trocarIgnoradas(!mostrarIgnoradas)}
+          title="A coluna do que você decidiu que não é pra você"
+        >
+          ignoradas {contagemIgnoradas > 0 ? contagemIgnoradas : ''}
+        </button>
+        <button
           className={'escrita' + (escrita?.ligada ? ' ligada' : '')}
           onClick={() => setLigandoEscrita(true)}
           title={
@@ -603,6 +711,15 @@ export function Quadro() {
           usuario={consumo.usuario}
           aoConfirmar={confirmar}
           aoCancelar={() => setConfirmando(false)}
+        />
+      )}
+
+      {etiquetando && (
+        <DialogoDeTags
+          task={etiquetando}
+          existentes={tags}
+          aoSalvar={(t) => void salvarTags(t)}
+          aoCancelar={() => setEtiquetando(null)}
         />
       )}
 
@@ -668,9 +785,31 @@ export function Quadro() {
         </p>
       )}
 
+      {tags.length > 0 && (
+        <div className="filtro-de-tags">
+          <span className="rotulo">etiquetas</span>
+          {tags.map((t) => (
+            <button
+              key={t.tag}
+              aria-pressed={tagFiltro === t.tag.toLowerCase()}
+              onClick={() =>
+                setTagFiltro(tagFiltro === t.tag.toLowerCase() ? null : t.tag.toLowerCase())
+              }
+              title={`${t.quantas} task(s) com esta etiqueta`}
+            >
+              {t.tag} <span className="quantas">{t.quantas}</span>
+            </button>
+          ))}
+          {tagFiltro && <button onClick={() => setTagFiltro(null)}>mostrar tudo</button>}
+        </div>
+      )}
+
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
-        <main className="colunas">
-          {COLUNAS.map((coluna) => (
+        <main
+          className="colunas"
+          style={{ ['--quantas-colunas' as string]: colunasVisiveis.length }}
+        >
+          {colunasVisiveis.map((coluna) => (
             <Coluna
               key={coluna}
               status={coluna}
@@ -712,6 +851,9 @@ export function Quadro() {
               aoDesmarcarComoMeu={(t) => void desmarcar(t)}
               aoSelecionar={alternarSelecao}
               aoSeparar={(t) => void separar(t)}
+              aoEtiquetar={setEtiquetando}
+              aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
+              aoApagar={(t) => void apagar(t)}
             />
           ))}
         </main>

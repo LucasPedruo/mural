@@ -17,15 +17,21 @@ coluna com o que eu fiz, agrupada por dia, com a anotação de como resolvi.
 
 ## Em 30 segundos
 
-Cinco colunas:
+As colunas:
 
 | Coluna | O que cai nela |
 | --- | --- |
 | **Ninguém pegou** | mensagem sem reação nenhuma |
 | **Fazendo** | mensagem com ⚪ — a reação de "peguei esta" (configurável) |
 | **Interagido** | mensagem com qualquer outra reação que não seja check |
-| **Concluído** | mensagem com check (✅ ☑️ ✔️) |
+| **Concluído por outros** | mensagem com check (✅ ☑️ ✔️) que não é sua |
 | **Feito por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
+| **Ignoradas** | o que você decidiu que não é pra você — escondida até você pedir |
+
+*Concluído por outros* se chama assim porque o que **você** fez sai dali para
+*Feito por mim*: o que resta é o trabalho do resto do time. Numa conversa de duas
+pessoas a coluna volta a ser só *Concluído*, como a primeira volta a ser *Sem
+reação* — "por outros" pressupõe um time.
 
 Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
 **Atualizar** relê a conversa.
@@ -235,6 +241,32 @@ dois números é o tamanho do ruído que o agrupamento de rajadas absorveu.
 com a anotação de como resolveu — incluindo o que já saiu do quadro em sprints
 encerradas. O botão **copiar** de cada dia devolve a lista em texto, para colar
 no chat de quem faltou na reunião.
+
+## Ignorar, apagar e etiquetar
+
+Três marcas suas, e nenhuma delas é status do Teams. Como o *feito por mim*, elas
+moram em campos próprios justamente para nenhuma leitura as apagar.
+
+**Ignorar** (⊘ no card) é para o que não é pra você: chegou no canal, alguém vai
+cuidar, e não precisa ocupar espaço no seu quadro. O card sai das colunas de
+trabalho e vai para *Ignoradas* — que fica **escondida** até você pedir, porque
+uma coluna de descartes não pode roubar largura das que são trabalho. Nada é
+escrito no Teams: ignorar em público seria outra coisa, e não é essa.
+
+**Apagar de vez** existe dentro de *Ignoradas*, e é o **único gesto irreversível
+do Mural**: o card sai do histórico e a mensagem entra na lista de arquivados,
+para nenhuma atualização trazê-la de volta — mesmo que ela continue no Teams. É a
+mesma máquina que o encerramento de sprint usa.
+
+**Etiquetas** (# no card) são suas: o Teams não tem esse campo. Até seis por task,
+normalizadas na entrada — "Financeiro", "financeiro" e "financeiro " são a mesma
+etiqueta, senão o filtro se quebraria sozinho em três. A barra acima das colunas
+lista as que existem com a contagem de cada uma; clicar filtra o quadro inteiro, e
+o painel soma por etiqueta atravessando as sprints.
+
+Ao encerrar a sprint, as ignoradas são arquivadas junto com o que terminou: elas
+já foram decididas, e arrastar a mesma lista de descartes de sprint em sprint não
+serve a nada.
 
 ## Escrever no Teams
 
@@ -479,6 +511,9 @@ Vale saber antes de adotar:
   displayName, id e email nulos — dá para contar quantos foram, não quem. O
   quadro diz "alguém interagiu", nunca "fulano pegou", e "feito por mim" precisa
   de um emoji de assinatura em vez da identidade real.
+- **Ignorar é só seu.** O time não vê que você ignorou algo — não há reação nem
+  mensagem para isso. Se a demanda era sua e você ignorou, ela continua em aberto
+  para todo mundo no Teams.
 - **Tirar reação só tira a sua.** O Graph não deixa mexer na reação de outra
   pessoa, então arrastar para fora de *Concluído* não funciona quando o check foi
   de um colega.

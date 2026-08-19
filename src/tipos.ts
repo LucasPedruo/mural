@@ -4,10 +4,10 @@
  *  sobra: reagiram com outra coisa. */
 export type Status = 'aberto' | 'fazendo' | 'interagido' | 'feito';
 
-/** As colunas do quadro. `meu` não é um status do Teams: é a marca pessoal
- *  "eu fiz isso", que vive num campo separado justamente para o sync não a
- *  apagar. Ver `MeuFeito`. */
-export type ColunaId = Status | 'meu';
+/** As colunas do quadro. `meu` e `ignorada` não são status do Teams: são marcas
+ *  pessoais, guardadas em campos separados justamente para o sync não as apagar.
+ *  Ver `MeuFeito` e `Task.ignorada`. */
+export type ColunaId = Status | 'meu' | 'ignorada';
 
 export type TipoFonte = 'canal' | 'chat';
 export type SubtipoFonte = 'canal' | 'oneOnOne' | 'group' | 'meeting';
@@ -81,6 +81,12 @@ export interface Task {
   podeDesmarcar: boolean;
   movidoAMao: boolean;
   meu: MeuFeito | null;
+  /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
+   *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
+   *  sobre a mensagem, não um recado para o time. */
+  ignorada: string | null;
+  /** Suas etiquetas. O Teams não tem esse campo: quem escreve é você, aqui. */
+  tags: string[];
   /** As mensagens que formam este card, da mais antiga para a mais nova. A
    *  primeira é a âncora: o id do card é o dela, e é ela que o clique abre. */
   mensagens: MensagemDaTask[];
@@ -228,6 +234,11 @@ export interface ResultadoEncerramento extends RespostaTasks {
 
 // ------------------------------------------------------------------- painéis
 
+export interface TagComContagem {
+  tag: string;
+  quantas: number;
+}
+
 export interface LinhaDeSprint {
   nome: string;
   inicio: string;
@@ -240,6 +251,7 @@ export interface LinhaDeSprint {
   sugestoes: number;
   concluidas: number;
   minhas: number;
+  ignoradas: number;
   emAberto: number;
   /** Quantas mensagens do Teams os cards desta sprint somam. A distância entre
    *  isso e 'chegaram' é o tamanho do ruído que o agrupamento absorveu. */
@@ -268,7 +280,17 @@ export interface DiaDaDaily {
   itens: ItemDaDaily[];
 }
 
+export interface LinhaDeTag {
+  tag: string;
+  total: number;
+  concluidas: number;
+  abertas: number;
+}
+
 export interface RespostaPainel {
+  /** As tags atravessam sprint: a pergunta "quanto de Financeiro chegou" não se
+   *  responde olhando uma coluna do quadro. */
+  tags: LinhaDeTag[];
   sprints: LinhaDeSprint[];
   /** O que chegou fora de qualquer sprint — histórico anterior ao ciclo. */
   foraDeSprint: { chegaram: number; bugs: number; concluidas: number } | null;

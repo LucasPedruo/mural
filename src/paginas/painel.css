@@ -95,7 +95,7 @@
 
 .pagina-painel .linha {
   display: grid;
-  grid-template-columns: minmax(180px, 1.6fr) 1fr 1.5fr 0.6fr 0.8fr 0.8fr 0.9fr;
+  grid-template-columns: minmax(170px, 1.5fr) 1fr 1.4fr 0.6fr 0.8fr 0.8fr 0.9fr 0.8fr;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
@@ -312,4 +312,26 @@
   .pagina-painel .num {
     text-align: left;
   }
+}
+
+/* O bloco das etiquetas tem quatro colunas, nao oito: reaproveita .tabela mas
+   com grade propria. */
+.pagina-painel .bloco-tags {
+  margin-top: 28px;
+}
+
+.pagina-painel .bloco-tags h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pagina-painel .linha.tags {
+  grid-template-columns: minmax(140px, 1.4fr) 1.4fr 0.8fr 0.8fr;
+}
+
+.pagina-painel .badge.etiqueta {
+  background: var(--bg-brand-subtle);
+  color: var(--marca-meu);
+  font-weight: 500;
 }

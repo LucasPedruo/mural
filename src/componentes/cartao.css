@@ -276,3 +276,32 @@
 .cartao .abrir-web {
   margin-left: 0;
 }
+
+/* Etiqueta: e texto seu, nao dado do Teams. Por isso tem a cor da marca e nao a
+   de status — e por isso vem antes das reacoes no rodape. */
+.cartao .badge.etiqueta {
+  background: var(--bg-brand-subtle);
+  color: var(--marca-meu);
+  border: 1px solid transparent;
+  font-weight: 500;
+}
+
+/* Apagar e o unico gesto irreversivel do quadro: ele nao pode parecer com os
+   outros. */
+.cartao .acao.perigo:hover {
+  color: var(--text-danger);
+  border-color: var(--color-danger-500);
+  background: var(--bg-danger);
+}
+
+/* Card ignorado: ele existe para ser encontrado se voce mudar de ideia, nao para
+   ser lido. Fica apagado, e volta ao normal no hover. */
+.cartao.ignorada {
+  opacity: 0.62;
+  background: transparent;
+  box-shadow: none;
+}
+.cartao.ignorada:hover {
+  opacity: 1;
+  background: var(--bg-surface);
+}

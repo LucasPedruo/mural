@@ -32,6 +32,9 @@ interface Props {
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
+  aoEtiquetar: (task: Task) => void;
+  aoIgnorar: (task: Task, ignorar: boolean) => void;
+  aoApagar: (task: Task) => void;
 }
 
 export function Coluna({
@@ -48,6 +51,9 @@ export function Coluna({
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
+  aoEtiquetar,
+  aoIgnorar,
+  aoApagar,
 }: Props) {
   const total = grupos.reduce((s, g) => s + g.tasks.length, 0);
   const agrupada = grupos.length > 1 || (grupos[0] && grupos[0].rotulo !== '');
@@ -91,6 +97,7 @@ export function Coluna({
                     task={t}
                     indice={indice++}
                     naColunaDaDaily={status === 'meu'}
+                    naColunaDeIgnoradas={status === 'ignorada'}
                     ultimaVisita={ultimaVisita}
                     selecionando={selecionando}
                     selecionado={selecionados.has(t.id)}
@@ -99,6 +106,9 @@ export function Coluna({
                     aoDesmarcarComoMeu={aoDesmarcarComoMeu}
                     aoSelecionar={aoSelecionar}
                     aoSeparar={aoSeparar}
+                    aoEtiquetar={aoEtiquetar}
+                    aoIgnorar={aoIgnorar}
+                    aoApagar={aoApagar}
                   />
                 ))}
               </div>

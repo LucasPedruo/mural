@@ -101,6 +101,8 @@
   --marca-feito: var(--color-success-600);
   /* Feito por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
   --marca-meu: var(--color-brand-700);
+  /* Ignorada nao tem cor: e a ausencia de trabalho. Cinza e o ponto. */
+  --marca-ignorada: var(--color-neutral-300);
 
   --shadow-card: 0 1px 2px rgba(23, 32, 25, 0.04), 0 1px 3px rgba(23, 32, 25, 0.03);
   --shadow-card-hover: 0 2px 6px rgba(23, 32, 25, 0.07), 0 1px 3px rgba(23, 32, 25, 0.05);
@@ -140,6 +142,7 @@
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-500);
   --marca-meu: var(--color-brand-400);
+  --marca-ignorada: var(--color-neutral-650);
 
   /* No dark a hierarquia vem da diferenca de superficie, nao de sombra. */
   --shadow-card: 0 0 rgba(0, 0, 0, 0);
