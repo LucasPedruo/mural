@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Mural">
+  <!-- O quadro: três colunas de alturas diferentes, que é o que o Mural mostra.
+       Fundo cheio na cor da marca porque favicon de 16px não sobrevive a
+       contorno fino, e o verde é o que identifica o app na aba. -->
+  <rect width="32" height="32" rx="8" fill="#00d479" />
+  <g fill="#123320">
+    <rect x="6" y="7" width="5" height="18" rx="2.5" />
+    <rect x="13.5" y="7" width="5" height="12" rx="2.5" />
+    <rect x="21" y="7" width="5" height="7" rx="2.5" />
+  </g>
+</svg>
