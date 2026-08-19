@@ -14,7 +14,9 @@
 /* A contagem empurrava sozinha os controles para a direita; agora ela divide o
    canto com o botao de colapsar. */
 .coluna .colapsar {
-  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 5px;
   border-radius: 7px;
   font-size: 12px;
   line-height: 1;

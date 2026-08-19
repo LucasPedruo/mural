@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { api } from '../api';
+import { IconeVoltar } from '../componentes/icones';
 import { dataDoDiaISO, rotuloDoDiaISO } from '../rotulos';
 import type { DiaDaDaily, Mural, RespostaPainel } from '../tipos';
 import './painel.css';
@@ -57,8 +58,13 @@ export function Painel() {
   return (
     <div className="pagina-painel">
       <header className="topo-painel">
-        <Link className="icone" to={`/m/${muralId}`} title="Voltar para o quadro">
-          ←
+        <Link
+          className="icone"
+          to={`/m/${muralId}`}
+          title="Voltar para o quadro"
+          aria-label="Voltar para o quadro"
+        >
+          <IconeVoltar />
         </Link>
         <span className="marca">
           <span className="ponto-marca" />

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { CORES_DE_STATUS } from '../rotulos';
 import type { ColunaId, Task } from '../tipos';
 import { CartaoDeTask } from './CartaoDeTask';
+import { IconeAbaixo, IconeColapsar } from './icones';
 import './coluna.css';
 
 /** Um bloco de cards com cabeçalho próprio dentro da coluna — usado pela
@@ -40,6 +41,10 @@ interface Props {
   aoEtiquetar: (task: Task) => void;
   aoIgnorar: (task: Task, ignorar: boolean) => void;
   aoApagar: (task: Task) => void;
+  /** Quais cards estão recolhidos, e como recolher. Mora no quadro porque a
+   *  escolha sobrevive a recarregar a página. */
+  colapsados: Set<string>;
+  aoColapsarCartao: (task: Task, colapsar: boolean) => void;
 }
 
 export function Coluna({
@@ -61,6 +66,8 @@ export function Coluna({
   aoEtiquetar,
   aoIgnorar,
   aoApagar,
+  colapsados,
+  aoColapsarCartao,
 }: Props) {
   const total = grupos.reduce((s, g) => s + g.tasks.length, 0);
   const agrupada = grupos.length > 1 || (grupos[0] && grupos[0].rotulo !== '');
@@ -77,6 +84,7 @@ export function Coluna({
       <section className="coluna colapsada">
         <button className="expandir" onClick={() => aoColapsar(false)} title={`Expandir ${rotulo}`}>
           <span className="ponto" style={{ background: CORES_DE_STATUS[status] }} />
+          <IconeAbaixo tamanho={13} />
           <span className="contagem">{total}</span>
           <span className="rotulo-de-pe">{rotulo}</span>
         </button>
@@ -109,8 +117,9 @@ export function Coluna({
           className="colapsar"
           onClick={() => aoColapsar(true)}
           title={`Colapsar ${rotulo} — ela continua recebendo cards arrastados`}
+          aria-label={`Colapsar ${rotulo}`}
         >
-          ⟨
+          <IconeColapsar />
         </button>
       </header>
 
@@ -140,6 +149,8 @@ export function Coluna({
                     naColunaDaDaily={status === 'meu'}
                     naColunaDeIgnoradas={status === 'ignorada'}
                     ultimaVisita={ultimaVisita}
+                    colapsado={colapsados.has(t.id)}
+                    aoColapsar={aoColapsarCartao}
                     selecionando={selecionando}
                     selecionado={selecionados.has(t.id)}
                     aoAbrir={aoAbrir}

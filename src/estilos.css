@@ -205,8 +205,22 @@ button.primario:hover:not(:disabled) {
   border-color: var(--bg-brand-hover);
   color: var(--color-neutral-0);
 }
-button.icone {
-  padding: 7px 10px;
+button.icone,
+a.icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 9px;
+  line-height: 1;
+}
+
+/* Todo icone do projeto e um SVG do lucide (ver src/componentes/icones.tsx), e
+   nenhum deles carrega significado sozinho: eles acompanham rotulo ou title.
+   Alinhar pela linha de texto e o que impede o icone de "pular" ao lado da
+   palavra. */
+svg {
+  flex: none;
+  vertical-align: middle;
 }
 button.perigo:hover:not(:disabled) {
   background: var(--bg-danger);

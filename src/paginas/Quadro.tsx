@@ -13,6 +13,7 @@ import {
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
+import { IconeEtiqueta, IconePessoa, IconeVoltar } from '../componentes/icones';
 import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
 import type {
   ColunaId,
@@ -30,12 +31,12 @@ import './quadro.css';
  *  porque a coluna só enche quando a sua reação aparece — ou quando você marca. */
 function vazioDaColuna(coluna: ColunaId, emojiMeu: string): string | undefined {
   if (coluna === 'ignorada') {
-    return 'nada ignorado — use ⊘ num card para tirar do quadro o que não é seu';
+    return 'nada ignorado — no menu ⋯ de um card, "Não é pra mim"';
   }
   if (coluna !== 'meu') return undefined;
   return emojiMeu
-    ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou use "fiz" num card`
-    : 'nada ainda — use "fiz" num card para anotar o que você resolveu';
+    ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou "Fiz esta" no menu ⋯ do card`
+    : 'nada ainda — use "Fiz esta" no menu ⋯ de um card para anotar o que você resolveu';
 }
 
 export function Quadro() {
@@ -71,6 +72,22 @@ export function Quadro() {
   const [tags, setTags] = useState<TagComContagem[]>([]);
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
+
+  // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
+  // vem em cada card, e uma volta ao servidor para descobrir o que está na tela
+  // seria trabalho para saber o que já se sabe.
+  const [autorFiltro, setAutorFiltro] = useState<string | null>(null);
+
+  // Cards recolhidos, por mural. Recolher é sobre o que você quer ver agora, não
+  // sobre a task — então é preferência de tela, e mora no navegador.
+  const chaveCards = `mural:cards-colapsados:${muralId}`;
+  const [cardsColapsados, setCardsColapsados] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(chaveCards) || '[]') as string[]);
+    } catch {
+      return new Set<string>();
+    }
+  });
 
   // Qualquer coluna pode ser colapsada: quem trabalha por sprint não olha
   // "Interagido" toda hora, e quem só quer ver o que está em aberto fecha o
@@ -381,6 +398,16 @@ export function Quadro() {
     }
   }
 
+  function colapsarCartao(task: Task, fechar: boolean) {
+    setCardsColapsados((atual) => {
+      const proximo = new Set(atual);
+      if (fechar) proximo.add(task.id);
+      else proximo.delete(task.id);
+      localStorage.setItem(chaveCards, JSON.stringify([...proximo]));
+      return proximo;
+    });
+  }
+
   function colapsar(coluna: ColunaId, fechar: boolean) {
     setColapsadas((atual) => {
       const proximo = new Set(atual);
@@ -565,11 +592,13 @@ export function Quadro() {
     const porColuna: Record<ColunaId, Task[]> = {
       aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
-    // O filtro de etiqueta corta o quadro inteiro: a pergunta que ele responde é
-    // "o que existe de Financeiro", e essa pergunta não tem coluna.
-    const visiveis = tagFiltro
-      ? tasks.filter((t) => t.tags.some((x) => x.toLowerCase() === tagFiltro))
-      : tasks;
+    // Os filtros cortam o quadro inteiro: as perguntas que eles respondem — "o
+    // que existe de Financeiro", "o que o Bernardo pediu" — não têm coluna.
+    const visiveis = tasks.filter(
+      (t) =>
+        (!tagFiltro || t.tags.some((x) => x.toLowerCase() === tagFiltro)) &&
+        (!autorFiltro || t.author === autorFiltro),
+    );
 
     for (const t of visiveis) {
       // Ignorada vence a marca de "fiz": se você decidiu que não é sua, ela não
@@ -605,7 +634,17 @@ export function Quadro() {
     resultado.meu = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro]);
+  }, [tasks, tagFiltro, autorFiltro]);
+
+  // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
+  // quem manda mais demanda é quem você procura primeiro.
+  const autores = useMemo(() => {
+    const por = new Map<string, number>();
+    for (const t of tasks) por.set(t.author, (por.get(t.author) ?? 0) + 1);
+    return [...por.entries()]
+      .map(([autor, quantas]) => ({ autor, quantas }))
+      .sort((a, b) => b.quantas - a.quantas || a.autor.localeCompare(b.autor));
+  }, [tasks]);
 
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
@@ -614,8 +653,13 @@ export function Quadro() {
   return (
     <>
       <header className="topo-quadro">
-        <button className="icone" onClick={() => navegar('/')} title="Voltar para meus murais">
-          ←
+        <button
+          className="icone"
+          onClick={() => navegar('/')}
+          title="Voltar para meus murais"
+          aria-label="Voltar para meus murais"
+        >
+          <IconeVoltar />
         </button>
         <span className="marca">
           <span className="ponto-marca" />
@@ -673,16 +717,20 @@ export function Quadro() {
         </button>
         {sprint?.atual && (
           <button
+            className="acao-topo"
             onClick={() => void encerrarSprint()}
             title="Arquiva Concluído e Feito por mim, e abre a sprint seguinte"
           >
             Encerrar sprint
           </button>
         )}
-        <Link className="botao-link" to={`/m/${muralId}/painel`} title="Sprints e daily">
+        <Link className="acao-topo" to={`/m/${muralId}/painel`} title="Sprints e daily">
           Painéis
         </Link>
-        <button className="primario" onClick={pedirAtualizacao} disabled={sincronizando}>
+        {/* As três ações do cabeçalho têm o mesmo peso visual: escolher uma para
+            ser verde faria o quadro sugerir que atualizar é o que você veio
+            fazer aqui, e quase nunca é. */}
+        <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
           {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
         </button>
       </header>
@@ -752,9 +800,29 @@ export function Quadro() {
         </p>
       )}
 
+      {autores.length > 1 && (
+        <div className="filtro">
+          <span className="rotulo">
+            <IconePessoa tamanho={13} /> quem pediu
+          </span>
+          {autores.map((a) => (
+            <button
+              key={a.autor}
+              aria-pressed={autorFiltro === a.autor}
+              onClick={() => setAutorFiltro(autorFiltro === a.autor ? null : a.autor)}
+              title={`${a.quantas} task(s) de ${a.autor}`}
+            >
+              {a.autor} <span className="quantas">{a.quantas}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {tags.length > 0 && (
-        <div className="filtro-de-tags">
-          <span className="rotulo">etiquetas</span>
+        <div className="filtro">
+          <span className="rotulo">
+            <IconeEtiqueta tamanho={13} /> etiquetas
+          </span>
           {tags.map((t) => (
             <button
               key={t.tag}
@@ -767,8 +835,24 @@ export function Quadro() {
               {t.tag} <span className="quantas">{t.quantas}</span>
             </button>
           ))}
-          {tagFiltro && <button onClick={() => setTagFiltro(null)}>mostrar tudo</button>}
         </div>
+      )}
+
+      {(tagFiltro || autorFiltro) && (
+        <p className="aviso faixa filtrando">
+          Mostrando só {autorFiltro && <strong>o que {autorFiltro} pediu</strong>}
+          {autorFiltro && tagFiltro && ' e '}
+          {tagFiltro && <strong>a etiqueta {tagFiltro}</strong>} — as contagens das colunas são do
+          filtro, não do quadro inteiro.
+          <button
+            onClick={() => {
+              setTagFiltro(null);
+              setAutorFiltro(null);
+            }}
+          >
+            Mostrar tudo
+          </button>
+        </p>
       )}
 
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
@@ -820,6 +904,8 @@ export function Quadro() {
               aoEtiquetar={setEtiquetando}
               aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
               aoApagar={(t) => void apagar(t)}
+              colapsados={cardsColapsados}
+              aoColapsarCartao={colapsarCartao}
             />
           ))}
         </main>

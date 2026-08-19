@@ -63,9 +63,13 @@
   color: var(--text-primary);
 }
 
-/* Link que precisa parecer botao: os paineis sao outra pagina, mas no cabecalho
-   ele mora entre botoes. */
-.topo-quadro .botao-link {
+/* Atualizar, Encerrar sprint e Paineis sao as tres acoes do cabecalho e tem o
+   MESMO peso: nenhuma delas e "o que voce veio fazer aqui". Painel e um link
+   (outra pagina) e as outras duas sao botoes, entao o estilo e escrito para os
+   dois elementos em vez de herdar do botao. */
+.topo-quadro .acao-topo {
+  display: inline-flex;
+  align-items: center;
   font-size: 12.5px;
   line-height: 1.4;
   padding: 6px 12px;
@@ -74,10 +78,16 @@
   background: var(--bg-surface);
   color: var(--text-secondary);
   text-decoration: none;
+  font-weight: 500;
 }
-.topo-quadro .botao-link:hover {
+.topo-quadro .acao-topo:hover {
   border-color: var(--border-strong);
   color: var(--text-primary);
+  background: var(--bg-surface);
+}
+.topo-quadro .acao-topo:disabled {
+  opacity: 0.6;
+  color: var(--text-muted);
 }
 
 .faixa {
@@ -118,8 +128,8 @@
 }
 
 
-/* A barra de etiquetas. Fica acima das colunas porque filtra todas elas. */
-.filtro-de-tags {
+/* As barras de filtro. Ficam acima das colunas porque filtram todas elas. */
+.filtro {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -127,12 +137,15 @@
   padding: 10px 24px 0;
 }
 
-.filtro-de-tags .rotulo {
+.filtro .rotulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11.5px;
   color: var(--text-muted);
 }
 
-.filtro-de-tags button {
+.filtro button {
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
@@ -140,15 +153,29 @@
   color: var(--text-secondary);
 }
 
-.filtro-de-tags button[aria-pressed='true'] {
+.filtro button[aria-pressed='true'] {
   border-color: var(--marca-meu);
   background: var(--bg-brand-subtle);
   color: var(--marca-meu);
   font-weight: 600;
 }
 
-.filtro-de-tags .quantas {
+.filtro .quantas {
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
 }
 
+/* Filtro ligado esconde cards, e um quadro que esconde precisa dizer que esconde
+   — senao a contagem da coluna parece errada. */
+.faixa.filtrando {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+}
+.faixa.filtrando button {
+  font-size: 12px;
+  padding: 4px 11px;
+}

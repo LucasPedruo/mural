@@ -178,25 +178,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.cartao .abrir-web {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-  text-decoration: none;
-  border: 1px solid var(--border-default);
-  border-radius: 999px;
-  padding: 1px 8px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.cartao:hover .abrir-web {
-  opacity: 1;
-}
-.cartao .abrir-web:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
 /* Task que uma versao anterior gravou: sem tracejado, porque ela nunca "se
    perdeu" do Teams — nasceu movivel. O selo "a mao" no rodape diz o que ela e. */
 .cartao.propria {
@@ -232,41 +213,6 @@
   gap: 5px;
 }
 
-/* Mesma discrição do atalho "web": só aparece no hover, para o rodapé não
-   virar uma barra de ferramentas. */
-.cartao .acao {
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-  padding: 1px 8px;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: none;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
-}
-.cartao:hover .acao,
-.cartao .acao:focus-visible {
-  opacity: 1;
-}
-.cartao .acao:hover {
-  color: var(--marca-meu);
-  border-color: var(--marca-meu);
-  background: var(--bg-brand-subtle);
-}
-
-/* Ação ligada — o card está na seleção do juntar. Fica visível sem hover: uma
-   seleção que desaparece quando o mouse sai não é uma seleção. */
-.cartao .acao.ligada {
-  opacity: 1;
-  color: var(--marca-meu);
-  border-color: var(--marca-meu);
-  background: var(--bg-brand-subtle);
-}
-
-.cartao .abrir-web {
-  margin-left: 0;
-}
 
 /* Etiqueta: e texto seu, nao dado do Teams. Por isso tem a cor da marca e nao a
    de status — e por isso vem antes das reacoes no rodape. */
@@ -295,4 +241,17 @@
 .cartao.ignorada:hover {
   opacity: 1;
   background: var(--bg-surface);
+}
+
+/* Card recolhido: so o titulo e o rodape. O aperto no padding e de proposito —
+   recolher existe para caber mais card na tela, e um card recolhido do mesmo
+   tamanho do aberto nao teria feito nada. */
+.cartao.colapsado {
+  padding: 8px 13px;
+}
+.cartao.colapsado .texto {
+  font-size: 13px;
+}
+.cartao.colapsado .rodape {
+  margin-top: 6px;
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import type { TagComContagem, Task } from '../tipos';
+import { IconeFechar } from './icones';
 import './confirmar.css';
 import './dialogo.css';
 
@@ -62,7 +63,8 @@ export function DialogoDeTags({ task, existentes, aoSalvar, aoCancelar }: Props)
                   title="Clique para tirar"
                   onClick={() => alternar(tag)}
                 >
-                  {tag} ✕
+                  {tag}
+                  <IconeFechar tamanho={12} />
                 </button>
               ))}
             </div>

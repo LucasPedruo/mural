@@ -3,7 +3,21 @@ import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 
 import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
 import type { Task } from '../tipos';
-import { IconeImagem } from './icones';
+import {
+  IconeAbaixo,
+  IconeAbrirFora,
+  IconeAcima,
+  IconeApagar,
+  IconeDesfazer,
+  IconeEditar,
+  IconeEtiqueta,
+  IconeFeito,
+  IconeIgnorar,
+  IconeImagem,
+  IconeJuntar,
+  IconeSeparar,
+} from './icones';
+import { MenuFlutuante, type ItemDeMenu } from './MenuFlutuante';
 import './cartao.css';
 
 /** Quantos prints e quantas linhas de continuação o card mostra antes de
@@ -21,10 +35,14 @@ interface Props {
    *  ali não há trabalho a fazer, só decisão a rever. */
   naColunaDeIgnoradas: boolean;
   ultimaVisita: string | null;
+  /** Recolhido: só o título e o rodapé. Prints, continuação da rajada e a
+   *  anotação da daily somem — é o que faz uma coluna cheia caber na tela. */
+  colapsado: boolean;
   /** Modo de juntar ligado: o clique no card seleciona em vez de abrir o Teams. */
   selecionando: boolean;
   selecionado: boolean;
   aoAbrir: (task: Task) => void;
+  aoColapsar: (task: Task, colapsar: boolean) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
@@ -40,9 +58,11 @@ export function CartaoDeTask({
   naColunaDaDaily,
   naColunaDeIgnoradas,
   ultimaVisita,
+  colapsado,
   selecionando,
   selecionado,
   aoAbrir,
+  aoColapsar,
   aoMarcarComoMeu,
   aoDesmarcarComoMeu,
   aoSelecionar,
@@ -65,11 +85,14 @@ export function CartaoDeTask({
   const linhas = mensagens.filter((m) => !m.soPrint && m.summary !== task.summary);
   const agrupado = mensagens.length > 1;
 
+  // Recolher só faz sentido no card que tem o que esconder.
+  const temDetalhe = prints.length > 0 || linhas.length > 0 || (naColunaDaDaily && !!task.meu);
+
   // Arrastar entre as colunas do Teams so vale para task fora de alcance ou
-  // criada aqui: enquanto a mensagem aparece no Teams, a reacao de la manda e a
-  // proxima atualizacao desfaria o movimento. O servidor recusa esse caso, e
-  // aqui o gesto nem comeca. Marcar como "feito por mim" e outra historia — nao
-  // mexe no status, entao vale para qualquer card, pelo botao do rodape.
+  // gravada por uma versao anterior: enquanto a mensagem aparece no Teams, a
+  // reacao de la manda e a proxima atualizacao desfaria o movimento. O servidor
+  // recusa esse caso, e aqui o gesto nem comeca. Marcar como "feito por mim" e
+  // outra historia — nao mexe no status, entao vale para qualquer card.
   const podeArrastar = task.podeMover;
 
   const dica = selecionando
@@ -81,6 +104,99 @@ export function CartaoDeTask({
       : podeArrastar
         ? 'Clique para abrir no Teams · fora de alcance: arraste para mudar de coluna'
         : 'Clique para abrir a mensagem no Teams';
+
+  // Tudo o que se faz num card mora no menu de "…". Antes eram sete botões
+  // disputando o canto do rodapé, todos escondidos atrás de hover e sem nome.
+  const acoes: ItemDeMenu[] = [];
+
+  if (temDetalhe) {
+    acoes.push({
+      rotulo: colapsado ? 'Expandir' : 'Recolher',
+      icone: colapsado ? <IconeAbaixo /> : <IconeAcima />,
+      aoEscolher: () => aoColapsar(task, !colapsado),
+      dica: 'Esconde prints, continuação da rajada e anotação',
+    });
+  }
+
+  if (naColunaDeIgnoradas) {
+    acoes.push({
+      rotulo: 'Devolver ao quadro',
+      icone: <IconeDesfazer />,
+      aoEscolher: () => aoIgnorar(task, false),
+    });
+  } else if (naColunaDaDaily) {
+    acoes.push({
+      rotulo: 'Editar a anotação',
+      icone: <IconeEditar />,
+      aoEscolher: () => aoMarcarComoMeu(task),
+    });
+    if (task.podeDesmarcar) {
+      acoes.push({
+        rotulo: 'Tirar de Feito por mim',
+        icone: <IconeDesfazer />,
+        aoEscolher: () => aoDesmarcarComoMeu(task),
+        dica: 'O card volta para a coluna que a reação manda',
+      });
+    }
+  } else {
+    acoes.push({
+      rotulo: 'Fiz esta',
+      icone: <IconeFeito />,
+      aoEscolher: () => aoMarcarComoMeu(task),
+      dica: 'Anotar a solução para a daily',
+    });
+  }
+
+  acoes.push({
+    rotulo: 'Etiquetas',
+    icone: <IconeEtiqueta />,
+    aoEscolher: () => aoEtiquetar(task),
+  });
+
+  if (!propria) {
+    acoes.push({
+      rotulo: selecionado ? 'Tirar da seleção' : 'Juntar com outro',
+      icone: <IconeJuntar />,
+      aoEscolher: () => aoSelecionar(task),
+      dica: 'Para quando a mesma demanda virou dois cards',
+    });
+  }
+
+  if (agrupado) {
+    acoes.push({
+      rotulo: 'Separar',
+      icone: <IconeSeparar />,
+      aoEscolher: () => aoSeparar(task),
+      dica: 'Cada mensagem volta a ser um card',
+    });
+  }
+
+  if (!naColunaDeIgnoradas) {
+    acoes.push({
+      rotulo: 'Não é pra mim',
+      icone: <IconeIgnorar />,
+      aoEscolher: () => aoIgnorar(task, true),
+      dica: 'Tira o card do quadro sem tocar no Teams',
+    });
+  }
+
+  if (task.webUrl) {
+    acoes.push({
+      rotulo: 'Abrir no navegador',
+      icone: <IconeAbrirFora />,
+      aoEscolher: () => window.open(task.webUrl, '_blank', 'noopener'),
+    });
+  }
+
+  if (naColunaDeIgnoradas) {
+    acoes.push({
+      rotulo: 'Apagar de vez',
+      icone: <IconeApagar />,
+      aoEscolher: () => aoApagar(task),
+      perigo: true,
+      dica: 'A mensagem não volta em nenhuma atualização',
+    });
+  }
 
   return (
     <Draggable draggableId={task.id} index={indice} isDragDisabled={!podeArrastar}>
@@ -113,6 +229,7 @@ export function CartaoDeTask({
               propria ? 'propria' : '',
               agrupado ? 'rajada' : '',
               task.ignorada ? 'ignorada' : '',
+              colapsado ? 'colapsado' : '',
               selecionado ? 'selecionado' : '',
               estado.isDragging ? 'arrastando' : '',
             ]
@@ -129,42 +246,48 @@ export function CartaoDeTask({
           >
             <div className="texto">{task.summary}</div>
 
-            {/* Print não é texto: mostrar "(só print)" como se fosse título faz
-                o card parecer vazio. A faixa ocupa o lugar da imagem que está
-                no Teams e diz, pela forma, que há algo para ver lá. */}
-            {prints.length > 0 && (
-              <div className="prints" aria-label={`${prints.length} print(s) na conversa`}>
-                {prints.slice(0, PRINTS_VISIVEIS).map((m) => (
-                  <span className="print" key={m.id}>
-                    <IconeImagem />
-                  </span>
-                ))}
-                {prints.length > PRINTS_VISIVEIS && (
-                  <span className="mais">+{prints.length - PRINTS_VISIVEIS} prints</span>
+            {!colapsado && (
+              <>
+                {/* Print não é texto: mostrar "(só print)" como se fosse título
+                    faz o card parecer vazio. A faixa ocupa o lugar da imagem que
+                    está no Teams e diz, pela forma, que há algo para ver lá. */}
+                {prints.length > 0 && (
+                  <div className="prints" aria-label={`${prints.length} print(s) na conversa`}>
+                    {prints.slice(0, PRINTS_VISIVEIS).map((m) => (
+                      <span className="print" key={m.id}>
+                        <IconeImagem />
+                      </span>
+                    ))}
+                    {prints.length > PRINTS_VISIVEIS && (
+                      <span className="mais">+{prints.length - PRINTS_VISIVEIS} prints</span>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
 
-            {/* O resto da rajada: as linhas que a pessoa mandou em seguida.
-                Ficam visíveis porque é nelas que costuma estar o detalhe que
-                faz a task ser entendida. */}
-            {linhas.slice(0, LINHAS_VISIVEIS).map((m) => (
-              <p className="continuacao" key={m.id}>
-                {m.summary}
-              </p>
-            ))}
-            {linhas.length > LINHAS_VISIVEIS && (
-              <p className="continuacao mais">
-                +{linhas.length - LINHAS_VISIVEIS} mensagens nesta rajada
-              </p>
-            )}
+                {/* O resto da rajada: as linhas que a pessoa mandou em seguida.
+                    Ficam visíveis porque é nelas que costuma estar o detalhe que
+                    faz a task ser entendida. */}
+                {linhas.slice(0, LINHAS_VISIVEIS).map((m) => (
+                  <p className="continuacao" key={m.id}>
+                    {m.summary}
+                  </p>
+                ))}
+                {linhas.length > LINHAS_VISIVEIS && (
+                  <p className="continuacao mais">
+                    +{linhas.length - LINHAS_VISIVEIS} mensagens nesta rajada
+                  </p>
+                )}
 
-            {/* Na coluna da daily o card existe para ser lido: a solução vem
-                junto, não escondida atrás de um clique. */}
-            {naColunaDaDaily && task.meu && (
-              <p className="solucao">
-                {task.meu.solucao || <span className="sem-nota">sem anotação — clique em ✎</span>}
-              </p>
+                {/* Na coluna da daily o card existe para ser lido: a solução vem
+                    junto, não escondida atrás de um clique. */}
+                {naColunaDaDaily && task.meu && (
+                  <p className="solucao">
+                    {task.meu.solucao || (
+                      <span className="sem-nota">sem anotação — use o menu para escrever</span>
+                    )}
+                  </p>
+                )}
+              </>
             )}
 
             <div className="rodape">
@@ -194,6 +317,13 @@ export function CartaoDeTask({
                 >
                   {mensagens.length} mensagens
                   {task.agrupamento === 'mao' ? ' · à mão' : ''}
+                </span>
+              )}
+              {/* Recolhido, o card precisa avisar que esconde algo — senão a
+                  faixa de print desaparecida parece card sem print. */}
+              {colapsado && temDetalhe && (
+                <span className="badge neutral" title="Use o menu para expandir">
+                  recolhido
                 </span>
               )}
               {/* Na coluna da daily o status real do Teams continua visível: a
@@ -241,150 +371,7 @@ export function CartaoDeTask({
               </span>
 
               <span className="acoes">
-                {/* Juntar e separar existem porque a heurística de rajada erra
-                    em alguns casos — e card errado que não dá para consertar é
-                    pior que card errado. O que você decide aqui nenhuma
-                    atualização desfaz. */}
-                {!propria && (
-                  <button
-                    className={'acao' + (selecionado ? ' ligada' : '')}
-                    type="button"
-                    title={
-                      selecionado
-                        ? 'Tirar da seleção'
-                        : 'Juntar com outro card — para quando a mesma demanda virou dois'
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      aoSelecionar(task);
-                    }}
-                  >
-                    ⧉
-                  </button>
-                )}
-                {agrupado && (
-                  <button
-                    className="acao"
-                    type="button"
-                    title="Separar: cada mensagem volta a ser um card"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      aoSeparar(task);
-                    }}
-                  >
-                    ⑃
-                  </button>
-                )}
-
-                {/* Etiquetar vale em qualquer coluna: a etiqueta é sobre o
-                    assunto da task, não sobre o estado dela. */}
-                <button
-                  className="acao"
-                  type="button"
-                  title="Etiquetas"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    aoEtiquetar(task);
-                  }}
-                >
-                  #
-                </button>
-
-                {naColunaDeIgnoradas ? (
-                  <>
-                    <button
-                      className="acao"
-                      type="button"
-                      title="Devolver para o quadro"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        aoIgnorar(task, false);
-                      }}
-                    >
-                      ↩
-                    </button>
-                    <button
-                      className="acao perigo"
-                      type="button"
-                      title="Apagar de vez — a mensagem não volta em nenhuma atualização"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        aoApagar(task);
-                      }}
-                    >
-                      apagar
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    className="acao"
-                    type="button"
-                    title="Não é pra mim — tira o card do quadro sem tocar no Teams"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      aoIgnorar(task, true);
-                    }}
-                  >
-                    ⊘
-                  </button>
-                )}
-
-                {naColunaDeIgnoradas ? null : naColunaDaDaily ? (
-                  <>
-                    <button
-                      className="acao"
-                      type="button"
-                      title="Editar a anotação da daily"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        aoMarcarComoMeu(task);
-                      }}
-                    >
-                      ✎
-                    </button>
-                    {/* Se foi a sua reação que trouxe o card para cá, tirar a
-                        marca aqui duraria até o próximo sync repor. O gesto nem
-                        aparece — a saída é tirar a reação no Teams. */}
-                    {task.podeDesmarcar && (
-                      <button
-                        className="acao"
-                        type="button"
-                        title="Tirar de Feito por mim — o card volta para a coluna do Teams"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          aoDesmarcarComoMeu(task);
-                        }}
-                      >
-                        ↩
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    className="acao"
-                    type="button"
-                    title="Fui eu que fiz — anotar a solução para a daily"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      aoMarcarComoMeu(task);
-                    }}
-                  >
-                    fiz
-                  </button>
-                )}
-
-                {task.webUrl && (
-                  <a
-                    className="abrir-web"
-                    href={task.webUrl}
-                    target="_blank"
-                    rel="noopener"
-                    title="Abrir no Teams do navegador"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    web
-                  </a>
-                )}
+                <MenuFlutuante itens={acoes} rotulo="Ações deste card" />
               </span>
             </div>
           </article>

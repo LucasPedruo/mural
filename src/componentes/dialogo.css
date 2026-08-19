@@ -55,6 +55,9 @@
 }
 
 .opcoes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
   padding: 6px 12px;
   border-radius: 999px;

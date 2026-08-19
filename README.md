@@ -36,11 +36,22 @@ reação* — "por outros" pressupõe um time.
 Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
 **Atualizar** relê a conversa.
 
-**Qualquer coluna colapsa** — o `⟨` no cabeçalho dela vira uma faixa fina com o
-rótulo de pé e a contagem. Quem trabalha por sprint não olha *Interagido* toda
-hora, e o espaço vai para as colunas que são trabalho agora. A coluna fechada
-**continua recebendo cards arrastados**: é o gesto de guardar sem abrir. A escolha
-é por mural e fica no navegador.
+**Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
+fina com o rótulo de pé e a contagem. **Cada card também**: recolhido, ele mostra
+só o título e o rodapé, sem os prints, sem a continuação da rajada e sem a
+anotação da daily. Quem trabalha por sprint não olha *Interagido* toda hora, e o
+espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
+recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
+por mural e ficam no navegador.
+
+**Tudo o que se faz num card mora no menu ⋯** dele. Eram sete botões disputando o
+canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação tem
+ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de
+exigir que você decore o que cada símbolo faz.
+
+**Os filtros** ficam acima das colunas: por **quem pediu** e por **etiqueta**. Eles
+cortam o quadro inteiro, e uma faixa avisa quando algo está escondido — contagem
+de coluna que mente é pior que filtro que não existe.
 
 O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
 colunas existe só para os cards que o Teams não acompanha mais.
@@ -154,8 +165,8 @@ Teams não acompanha mais — os "fora de alcance".
 Nem para eles vale arrastar até *Interagido*: não existe emoji que signifique
 "interagido", é o que sobra quando alguém reage com outra coisa.
 
-**fiz**, no rodapé de qualquer card, joga ele para *Feito por mim*. Ou reaja no
-Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
+**Fiz esta**, no menu ⋯ de qualquer card, joga ele para *Feito por mim*. Ou reaja
+no Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
 próxima atualização.
 
 **Juntar e separar** (⧉ e ⑃ no rodapé) consertam o agrupamento quando ele erra:
@@ -246,7 +257,7 @@ no chat de quem faltou na reunião.
 Três marcas suas, e nenhuma delas é status do Teams. Como o *feito por mim*, elas
 moram em campos próprios justamente para nenhuma leitura as apagar.
 
-**Ignorar** (⊘ no card) é para o que não é pra você: chegou no canal, alguém vai
+**Ignorar** ("Não é pra mim", no menu ⋯ do card) é para o que não é pra você: chegou no canal, alguém vai
 cuidar, e não precisa ocupar espaço no seu quadro. O card sai das colunas de
 trabalho e vai para *Ignoradas* — que nasce **colapsada**, porque uma coluna de
 descartes não pode roubar largura das que são trabalho. Ao ignorar o primeiro card
@@ -258,7 +269,7 @@ do Mural**: o card sai do histórico e a mensagem entra na lista de arquivados,
 para nenhuma atualização trazê-la de volta — mesmo que ela continue no Teams. É a
 mesma máquina que o encerramento de sprint usa.
 
-**Etiquetas** (# no card) são suas: o Teams não tem esse campo. Até seis por task,
+**Etiquetas** (no menu ⋯ do card) são suas: o Teams não tem esse campo. Até seis por task,
 normalizadas na entrada — "Financeiro", "financeiro" e "financeiro " são a mesma
 etiqueta, senão o filtro se quebraria sozinho em três. A barra acima das colunas
 lista as que existem com a contagem de cada uma; clicar filtra o quadro inteiro, e
@@ -392,7 +403,7 @@ Tirar a reação no Teams tira o card da coluna na atualização seguinte. A exc
 é quando você já escreveu a anotação: aí a marca fica, porque texto que você
 escreveu não pode sumir por causa de um clique numa reação.
 
-**Pelo botão.** Todo card tem um **fiz** no rodapé, para o que você esqueceu de
+**Pelo menu.** Todo card tem **Fiz esta** no menu ⋯, para o que você esqueceu de
 reagir no Teams.
 
 Marcar como seu **não muda o status no Teams**. É uma marca pessoal, guardada
@@ -525,7 +536,9 @@ O servidor escuta apenas em `127.0.0.1`.
 Fonte [DM Sans](https://fonts.google.com/specimen/DM+Sans) sob SIL Open Font
 License 1.1, embutida em `assets/`.
 
-Ícones do [lucide](https://lucide.dev) sob licença ISC, copiados como SVG inline
-em `src/componentes/icones.tsx` — dois traçados não justificam uma dependência.
+**Todos** os ícones vêm do [lucide](https://lucide.dev), sob licença ISC, copiados
+como SVG inline em `src/componentes/icones.tsx` — meia dúzia de traçados não
+justifica uma dependência, e glifo de texto (⧉, ⊘, ✎) muda de forma a cada
+sistema operacional.
 
 MIT.
