@@ -47,10 +47,12 @@ export function Quadro() {
   const [sincronizando, setSincronizando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
 
+  // "Novo" e "mudou" são relativos à sua última visita a este mural. O valor é
+  // lido uma vez, na montagem, e não muda enquanto a aba está aberta: os selos
+  // precisam ficar de pé durante a visita inteira, senão desapareceriam no meio
+  // da leitura. Quem grava a visita nova é o efeito abaixo, na saída.
   const chaveVisto = `mural:ultima-visita:${muralId}`;
-  const [ultimaVisita, setUltimaVisita] = useState<string | null>(
-    () => localStorage.getItem(chaveVisto),
-  );
+  const [ultimaVisita] = useState<string | null>(() => localStorage.getItem(chaveVisto));
 
   const [consumo, setConsumo] = useState<RespostaConsumo | null>(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -89,6 +91,18 @@ export function Quadro() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  // Sair do mural é o que marca como visto. Antes havia um botão para isso, mas
+  // pedir um clique para dizer "eu li" é trabalho que o próprio ato de sair já
+  // informa. O evento pagehide cobre fechar a aba; o cleanup cobre voltar para a home.
+  useEffect(() => {
+    const marcarVisto = () => localStorage.setItem(chaveVisto, new Date().toISOString());
+    window.addEventListener('pagehide', marcarVisto);
+    return () => {
+      marcarVisto();
+      window.removeEventListener('pagehide', marcarVisto);
+    };
+  }, [chaveVisto]);
 
   // ---- progresso ao vivo -----------------------------------------------
 
@@ -534,16 +548,6 @@ export function Quadro() {
         </Link>
         <button onClick={() => setEditando('nova')} title="Criar uma task que não veio do Teams">
           Nova task
-        </button>
-        <button
-          onClick={() => {
-            const agora = new Date().toISOString();
-            localStorage.setItem(chaveVisto, agora);
-            setUltimaVisita(agora);
-          }}
-          title="Zera as marcas NOVO e MUDOU"
-        >
-          Marcar como visto
         </button>
         <button className="primario" onClick={pedirAtualizacao} disabled={sincronizando}>
           {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
