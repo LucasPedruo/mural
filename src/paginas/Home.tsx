@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import {
+  DialogoDeConfirmacao,
+  type PedidoDeConfirmacao,
+} from '../componentes/DialogoDeConfirmacao';
 import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { IconeFechar } from '../componentes/icones';
 import {
@@ -23,6 +27,10 @@ export function Home() {
   // ela é contexto do que está na tela, e mexer no ciclo é organizar o mural —
   // o mesmo assunto de criar e remover, que já mora nesta página.
   const [editandoSprint, setEditandoSprint] = useState<MuralNaLista | null>(null);
+  // O que se pergunta antes de um gesto que não volta. Um estado só para os
+  // três: eles nunca acontecem ao mesmo tempo, e um diálogo por gesto seria três
+  // cópias da mesma caixa.
+  const [pedido, setPedido] = useState<PedidoDeConfirmacao | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -40,14 +48,27 @@ export function Home() {
     document.title = 'Mural';
   }, [carregar]);
 
-  async function resetarOnboarding() {
-    const confirmado = window.confirm(
-      'Refazer a configuração?\n\n' +
-        'Apaga o cache do onboarding: o agente de IA escolhido, a conta Microsoft ' +
-        'verificada, a lista de chats e a preferência de confirmar antes de atualizar.\n\n' +
-        'Seus murais, o histórico de tasks e o registro de gastos NÃO são tocados.',
-    );
-    if (!confirmado) return;
+  function resetarOnboarding() {
+    setPedido({
+      titulo: 'Refazer a configuração?',
+      rotulo: 'Refazer a configuração',
+      corpo: (
+        <>
+          <p>
+            Apaga o cache do onboarding: o agente de IA escolhido, a conta Microsoft verificada, a
+            lista de chats e a preferência de confirmar antes de atualizar.
+          </p>
+          <p>
+            Seus murais, o histórico de tasks e o registro de gastos <strong>não</strong> são
+            tocados.
+          </p>
+        </>
+      ),
+      aoConfirmar: () => void refazerConfiguracao(),
+    });
+  }
+
+  async function refazerConfiguracao() {
     try {
       await api.resetarOnboarding();
       navegar('/onboarding');
@@ -56,12 +77,22 @@ export function Home() {
     }
   }
 
-  async function remover(m: MuralNaLista) {
-    const confirmado = window.confirm(
-      `Remover "${m.nome}"?\n\n` +
-        'O histórico acumulado deste mural é apagado. A conversa no Teams não é tocada.',
-    );
-    if (!confirmado) return;
+  function remover(m: MuralNaLista) {
+    setPedido({
+      titulo: `Remover "${m.nome}"?`,
+      rotulo: 'Remover o mural',
+      perigo: true,
+      corpo: (
+        <p>
+          O histórico acumulado deste mural é apagado — as anotações da daily, as etiquetas e o
+          arquivo das sprints encerradas. A conversa no Teams não é tocada.
+        </p>
+      ),
+      aoConfirmar: () => void removerMesmo(m),
+    });
+  }
+
+  async function removerMesmo(m: MuralNaLista) {
     try {
       await api.removerMural(m.id);
       await carregar();
@@ -85,16 +116,30 @@ export function Home() {
 
   // Encerrar tira do quadro o que já terminou e guarda no arquivo da sprint.
   // Nada é apagado — é de lá que o dashboard e os painéis leem o histórico.
-  async function encerrarSprint(m: MuralNaLista) {
+  function encerrarSprint(m: MuralNaLista) {
     if (!m.sprint) return;
     const terminadas = m.totais.feito + m.totais.meu;
-    const confirmado = window.confirm(
-      `Encerrar a ${m.sprint.nome} em "${m.nome}"?\n\n` +
-        `${terminadas} card(s) de Concluído e de Concluído por mim saem do quadro e vão para o ` +
-        'arquivo desta sprint. Nada é apagado: o dashboard e os painéis leem de lá, com as ' +
-        'anotações da daily.\n\nA sprint seguinte começa hoje.',
-    );
-    if (!confirmado) return;
+    setPedido({
+      titulo: `Encerrar a ${m.sprint.nome} em "${m.nome}"?`,
+      rotulo: 'Encerrar a sprint',
+      corpo: (
+        <>
+          <p>
+            <strong>{terminadas}</strong> card(s) de <em>Concluído</em> e de{' '}
+            <em>Concluído por mim</em> saem do quadro e vão para o arquivo desta sprint.
+          </p>
+          <p>
+            Nada é apagado: o dashboard e os painéis leem de lá, com as anotações da daily inteiras.
+            A sprint seguinte começa hoje.
+          </p>
+        </>
+      ),
+      aoConfirmar: () => void encerrarMesmo(m),
+    });
+  }
+
+  async function encerrarMesmo(m: MuralNaLista) {
+    if (!m.sprint) return;
     setErro(null);
     try {
       const r = await api.encerrarSprint(m.id);
@@ -230,6 +275,8 @@ export function Home() {
           </Link>
         ))}
       </div>
+
+      <DialogoDeConfirmacao pedido={pedido} aoCancelar={() => setPedido(null)} />
 
       {editandoSprint && (
         <DialogoDeSprint

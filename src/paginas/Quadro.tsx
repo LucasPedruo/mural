@@ -11,6 +11,10 @@ import {
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
 import { DialogoDeColuna } from '../componentes/DialogoDeColuna';
+import {
+  DialogoDeConfirmacao,
+  type PedidoDeConfirmacao,
+} from '../componentes/DialogoDeConfirmacao';
 import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
@@ -126,6 +130,9 @@ export function Quadro() {
   // por qualquer um dos dois cabeçalhos: escolher uma sem ver a outra é o que
   // fazia a regra de "não podem ser iguais" chegar como erro em vez de contexto.
   const [editandoEmojis, setEditandoEmojis] = useState(false);
+  // O que se pergunta antes de apagar. Um estado só: apagar um card e excluir
+  // uma coluna nunca acontecem ao mesmo tempo.
+  const [pedido, setPedido] = useState<PedidoDeConfirmacao | null>(null);
   const [checks, setChecks] = useState<string[]>([]);
 
 
@@ -557,14 +564,31 @@ export function Quadro() {
     }
   }
 
-  async function apagar(task: Task) {
-    const confirmado = window.confirm(
-      `Apagar "${task.summary}" de vez?\n\n` +
-        'O card sai do histórico e a mensagem entra na lista de arquivados: nenhuma ' +
-        'atualização vai trazê-la de volta, mesmo que ela continue no Teams.\n\n' +
-        'Isto não tem como desfazer pela interface.',
-    );
-    if (!confirmado) return;
+  function apagar(task: Task) {
+    setPedido({
+      titulo: 'Apagar de vez?',
+      rotulo: 'Apagar de vez',
+      perigo: true,
+      corpo: (
+        <>
+          {/* O texto do card na pergunta, e não só o título do diálogo: com o
+              card já sumindo atrás do modal, é a última chance de conferir que
+              o que vai embora é o que você acha que é. */}
+          <p className="citacao-do-card">{task.summary}</p>
+          <p>
+            O card sai do histórico e a mensagem entra na lista de arquivados: nenhuma atualização
+            vai trazê-la de volta, mesmo que ela continue no Teams.
+          </p>
+          <p>
+            <strong>Isto não tem como desfazer pela interface.</strong>
+          </p>
+        </>
+      ),
+      aoConfirmar: () => void apagarMesmo(task),
+    });
+  }
+
+  async function apagarMesmo(task: Task) {
     setErro(null);
     try {
       const r = await api.apagar(muralId, task.id);
@@ -600,18 +624,35 @@ export function Quadro() {
   // Excluir leva os cards junto, e não tem volta: eles saem do arquivo e as
   // mensagens entram na lista de arquivados, para nenhuma leitura futura as
   // ressuscitar. Por isso o número vai na frente, na pergunta.
-  async function excluirColuna(coluna: ColunaPersonalizada) {
+  function excluirColuna(coluna: ColunaPersonalizada) {
     const dentro = tasks.filter((t) => t.coluna === coluna.id).length;
-    const confirmado = window.confirm(
-      `Excluir a coluna "${coluna.nome}"?\n\n` +
-        (dentro === 0
-          ? 'Ela está vazia — nenhum card é afetado.'
-          : `Os ${dentro} card(s) que estão nela são APAGADOS junto, de vez. ` +
-            'Eles saem do histórico e as mensagens entram na lista de arquivados: ' +
-            'nenhuma atualização vai trazê-las de volta, mesmo que continuem no Teams.') +
-        '\n\nIsto não tem como desfazer pela interface.',
-    );
-    if (!confirmado) return;
+    setPedido({
+      titulo: `Excluir a coluna "${coluna.nome}"?`,
+      rotulo: dentro === 0 ? 'Excluir a coluna' : `Excluir e apagar ${dentro}`,
+      perigo: dentro > 0,
+      corpo:
+        dentro === 0 ? (
+          <p>Ela está vazia — nenhum card é afetado.</p>
+        ) : (
+          <>
+            <p>
+              Os <strong>{dentro}</strong> card(s) que estão nela são <strong>apagados</strong>{' '}
+              junto, de vez.
+            </p>
+            <p>
+              Eles saem do histórico e as mensagens entram na lista de arquivados: nenhuma
+              atualização vai trazê-las de volta, mesmo que continuem no Teams.
+            </p>
+            <p>
+              <strong>Isto não tem como desfazer pela interface.</strong>
+            </p>
+          </>
+        ),
+      aoConfirmar: () => void excluirColunaMesmo(coluna),
+    });
+  }
+
+  async function excluirColunaMesmo(coluna: ColunaPersonalizada) {
     setErro(null);
     try {
       const r = await api.excluirColuna(muralId, coluna.id);
@@ -1066,6 +1107,8 @@ export function Quadro() {
         />
       )}
 
+      <DialogoDeConfirmacao pedido={pedido} aoCancelar={() => setPedido(null)} />
+
       {editandoEmojis && (
         <DialogoDeEmojis
           emojiFazendo={emojiFazendo}
@@ -1197,7 +1240,7 @@ export function Quadro() {
                   aoSeparar={(t) => void separar(t)}
                   aoEtiquetar={setEtiquetando}
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
-                  aoApagar={(t) => void apagar(t)}
+                  aoApagar={apagar}
                   aoSoltarDaColuna={(t) => void soltarDaColuna(t)}
                   colapsados={cardsColapsados}
                   aoColapsarCartao={colapsarCartao}

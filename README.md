@@ -113,6 +113,18 @@ botão diz quantas são; as anotadas saem uma a uma, pelo ícone do item.
 O histórico é do navegador, por mural. É relato da sua sessão, não dado do
 quadro — o servidor não teria o que fazer com ele.
 
+**Nenhuma pergunta do Mural usa a caixa do navegador.** As cinco confirmações —
+apagar um card, excluir uma coluna, remover um mural, encerrar a sprint, refazer
+a configuração — são diálogos da própria interface. O `window.confirm` trava a
+aba enquanto está aberto, ignora o tema, só aceita texto corrido (nada de
+negrito no número que é a informação principal da frase) e, a partir do
+segundo, o navegador oferece "impedir que esta página crie diálogos" — um botão
+que desliga em silêncio a confirmação de um gesto irreversível.
+
+Cancelar é sempre o padrão: Escape fecha, o clique fora fecha, e o foco começa
+em *Cancelar*. O botão que faz a coisa diz o que ela é ("Excluir e apagar 3"),
+nunca "OK", e fica vermelho quando não tem volta.
+
 **Tudo o que se faz num card mora no menu ⋯** dele. Eram sete botões disputando o
 canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação tem
 ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de

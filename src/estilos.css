@@ -253,6 +253,20 @@ button.perigo:hover:not(:disabled) {
   border-color: var(--text-danger);
 }
 
+/* O botao que confirma um gesto irreversivel. Cheio, como o primario — ele E a
+   acao principal do dialogo — mas vermelho, porque o que ele faz nao volta. */
+button.perigoso {
+  background: var(--color-danger-500);
+  border-color: var(--color-danger-500);
+  color: var(--color-neutral-0);
+  font-weight: 600;
+}
+button.perigoso:hover:not(:disabled) {
+  background: var(--color-danger-600);
+  border-color: var(--color-danger-600);
+  color: var(--color-neutral-0);
+}
+
 /* ---- badges (rounded-full, semibold, 10px — igual ao design system) ---- */
 .badge {
   display: inline-flex;

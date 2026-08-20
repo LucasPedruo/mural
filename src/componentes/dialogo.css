@@ -120,3 +120,37 @@
 .cores-de-coluna .amostra-cor.escolhida {
   border-color: var(--cor);
 }
+
+/* O corpo de uma confirmação. Parágrafos curtos e um número em negrito no meio:
+   é o número que faz a pergunta ser respondível, e o `window.confirm` não sabia
+   colocá-lo em negrito. */
+.corpo-confirmacao {
+  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.corpo-confirmacao p {
+  margin: 0 0 10px;
+}
+.corpo-confirmacao p:last-child {
+  margin-bottom: 0;
+}
+.corpo-confirmacao strong {
+  color: var(--text-primary);
+}
+
+/* O texto do card dentro da pergunta de apagar. Recuado e em itálico: é uma
+   citação do que vai sumir, não mais uma frase do diálogo. */
+.corpo-confirmacao .citacao-do-card {
+  padding: 9px 12px;
+  border-left: 3px solid var(--marca-aberto);
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  font-style: italic;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow-y: auto;
+}
