@@ -118,19 +118,46 @@
   align-items: flex-start;
   gap: 16px;
   padding: 20px 24px 40px;
+  /* Com largura fixa a fila passa da tela, e passar da tela e o comportamento
+     certo: o quadro rola na horizontal em vez de espremer as colunas ate elas
+     deixarem de caber um card. A barra fica sempre visivel — barra que so
+     aparece no hover esconde que existe mais quadro a direita. */
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior-x: contain;
 }
 
+.colunas::-webkit-scrollbar {
+  height: 10px;
+}
+.colunas::-webkit-scrollbar-track {
+  background: transparent;
+}
+.colunas::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid var(--bg-app);
+}
+.colunas::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Largura FIXA, sem crescer. Deixar a coluna dividir a tela sobrando parecia
+   aproveitar o espaco, mas com tres colunas num monitor largo cada card virava
+   uma faixa de 500px com quatro palavras em cima — e a distancia entre o texto e
+   o rodape passava a ser maior que o card. Um quadro se le em coluna estreita;
+   o que sobra na direita e espaco, nao desperdicio. */
 .colunas > .coluna {
-  /* Cresce para dividir a tela, mas nunca encolhe abaixo do legivel. */
-  flex: 1 0 232px;
-  min-width: 232px;
+  flex: 0 0 268px;
+  width: 268px;
 }
 
 /* 46px cabe o ponto de cor, a contagem e o rotulo de pe. */
 .colunas > .coluna.colapsada {
   flex: 0 0 46px;
-  min-width: 46px;
+  width: 46px;
 }
 
 /* Coluna em transito: ela sai do fluxo e precisa parecer levantada da mesa. */
@@ -144,24 +171,25 @@
 /* O botão de criar coluna fica no fim da fila, com a largura de uma coluna
    colapsada: ele é um lugar vago, e desenhá-lo do tamanho de uma coluna cheia
    faria o quadro parecer ter uma coluna vazia a mais. */
+/* O botao de criar coluna fica no fim da fila. O rotulo alinha em cima, na
+   altura do cabecalho das colunas ao lado: centralizado no meio de uma caixa
+   alta ele flutuava sozinho, longe de tudo que se le naquela linha. */
 .colunas .nova-coluna {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  flex: 0 0 132px;
-  min-width: 132px;
-  align-self: stretch;
-  min-height: 92px;
-  padding: 14px 10px;
+  justify-content: flex-start;
+  gap: 7px;
+  flex: 0 0 156px;
+  width: 156px;
+  padding: 12px 14px;
   border: 1px dashed var(--border-strong);
   border-radius: 12px;
   background: none;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.35;
-  text-align: center;
+  text-align: left;
+  white-space: nowrap;
 }
 .colunas .nova-coluna:hover {
   border-color: var(--marca-meu);

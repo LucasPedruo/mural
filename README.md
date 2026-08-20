@@ -42,8 +42,15 @@ navegador não pode fazer coluna desaparecer do quadro.
 
 As colunas ficam numa **fila única que rola no horizontal**, sem quebrar linha: é
 o que o arraste entende como lista, e é o que faz um quadro parecer um quadro em
-vez de duas fileiras de colunas. Quem tem tela pequena colapsa o que não está
-usando — foi para isso que o colapsar existe.
+vez de duas fileiras de colunas.
+
+Elas têm **largura fixa**. Deixá-las dividir a tela sobrando parecia aproveitar o
+espaço, mas com três colunas num monitor largo cada card virava uma faixa de
+500px com quatro palavras em cima, e a distância entre o texto e o rodapé passava
+a ser maior que o próprio card. Um quadro se lê em coluna estreita; o que sobra à
+direita é espaço, não desperdício. Quando a fila passa da tela, ela rola — e a
+barra fica visível, porque barra que só aparece no hover esconde que existe mais
+quadro adiante. Quem tem tela pequena colapsa o que não está usando.
 
 **Você pode criar colunas suas**, no "+ nova coluna" no fim da fila. Elas são de
 outra natureza que as seis de cima: as seis são **regras** — `statusDe()` calcula
