@@ -96,3 +96,27 @@
 .modal.largo {
   max-width: 560px;
 }
+
+/* As seis cores de uma coluna sua. Bolinhas e não um <select>: a escolha é
+   visual, e o nome da cor não diz nada que a cor não diga melhor. */
+.cores-de-coluna {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cores-de-coluna .amostra-cor {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: var(--cor);
+  box-shadow: inset 0 0 0 2px var(--bg-surface);
+}
+.cores-de-coluna .amostra-cor:hover {
+  border-color: var(--border-strong);
+}
+.cores-de-coluna .amostra-cor.escolhida {
+  border-color: var(--cor);
+}

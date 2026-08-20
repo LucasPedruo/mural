@@ -25,7 +25,9 @@ export interface Mural {
 }
 
 export interface MuralNaLista extends Mural {
-  totais: Record<ColunaId, number>;
+  /** As seis do Teams, mais `suas` — os cards presos em colunas que você criou.
+   *  Sem essa chave a soma da linha não fecharia com o quadro. */
+  totais: Record<ColunaId, number> & { suas: number };
   foraDeAlcance: number;
   /** A sprint corrente. Vem na listagem porque é daqui que ela passa a ser
    *  definida e encerrada — o quadro só a mostra. */
@@ -101,6 +103,11 @@ export interface Task {
   /** Quem resolveu, quando não foi você. Exclusivo com `meu`: o crédito é de uma
    *  pessoa só, senão o mesmo card apareceria em duas colunas. */
   feitoPor: FeitoPorOutro | null;
+  /** A coluna SUA em que você prendeu este card, se prendeu. Vence a regra do
+   *  Teams: foi um gesto explícito, e mais recente que qualquer reação. O
+   *  `status` continua sendo atualizado por baixo — é o que faz soltar o card
+   *  devolvê-lo na hora à coluna que o canal manda, sem nova leitura. */
+  coluna: string | null;
   /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */
@@ -318,6 +325,41 @@ export interface RespostaPainel {
     diasAtivos: number;
     arquivadas: number;
   };
+}
+
+// ------------------------------------------------------------- colunas suas
+
+/** Uma coluna que você criou.
+ *
+ *  As seis do quadro não são listas, são **regras**: `statusDe` calcula a coluna
+ *  a partir da reação no Teams. Por isso elas não se criam nem se apagam —
+ *  apagar "Backlog" seria apagar a pergunta "o que ninguém pegou".
+ *
+ *  Estas são o contrário: **não têm regra**. São lugares, e o único jeito de um
+ *  card entrar é você arrastar. É a única parte do quadro que não responde ao
+ *  Teams, e é de propósito: serve para o passo do SEU processo que o canal não
+ *  conhece. */
+export interface ColunaPersonalizada {
+  id: string;
+  nome: string;
+  /** Cor nomeada, não hex: o quadro tem tema claro e escuro, e um valor cravado
+   *  ficaria ilegível num dos dois. O nome vira variável de CSS na tela. */
+  cor: CorDeColuna;
+  criadaEm: string;
+}
+
+export type CorDeColuna = 'roxo' | 'ciano' | 'rosa' | 'lima' | 'ambar' | 'cinza';
+
+export const CORES_DE_COLUNA: CorDeColuna[] = ['roxo', 'ciano', 'rosa', 'lima', 'ambar', 'cinza'];
+
+export interface RespostaColunas {
+  colunas: ColunaPersonalizada[];
+}
+
+export interface ResultadoExclusaoDeColuna extends RespostaColunas, RespostaTasks {
+  /** Quantos cards foram apagados junto — a coluna não é um esconderijo. */
+  apagadas: number;
+  nome: string;
 }
 
 // ------------------------------------------------------------- notificações

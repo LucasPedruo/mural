@@ -1,10 +1,10 @@
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import type { ReactNode } from 'react';
 
-import { CORES_DE_STATUS } from '../rotulos';
-import type { ColunaId, Task } from '../tipos';
+import type { Task } from '../tipos';
 import { CartaoDeTask } from './CartaoDeTask';
 import { IconeAbaixo, IconeColapsar, IconePegar } from './icones';
+import { MenuFlutuante, type ItemDeMenu } from './MenuFlutuante';
 import './coluna.css';
 
 /** Os dois tipos de arraste do quadro. O dnd só deixa soltar um Draggable num
@@ -22,8 +22,14 @@ export interface GrupoDaColuna {
 }
 
 interface Props {
-  status: ColunaId;
+  /** O id da coluna: um dos seis do Teams, ou o de uma coluna sua. É o
+   *  `droppableId` do arraste, então precisa ser único no quadro. */
+  status: string;
   rotulo: string;
+  /** A cor da coluna, já como valor de CSS. Vem de fora porque as seis do Teams
+   *  a tiram do status e as suas a tiram do que você escolheu — a coluna não
+   *  precisa saber de qual das duas listas ela é. */
+  cor: string;
   /** Sem grupos: uma lista corrida. Com grupos: um cabeçalho por bloco. */
   grupos: GrupoDaColuna[];
   /** Posição na fila de colunas. É o que o dnd usa para saber onde ela está
@@ -42,10 +48,14 @@ interface Props {
   /** Controle próprio no cabeçalho — hoje só a coluna da daily usa, para
    *  mostrar e trocar a reação que marca os cards como seus. */
   acessorio?: ReactNode;
+  /** O menu de "…" do cabeçalho. Só as colunas suas têm: renomear e excluir não
+   *  fazem sentido em coluna que é regra do Teams. */
+  menu?: ItemDeMenu[];
   aoAbrir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoCreditarOutro: (task: Task) => void;
   aoTirarCredito: (task: Task) => void;
+  aoSoltarDaColuna: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
@@ -61,10 +71,12 @@ interface Props {
 export function Coluna({
   status,
   rotulo,
+  cor,
   grupos,
   indiceDaColuna,
   ultimaVisita,
   acessorio,
+  menu,
   vazio = 'nada aqui',
   colapsada,
   aoColapsar,
@@ -74,6 +86,7 @@ export function Coluna({
   aoMarcarComoMeu,
   aoCreditarOutro,
   aoTirarCredito,
+  aoSoltarDaColuna,
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
@@ -120,7 +133,7 @@ export function Coluna({
                 title={`Expandir ${rotulo} — arraste para mudar a ordem`}
                 {...colunaFornecida.dragHandleProps}
               >
-                <span className="ponto" style={{ background: CORES_DE_STATUS[status] }} />
+                <span className="ponto" style={{ background: cor }} />
                 <IconeAbaixo tamanho={13} />
                 <span className="contagem">{total}</span>
                 <span className="rotulo-de-pe">{rotulo}</span>
@@ -152,11 +165,14 @@ export function Coluna({
                 <IconePegar tamanho={13} />
               </span>
               <span className="selo">
-                <span className="ponto" style={{ background: CORES_DE_STATUS[status] }} />
+                <span className="ponto" style={{ background: cor }} />
                 {rotulo}
               </span>
               {acessorio}
               <span className="contagem">{total}</span>
+              {menu && menu.length > 0 && (
+                <MenuFlutuante itens={menu} rotulo={`Ações da coluna ${rotulo}`} />
+              )}
               <button
                 className="colapsar"
                 onClick={() => aoColapsar(true)}
@@ -201,6 +217,7 @@ export function Coluna({
                           aoMarcarComoMeu={aoMarcarComoMeu}
                           aoCreditarOutro={aoCreditarOutro}
                           aoTirarCredito={aoTirarCredito}
+                          aoSoltarDaColuna={aoSoltarDaColuna}
                           aoDesmarcarComoMeu={aoDesmarcarComoMeu}
                           aoSelecionar={aoSelecionar}
                           aoSeparar={aoSeparar}

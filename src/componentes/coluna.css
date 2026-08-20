@@ -219,3 +219,14 @@
 .coluna.colapsada .faixa.recebendo {
   background: var(--bg-brand-subtle);
 }
+
+/* O menu de "…" no cabeçalho de uma coluna sua. O gatilho é o mesmo do card,
+   mas aqui ele mora dentro de uma alça de arraste: sem parar a propagação, o
+   clique começaria a arrastar a coluna em vez de abrir o menu. */
+.coluna header .menu-flutuante {
+  flex: none;
+  margin-left: -2px;
+}
+.coluna header .menu-flutuante .gatilho {
+  height: 20px;
+}

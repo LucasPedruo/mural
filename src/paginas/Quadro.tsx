@@ -10,19 +10,32 @@ import {
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
+import { DialogoDeColuna } from '../componentes/DialogoDeColuna';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { Notificacoes } from '../componentes/Notificacoes';
 import { Toasts } from '../componentes/Toasts';
 import {
+  IconeApagar,
+  IconeEditar,
   IconeEtiqueta,
+  IconeMais,
   IconePessoa,
   IconeVoltar,
 } from '../componentes/icones';
-import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
+import {
+  COLUNAS,
+  CORES_DE_STATUS,
+  dataDoDiaISO,
+  diaLocal,
+  rotuloDaColuna,
+  rotuloDoDia,
+} from '../rotulos';
 import type {
   ColunaId,
+  ColunaPersonalizada,
+  CorDeColuna,
   Mural,
   Notificacao,
   Progresso,
@@ -90,6 +103,13 @@ export function Quadro() {
 
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
 
+  // As colunas que você criou. Diferente das seis, elas não têm regra: quem põe
+  // card ali é você, arrastando. Moram no servidor porque são do quadro — a
+  // ordem e o colapso, que são de tela, continuam no navegador.
+  const [colunasSuas, setColunasSuas] = useState<ColunaPersonalizada[]>([]);
+  const [editandoColuna, setEditandoColuna] = useState<ColunaPersonalizada | null>(null);
+  const [criandoColuna, setCriandoColuna] = useState(false);
+
 
   // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
   // está sendo etiquetada e o filtro ligado.
@@ -113,13 +133,12 @@ export function Quadro() {
   // vice-versa), e uma lista desatualizada no navegador não pode fazer coluna
   // desaparecer do quadro.
   const chaveOrdem = `mural:ordem-das-colunas:${muralId}`;
-  const [ordem, setOrdem] = useState<ColunaId[]>(() => {
+  const [ordem, setOrdem] = useState<string[]>(() => {
     try {
-      const salva = JSON.parse(localStorage.getItem(chaveOrdem) || '[]') as ColunaId[];
-      const conhecidas = salva.filter((c) => COLUNAS.includes(c));
-      return [...conhecidas, ...COLUNAS.filter((c) => !conhecidas.includes(c))];
+      const salva = JSON.parse(localStorage.getItem(chaveOrdem) || '[]') as string[];
+      return Array.isArray(salva) ? salva : [];
     } catch {
-      return [...COLUNAS];
+      return [];
     }
   });
 
@@ -145,13 +164,13 @@ export function Quadro() {
   // *Fora do escopo* nasce colapsada: ela é onde se põe o que não se quer ver, e
   // aberta por padrão roubaria largura das colunas que são trabalho.
   const chaveColapsadas = `mural:colunas-colapsadas:${muralId}`;
-  const [colapsadas, setColapsadas] = useState<Set<ColunaId>>(() => {
+  const [colapsadas, setColapsadas] = useState<Set<string>>(() => {
     const salvo = localStorage.getItem(chaveColapsadas);
-    if (!salvo) return new Set<ColunaId>(['ignorada']);
+    if (!salvo) return new Set<string>(['ignorada']);
     try {
-      return new Set<ColunaId>(JSON.parse(salvo) as ColunaId[]);
+      return new Set<string>(JSON.parse(salvo) as string[]);
     } catch {
-      return new Set<ColunaId>(['ignorada']);
+      return new Set<string>(['ignorada']);
     }
   });
 
@@ -162,13 +181,15 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, etiquetas] = await Promise.all([
+      const [tarefas, info, custo, ciclo, etiquetas, suas] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
         api.tags(muralId),
+        api.colunas(muralId),
       ]);
+      setColunasSuas(suas.colunas);
       setTags(etiquetas.tags);
       setMural(info.mural);
       setTasks(tarefas.tasks);
@@ -556,13 +577,66 @@ export function Quadro() {
   }
 
   function reordenarColunas(de: number, para: number) {
-    setOrdem((atual) => {
-      const nova = [...atual];
-      const [movida] = nova.splice(de, 1);
-      nova.splice(para, 0, movida);
-      localStorage.setItem(chaveOrdem, JSON.stringify(nova));
-      return nova;
-    });
+    const nova = [...todasAsColunas];
+    const [movida] = nova.splice(de, 1);
+    nova.splice(para, 0, movida);
+    localStorage.setItem(chaveOrdem, JSON.stringify(nova));
+    setOrdem(nova);
+  }
+
+  // ---- colunas suas ----------------------------------------------------
+
+  async function salvarColuna(dados: { nome: string; cor: CorDeColuna }) {
+    const alvo = editandoColuna;
+    setEditandoColuna(null);
+    setCriandoColuna(false);
+    setErro(null);
+    try {
+      const r = await api.salvarColuna(muralId, { ...dados, id: alvo?.id });
+      setColunasSuas(r.colunas);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // Excluir leva os cards junto, e não tem volta: eles saem do arquivo e as
+  // mensagens entram na lista de arquivados, para nenhuma leitura futura as
+  // ressuscitar. Por isso o número vai na frente, na pergunta.
+  async function excluirColuna(coluna: ColunaPersonalizada) {
+    const dentro = tasks.filter((t) => t.coluna === coluna.id).length;
+    const confirmado = window.confirm(
+      `Excluir a coluna "${coluna.nome}"?\n\n` +
+        (dentro === 0
+          ? 'Ela está vazia — nenhum card é afetado.'
+          : `Os ${dentro} card(s) que estão nela são APAGADOS junto, de vez. ` +
+            'Eles saem do histórico e as mensagens entram na lista de arquivados: ' +
+            'nenhuma atualização vai trazê-las de volta, mesmo que continuem no Teams.') +
+        '\n\nIsto não tem como desfazer pela interface.',
+    );
+    if (!confirmado) return;
+    setErro(null);
+    try {
+      const r = await api.excluirColuna(muralId, coluna.id);
+      setColunasSuas(r.colunas);
+      setTasks(r.tasks);
+      if (r.apagadas > 0) {
+        avisar(`coluna "${r.nome}" excluída — ${r.apagadas} card(s) apagados junto`);
+      }
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // Soltar o card de volta ao fluxo do Teams. Não precisa de nova leitura: o
+  // `status` nunca parou de ser atualizado por baixo enquanto ele estava preso.
+  async function soltarDaColuna(task: Task) {
+    setErro(null);
+    try {
+      const r = await api.prenderNaColuna(muralId, task.id, null);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
   }
 
   function fecharAvisoFora(quantas: number) {
@@ -580,7 +654,7 @@ export function Quadro() {
     });
   }
 
-  function colapsar(coluna: ColunaId, fechar: boolean) {
+  function colapsar(coluna: string, fechar: boolean) {
     setColapsadas((atual) => {
       const proximo = new Set(atual);
       if (fechar) proximo.add(coluna);
@@ -642,9 +716,40 @@ export function Quadro() {
       return;
     }
 
-    const coluna = destino.droppableId as ColunaId;
+    const coluna = destino.droppableId;
     const task = tasks.find((t) => t.id === resultado.draggableId);
     if (!task) return;
+
+    // Uma coluna sua é o único destino que aceita QUALQUER card — inclusive o
+    // que o Teams ainda acompanha. É a diferença que a torna útil: prender ali
+    // é dizer "este saiu do fluxo do canal por enquanto". O `status` continua
+    // sendo atualizado por baixo, então soltar devolve o card na hora.
+    if (colunasSuas.some((c) => c.id === coluna)) {
+      if (task.coluna === coluna) return;
+      setErro(null);
+      const antes = tasks;
+      setTasks((atual) =>
+        atual.map((t) => (t.id === task.id ? { ...t, coluna, ignorada: null } : t)),
+      );
+      try {
+        const r = await api.prenderNaColuna(muralId, task.id, coluna);
+        setTasks(r.tasks);
+      } catch (e) {
+        setTasks(antes);
+        setErro((e as Error).message);
+      }
+      return;
+    }
+
+    // Saindo de uma coluna sua para uma das seis: solta primeiro, senão ele
+    // voltaria sozinho no render seguinte. Se o destino for a coluna que a
+    // reação já manda, soltar é tudo o que precisa acontecer.
+    if (task.coluna) {
+      await soltarDaColuna(task);
+      if (coluna !== 'meu' && coluna !== 'ignorada' && (!task.podeMover || task.status === coluna)) {
+        return;
+      }
+    }
 
     // Soltar na coluna da daily não muda o status: abre a anotação. É a mesma
     // coisa que o botão "fiz" do card faz, só que pelo gesto.
@@ -701,7 +806,9 @@ export function Quadro() {
     // recusar, o estado volta ao que era e o motivo aparece na tela.
     const anterior = tasks;
     setTasks((atual) =>
-      atual.map((t) => (t.id === task.id ? { ...t, status: coluna, movidoAMao: true } : t)),
+      atual.map((t) =>
+        t.id === task.id ? { ...t, status: coluna as Status, movidoAMao: true } : t,
+      ),
     );
     setErro(null);
 
@@ -740,10 +847,20 @@ export function Quadro() {
   // Card marcado como seu sai da coluna do Teams: o status real continua no
   // dado (e visível como badge no card), mas o card mora numa coluna só —
   // senão a mesma task apareceria duas vezes no quadro.
+  // Todas as colunas do quadro, na sua ordem. O que está salvo é validado na
+  // leitura: uma coluna sua pode ter sido excluída noutra aba, e uma lista velha
+  // no navegador não pode fazer coluna desaparecer nem ressuscitar.
+  const todasAsColunas = useMemo(() => {
+    const ids = [...COLUNAS, ...colunasSuas.map((c) => c.id)] as string[];
+    const conhecidas = ordem.filter((c) => ids.includes(c));
+    return [...conhecidas, ...ids.filter((c) => !conhecidas.includes(c))];
+  }, [ordem, colunasSuas]);
+
   const grupos = useMemo(() => {
-    const porColuna: Record<ColunaId, Task[]> = {
+    const porColuna: Record<string, Task[]> = {
       aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
+    for (const c of colunasSuas) porColuna[c.id] = [];
     // Os filtros cortam o quadro inteiro: as perguntas que eles respondem — "o
     // que existe de Financeiro", "o que o Bernardo pediu" — não têm coluna.
     const visiveis = tasks.filter(
@@ -756,6 +873,10 @@ export function Quadro() {
       // Ignorada vence a marca de "fiz": se você decidiu que não é sua, ela não
       // aparece na daily por causa de um clique antigo.
       if (t.ignorada) porColuna.ignorada.push(t);
+      // Preso numa coluna sua: vence a regra do Teams, porque foi um gesto seu e
+      // mais recente que qualquer reação. Se a coluna não existe mais — excluída
+      // noutra aba — o card volta a valer pelo status, em vez de sumir da tela.
+      else if (t.coluna && porColuna[t.coluna]) porColuna[t.coluna].push(t);
       else if (t.meu) porColuna.meu.push(t);
       // Creditada a outra pessoa mora em "Concluído" mesmo que o
       // check ainda não tenha aparecido no Teams: alguém disse aqui que está
@@ -774,8 +895,13 @@ export function Quadro() {
     // Na daily o mais recente é o que você conta primeiro.
     porColuna.meu.sort((a, b) => (b.meu?.em ?? '').localeCompare(a.meu?.em ?? ''));
 
-    const resultado = {} as Record<ColunaId, GrupoDaColuna[]>;
-    for (const c of COLUNAS) {
+    // Nas suas, o mais recente em cima: você acabou de pôr o card ali.
+    for (const c of colunasSuas) {
+      porColuna[c.id].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+    }
+
+    const resultado: Record<string, GrupoDaColuna[]> = {};
+    for (const c of Object.keys(porColuna)) {
       resultado[c] = [{ chave: c, rotulo: '', tasks: porColuna[c] }];
     }
 
@@ -791,7 +917,7 @@ export function Quadro() {
     resultado.meu = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro, autorFiltro]);
+  }, [tasks, tagFiltro, autorFiltro, colunasSuas]);
 
   // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
   // quem manda mais demanda é quem você procura primeiro.
@@ -930,6 +1056,17 @@ export function Quadro() {
         />
       )}
 
+      {(criandoColuna || editandoColuna) && (
+        <DialogoDeColuna
+          coluna={editandoColuna}
+          aoSalvar={(d) => void salvarColuna(d)}
+          aoCancelar={() => {
+            setCriandoColuna(false);
+            setEditandoColuna(null);
+          }}
+        />
+      )}
+
       {creditando && (
         <DialogoDeFeitoPorOutro
           task={creditando}
@@ -1013,16 +1150,42 @@ export function Quadro() {
         <Droppable droppableId="colunas" type={TIPO_COLUNA} direction="horizontal">
           {(fornecido) => (
             <main className="colunas" ref={fornecido.innerRef} {...fornecido.droppableProps}>
-              {ordem.map((coluna, i) => (
+              {todasAsColunas.map((coluna, i) => {
+                const sua = colunasSuas.find((c) => c.id === coluna);
+                return (
                 <Coluna
                   key={coluna}
                   status={coluna}
                   indiceDaColuna={i}
-                  rotulo={rotuloDaColuna(coluna)}
-                  grupos={grupos[coluna]}
-                  vazio={vazioDaColuna(coluna, emojiMeu)}
+                  rotulo={sua ? sua.nome : rotuloDaColuna(coluna as ColunaId)}
+                  cor={sua ? `var(--coluna-${sua.cor})` : CORES_DE_STATUS[coluna as ColunaId]}
+                  grupos={grupos[coluna] ?? []}
+                  vazio={
+                    sua
+                      ? 'nada aqui — arraste um card para dentro; esta coluna não recebe sozinha'
+                      : vazioDaColuna(coluna as ColunaId, emojiMeu)
+                  }
                   colapsada={colapsadas.has(coluna)}
                   aoColapsar={(fechar) => colapsar(coluna, fechar)}
+                  menu={
+                    sua
+                      ? [
+                          {
+                            rotulo: 'Renomear',
+                            icone: <IconeEditar />,
+                            aoEscolher: () => setEditandoColuna(sua),
+                            dica: 'Nome e cor',
+                          },
+                          {
+                            rotulo: 'Excluir a coluna',
+                            icone: <IconeApagar />,
+                            aoEscolher: () => void excluirColuna(sua),
+                            perigo: true,
+                            dica: 'Apaga junto os cards que estão nela',
+                          },
+                        ]
+                      : undefined
+                  }
                   acessorio={
                     coluna === 'fazendo' ? (
                       <button
@@ -1063,11 +1226,24 @@ export function Quadro() {
                   aoEtiquetar={setEtiquetando}
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
                   aoApagar={(t) => void apagar(t)}
+                  aoSoltarDaColuna={(t) => void soltarDaColuna(t)}
                   colapsados={cardsColapsados}
                   aoColapsarCartao={colapsarCartao}
                 />
-              ))}
+                );
+              })}
               {fornecido.placeholder}
+
+              {/* Fora do Droppable de propósito: é um botão, não uma coluna, e
+                  arrastar uma coluna para depois dele não pode dar em nada. */}
+              <button
+                className="nova-coluna"
+                onClick={() => setCriandoColuna(true)}
+                title="Uma coluna sua, sem regra: só recebe o que você arrastar"
+              >
+                <IconeMais tamanho={16} />
+                nova coluna
+              </button>
             </main>
           )}
         </Droppable>

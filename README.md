@@ -45,6 +45,32 @@ o que o arraste entende como lista, e é o que faz um quadro parecer um quadro e
 vez de duas fileiras de colunas. Quem tem tela pequena colapsa o que não está
 usando — foi para isso que o colapsar existe.
 
+**Você pode criar colunas suas**, no "+ nova coluna" no fim da fila. Elas são de
+outra natureza que as seis de cima: as seis são **regras** — `statusDe()` calcula
+a coluna a partir da reação no Teams, e nenhum card é *posto* nelas. Por isso não
+se criam nem se apagam: apagar *Backlog* seria apagar a pergunta "o que ninguém
+pegou".
+
+Uma coluna sua é o contrário: **não tem regra**. É um lugar, e o único jeito de um
+card entrar é você arrastar. Serve para o passo do *seu* processo que o canal não
+conhece — "aguardando cliente", "em homologação".
+
+Ela é o único destino que aceita **qualquer** card, inclusive o que o Teams ainda
+acompanha — nas seis colunas o arraste é recusado, porque a reação de lá manda e a
+próxima leitura desfaria o movimento. Prender um card ali é dizer "este saiu do
+fluxo do canal por enquanto", e o card passa a mostrar o selo **fora do fluxo**. O
+`status` continua sendo atualizado por baixo a cada leitura, intocado: é o que faz
+*Devolver ao Teams*, no menu ⋯, recolocá-lo na hora na coluna que a reação manda,
+sem precisar de nova sincronização.
+
+**Excluir uma coluna sua apaga os cards que estão nela**, de vez — eles saem do
+histórico e as mensagens entram na lista de arquivados, então nenhuma atualização
+as traz de volta. O diálogo avisa com o número na frente. É o mesmo mecanismo do
+*Apagar de vez* de um card, e o segundo gesto irreversível do Mural.
+
+Encerrar a sprint **não** leva card preso numa coluna sua: ele está num passo do
+seu processo, não terminado — nem que o time já tenha dado o check no Teams.
+
 **Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
 fina com o rótulo de pé e a contagem. **Cada card também**: recolhido, ele mostra
 só o título e o rodapé, sem os prints, sem a continuação da rajada e sem a
@@ -614,6 +640,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais/<id>/tasks.json` | o histórico daquele mural, com as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — o dashboard e os painéis vivem daqui |
+| `murais/<id>/colunas.json` | as colunas que você criou: nome e cor |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `agentes.json` | qual agente de IA lê o Teams, e os ajustes dele |
 | `conta.json`, `chats.json` | cache do onboarding |

@@ -8,6 +8,9 @@ import type {
   MuralNaLista,
   Preferencias,
   RespostaAgentes,
+  ColunaPersonalizada,
+  ResultadoExclusaoDeColuna,
+  RespostaColunas,
   RespostaConsumo,
   RespostaDashboard,
   RespostaPainel,
@@ -126,6 +129,31 @@ export const api = {
       `/api/tags?mural=${muralId}`,
       json({ id, tags }),
     ),
+
+  // --- colunas suas ---
+  // Elas não têm regra: quem põe card ali é você, arrastando. Por isso a coluna
+  // mora no servidor (é do quadro, não da sua tela) e o card guarda em qual
+  // delas está preso.
+
+  colunas: (muralId: string) => pedir<RespostaColunas>(`/api/colunas?mural=${muralId}`),
+
+  salvarColuna: (muralId: string, dados: { id?: string; nome: string; cor?: string }) =>
+    pedir<RespostaColunas & { coluna: ColunaPersonalizada }>(
+      `/api/colunas?mural=${muralId}`,
+      json(dados),
+    ),
+
+  // Irreversível: leva os cards da coluna junto. Quem confirma é a interface,
+  // com o número na frente.
+  excluirColuna: (muralId: string, id: string) =>
+    pedir<ResultadoExclusaoDeColuna>(`/api/colunas?mural=${muralId}&id=${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Prender e soltar. Rota própria, e não `mover`: mover recusa card que o Teams
+  // acompanha, e prender existe justamente para tirar um desses do fluxo.
+  prenderNaColuna: (muralId: string, id: string, coluna: string | null) =>
+    pedir<RespostaTasks>(`/api/coluna?mural=${muralId}`, json({ id, coluna })),
 
   // --- sprint ---
 

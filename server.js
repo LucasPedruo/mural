@@ -165,6 +165,133 @@ function arquivoSprints(id) {
   return path.join(pastaDoMural(id), 'sprints.json');
 }
 
+function arquivoColunas(id) {
+  return path.join(pastaDoMural(id), 'colunas.json');
+}
+
+// --------------------------------------------------------- colunas suas
+//
+// As seis colunas do quadro nao sao listas: sao REGRAS. Nenhum card e posto
+// nelas — `statusDe` calcula a coluna a partir da reacao no Teams, e `meu` e
+// `ignorada` saem de campos seus. Por isso elas nao se criam nem se apagam:
+// apagar "Backlog" seria apagar a pergunta "o que ninguem pegou".
+//
+// As colunas daqui sao o contrario: NAO tem regra. Sao lugares, e o unico jeito
+// de um card entrar e voce arrastar. Isso as torna a unica parte do quadro que
+// nao responde ao Teams — e e de proposito, porque e para isso que servem: o
+// passo do SEU processo que o canal nao conhece.
+const MAX_COLUNAS = 8;
+const MAX_LETRAS_DA_COLUNA = 24;
+
+// Cores nomeadas, nao hex: o quadro tem tema claro e escuro, e um #7c3aed
+// gravado no disco ficaria ilegivel num dos dois. O nome vira variavel de CSS
+// na interface, que e quem sabe o tom certo de cada tema.
+const CORES_DE_COLUNA = ['roxo', 'ciano', 'rosa', 'lima', 'ambar', 'cinza'];
+
+function lerColunas(muralId) {
+  const c = lerJson(arquivoColunas(muralId), { colunas: [] });
+  return Array.isArray(c.colunas) ? c : { colunas: [] };
+}
+
+function gravarColunas(muralId, c) {
+  fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
+  gravarJsonAtomico(arquivoColunas(muralId), c);
+}
+
+function nomeDeColunaValido(valor) {
+  const nome = String(valor || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LETRAS_DA_COLUNA);
+  if (!nome) throw new Error('Dê um nome à coluna.');
+  return nome;
+}
+
+function criarColuna(muralId, corpo) {
+  const c = lerColunas(muralId);
+  if (c.colunas.length >= MAX_COLUNAS) {
+    throw new Error(
+      `O quadro ja tem ${MAX_COLUNAS} colunas suas. Uma fila que nao cabe na tela deixa de ser ` +
+      'um quadro — exclua uma antes de criar outra.'
+    );
+  }
+  const nome = nomeDeColunaValido(corpo.nome);
+  if (c.colunas.some((x) => x.nome.toLowerCase() === nome.toLowerCase())) {
+    throw new Error('Ja existe uma coluna sua com esse nome.');
+  }
+  const coluna = {
+    id: `c${Date.now().toString(36)}`,
+    nome,
+    cor: CORES_DE_COLUNA.includes(corpo.cor) ? corpo.cor : CORES_DE_COLUNA[c.colunas.length % CORES_DE_COLUNA.length],
+    criadaEm: new Date().toISOString(),
+  };
+  c.colunas.push(coluna);
+  gravarColunas(muralId, c);
+  return coluna;
+}
+
+function renomearColuna(muralId, id, corpo) {
+  const c = lerColunas(muralId);
+  const coluna = c.colunas.find((x) => x.id === String(id));
+  if (!coluna) throw new Error('Coluna desconhecida.');
+  if (corpo.nome !== undefined) {
+    const nome = nomeDeColunaValido(corpo.nome);
+    if (c.colunas.some((x) => x.id !== coluna.id && x.nome.toLowerCase() === nome.toLowerCase())) {
+      throw new Error('Ja existe uma coluna sua com esse nome.');
+    }
+    coluna.nome = nome;
+  }
+  if (corpo.cor !== undefined && CORES_DE_COLUNA.includes(corpo.cor)) coluna.cor = corpo.cor;
+  gravarColunas(muralId, c);
+  return coluna;
+}
+
+// Excluir leva os cards junto, e isso e irreversivel: eles saem do arquivo e as
+// mensagens entram na lista de arquivados, para nenhuma leitura futura as
+// ressuscitar. E a mesma maquina do "apagar de vez" de um card — nao existe
+// meia exclusao aqui, e a interface avisa antes com o numero na frente.
+function excluirColuna(muralId, id) {
+  const c = lerColunas(muralId);
+  const coluna = c.colunas.find((x) => x.id === String(id));
+  if (!coluna) throw new Error('Coluna desconhecida.');
+
+  const db = lerTasks(muralId);
+  if (!db.arquivados) db.arquivados = {};
+  let apagadas = 0;
+  for (const t of Object.values(db.tasks)) {
+    if (t.coluna !== coluna.id) continue;
+    if (t.origem !== 'manual') {
+      for (const m of mensagensDaTask(t)) db.arquivados[m.id] = `coluna:${coluna.nome}`;
+      db.arquivados[t.id] = `coluna:${coluna.nome}`;
+    }
+    delete db.tasks[t.id];
+    apagadas++;
+  }
+  gravarTasks(muralId, db);
+
+  c.colunas = c.colunas.filter((x) => x.id !== coluna.id);
+  gravarColunas(muralId, c);
+  return { apagadas, nome: coluna.nome };
+}
+
+/** Prender um card numa coluna sua, ou solta-lo de volta ao fluxo do Teams.
+ *
+ *  Diferente de `/api/mover`, que so aceita card fora de alcance: aqui o card
+ *  PODE estar sendo acompanhado pelo canal, e prende-lo e justamente dizer "este
+ *  saiu do fluxo do Teams por enquanto". O `status` continua sendo atualizado a
+ *  cada leitura, intocado — e por isso soltar o card o devolve na hora para a
+ *  coluna que a reacao mandar, sem precisar de nova sincronizacao. */
+function prenderNaColuna(muralId, id, colunaId) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  if (colunaId) {
+    const existe = lerColunas(muralId).colunas.some((x) => x.id === String(colunaId));
+    if (!existe) throw new Error('Coluna desconhecida.');
+    t.coluna = String(colunaId);
+  } else {
+    t.coluna = null;
+  }
+  gravarTasks(muralId, db);
+}
+
 // ------------------------------------------------------------------- sprints
 
 // A sprint aqui e so um ciclo com comeco e fim: o time nem precisa usar a
@@ -270,6 +397,10 @@ function encerrarSprint(muralId) {
   for (const t of Object.values(db.tasks)) {
     // Ignorada tambem sai do quadro no encerramento: ela ja foi decidida, e
     // arrastar a mesma lista de descartes de sprint em sprint nao serve a nada.
+    // Card preso numa coluna sua nao e "terminado": ele esta num passo do SEU
+    // processo, e encerrar a sprint nao pode arrancar de la o que voce ainda
+    // esta segurando — nem que o time ja tenha dado o check no Teams.
+    if (t.coluna) continue;
     if (t.status !== 'feito' && !t.meu && !t.feitoPor && !t.ignorada) continue;
     arquivadas.push({ ...t, sprint: s.atual.nome, arquivadaEm: agora });
     // Task sua nunca esteve no Teams: nao ha mensagem para o merge ressuscitar,
@@ -331,6 +462,10 @@ function tarefaConcluida(t) {
 // tudo; depois o credito (seu ou de outra pessoa); e so entao o status do Teams.
 function colunaDaTask(t) {
   if (t.ignorada) return 'ignorada';
+  // Uma coluna sua vence a regra do Teams: prender o card ali foi um gesto seu,
+  // explicito, e mais recente que qualquer reacao. O status continua sendo
+  // atualizado por baixo — e por isso soltar o card o devolve na hora.
+  if (t.coluna) return t.coluna;
   if (t.meu) return 'meu';
   if (t.feitoPor) return 'feito';
   return t.status || 'aberto';
@@ -460,10 +595,16 @@ const DIAS_DO_DASHBOARD = 30;
 function dashboardDoMural(muralId) {
   const { sprints, tasks } = historicoCompleto(muralId);
 
+  // As seis do Teams sempre aparecem, mesmo zeradas — "nada em Backlog" e uma
+  // resposta. As suas so entram se existirem, e um card preso numa coluna ja
+  // excluida nao pode sumir da conta: ele volta a valer pelo status do Teams.
   const porColuna = { aberto: 0, fazendo: 0, interagido: 0, feito: 0, meu: 0, ignorada: 0 };
+  for (const c of lerColunas(muralId).colunas) porColuna[c.id] = 0;
   for (const t of tasks) {
     const c = colunaDaTask(t);
     if (porColuna[c] !== undefined) porColuna[c]++;
+    else if (porColuna[t.status] !== undefined) porColuna[t.status]++;
+    else porColuna.aberto++;
   }
 
   // Quando a task foi concluida. So o que foi marcado AQUI tem data propria: o
@@ -863,6 +1004,7 @@ function tasksParaTela(muralId) {
     origem: t.origem === 'manual' ? 'manual' : 'teams',
     meu: t.meu || null,
     feitoPor: t.feitoPor || null,
+    coluna: t.coluna || null,
     ignorada: t.ignorada || null,
     tags: Array.isArray(t.tags) ? t.tags : [],
     mensagens: mensagensDaTask(t),
@@ -1943,7 +2085,7 @@ async function rotear(req, res) {
   if (p === '/api/murais' && req.method === 'GET') {
     const indice = lerIndice();
     const murais = indice.murais.map((m) => {
-      let totais = { aberto: 0, fazendo: 0, interagido: 0, feito: 0, meu: 0, ignorada: 0 };
+      let totais = { aberto: 0, fazendo: 0, interagido: 0, feito: 0, meu: 0, ignorada: 0, suas: 0 };
       let foraDeAlcance = 0;
       try {
         const db = lerTasks(m.id);
@@ -1952,6 +2094,9 @@ async function rotear(req, res) {
           // e a mesma regra do quadro, senao a home diria outro numero. Ignorada
           // vence tudo: ela nao esta em nenhuma coluna de trabalho.
           if (t.ignorada) totais.ignorada++;
+          // Preso numa coluna sua: conta so ali, senao a home diria um numero e
+          // o quadro mostraria outro.
+          else if (t.coluna) totais.suas++;
           else if (t.meu) totais.meu++;
           // Creditada a outra pessoa conta como concluida, igual ao quadro: o
           // status pode ainda ser 'aberto' porque ninguem deu o check no Teams,
@@ -2186,6 +2331,54 @@ async function rotear(req, res) {
       const corpo = await lerCorpoJson(req);
       if (corpo.marcar === false) desmarcarFeitoPorOutro(muralId, corpo.id);
       else marcarFeitoPorOutro(muralId, corpo.id, corpo.quem, corpo.solucao);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // ---- colunas suas ----
+
+  if (p === '/api/colunas' && req.method === 'GET') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    return json(res, 200, { ok: true, ...lerColunas(muralId) });
+  }
+
+  if (p === '/api/colunas' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      const coluna = corpo.id ? renomearColuna(muralId, corpo.id, corpo) : criarColuna(muralId, corpo);
+      return json(res, 200, { ok: true, coluna, ...lerColunas(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // Irreversivel: apaga a coluna E os cards que estao nela. A interface confirma
+  // antes, com o numero na frente — este servidor nao adivinha se voce leu.
+  if (p === '/api/colunas' && req.method === 'DELETE') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const r = excluirColuna(muralId, url.searchParams.get('id') || '');
+      return json(res, 200, { ok: true, ...r, ...lerColunas(muralId), ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // Prender um card numa coluna sua, ou solta-lo. Rota propria e nao `/api/mover`
+  // porque a regra e outra: mover recusa card que o Teams acompanha, e prender
+  // existe justamente para tirar um card desses do fluxo do canal.
+  if (p === '/api/coluna' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      prenderNaColuna(muralId, corpo.id, corpo.coluna || null);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });

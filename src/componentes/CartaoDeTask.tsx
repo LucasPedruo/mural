@@ -47,6 +47,10 @@ interface Props {
   aoMarcarComoMeu: (task: Task) => void;
   aoCreditarOutro: (task: Task) => void;
   aoTirarCredito: (task: Task) => void;
+  /** Solta o card de volta ao fluxo do Teams. Só aparece quando ele está preso
+   *  numa coluna sua — que é a única situação em que o quadro deixa de refletir
+   *  o que a reação no canal diz. */
+  aoSoltarDaColuna: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
@@ -69,6 +73,7 @@ export function CartaoDeTask({
   aoMarcarComoMeu,
   aoCreditarOutro,
   aoTirarCredito,
+  aoSoltarDaColuna,
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
@@ -124,6 +129,18 @@ export function CartaoDeTask({
       icone: colapsado ? <IconeAbaixo /> : <IconeAcima />,
       aoEscolher: () => aoColapsar(task, !colapsado),
       dica: 'Esconde prints, continuação da rajada e anotação',
+    });
+  }
+
+  // Preso numa coluna sua, o card não tem status a mexer: ele saiu do fluxo do
+  // Teams por escolha sua, e a única coisa a fazer é devolvê-lo. As ações de
+  // "fiz esta" e crédito continuam adiante, porque essas não são posição.
+  if (task.coluna) {
+    acoes.push({
+      rotulo: 'Devolver ao Teams',
+      icone: <IconeDesfazer />,
+      aoEscolher: () => aoSoltarDaColuna(task),
+      dica: 'Volta para a coluna que a reação no canal manda',
     });
   }
 
@@ -387,6 +404,17 @@ export function CartaoDeTask({
                   title="Está aqui porque a sua reação está na mensagem. Para tirar, remova a reação no Teams."
                 >
                   pela reação
+                </span>
+              )}
+              {/* Preso à mão: o quadro deixou de refletir o canal neste card, e
+                  isso precisa estar escrito nele — senão a coluna mente sobre o
+                  que o Teams diz. O status real vai no title. */}
+              {task.coluna && (
+                <span
+                  className="badge marca"
+                  title={`Você prendeu este card nesta coluna. No Teams ele está como "${task.status}", e nenhuma leitura o move enquanto estiver preso.`}
+                >
+                  fora do fluxo
                 </span>
               )}
               {task.foraDeAlcance && !propria && (
