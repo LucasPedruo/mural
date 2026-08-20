@@ -124,10 +124,10 @@ export function Painel() {
                   Em aberto
                 </span>
                 <span role="columnheader" className="num">
-                  Feitas por mim
+                  Por mim
                 </span>
                 <span role="columnheader" className="num">
-                  Ignoradas
+                  Fora do escopo
                 </span>
               </div>
 

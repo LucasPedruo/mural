@@ -90,7 +90,7 @@ export function Home() {
     const terminadas = m.totais.feito + m.totais.meu;
     const confirmado = window.confirm(
       `Encerrar a ${m.sprint.nome} em "${m.nome}"?\n\n` +
-        `${terminadas} card(s) de Concluído e de Feito por mim saem do quadro e vão para o ` +
+        `${terminadas} card(s) de Concluído e de Concluído por mim saem do quadro e vão para o ` +
         'arquivo desta sprint. Nada é apagado: o dashboard e os painéis leem de lá, com as ' +
         'anotações da daily.\n\nA sprint seguinte começa hoje.',
     );
@@ -170,7 +170,7 @@ export function Home() {
                         e.stopPropagation();
                         void encerrarSprint(m);
                       }}
-                      title="Arquiva Concluído e Feito por mim, e abre a sprint seguinte"
+                      title="Arquiva Concluído e Concluído por mim, e abre a sprint seguinte"
                     >
                       encerrar
                     </button>
@@ -180,10 +180,10 @@ export function Home() {
             </div>
 
             <div className="numeros">
-              {/* Inclui "Feito por mim": um card marcado sai da coluna do
+              {/* Inclui "Concluído por mim": um card marcado sai da coluna do
                   Teams, então sem essa pílula a soma da linha não fecharia. */}
               {COLUNAS.map((s) => (
-                <span className="pilula" key={s} title={rotuloDaColuna(s, m)}>
+                <span className="pilula" key={s} title={rotuloDaColuna(s)}>
                   <span className="ponto" style={{ background: CORES_DE_STATUS[s] }} />
                   {m.totais[s]}
                 </span>

@@ -111,7 +111,7 @@
   gap: 8px;
 }
 
-/* Cabeçalho de dia dentro da coluna "Feito por mim": na daily você conta o de
+/* Cabeçalho de dia dentro da coluna "Concluído por mim": na daily você conta o de
    ontem e o de hoje, e a separação precisa ser visível sem virar outro card. */
 .coluna .dia {
   display: flex;

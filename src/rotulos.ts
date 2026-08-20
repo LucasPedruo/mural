@@ -1,18 +1,20 @@
-import type { ColunaId, Mural, Status, SubtipoFonte, TipoFonte } from './tipos';
+import type { ColunaId, Status, SubtipoFonte, TipoFonte } from './tipos';
 
-/** "Ninguém pegou" pressupõe um time dividindo trabalho — numa conversa de duas
- *  pessoas isso não quer dizer nada. */
-export function rotuloDaColuna(status: ColunaId, fonte?: Pick<Mural, 'tipo' | 'subtipo'>): string {
-  const doisApenas = fonte?.tipo === 'chat' && fonte.subtipo === 'oneOnOne';
-  if (status === 'meu') return 'Feito por mim';
-  if (status === 'ignorada') return 'Ignoradas';
-  if (status === 'fazendo') return 'Fazendo';
-  if (status === 'interagido') return 'Interagido';
-  // O que você fez sai daqui para "Feito por mim", então o que fica nesta coluna
-  // é o que o resto do time concluiu. Numa conversa de duas pessoas "por outros"
-  // soaria estranho, e o rótulo volta a ser o simples.
-  if (status === 'feito') return doisApenas ? 'Concluído' : 'Concluído por outros';
-  return doisApenas ? 'Sem reação' : 'Ninguém pegou';
+/** O nome de cada coluna na tela. Os ids não mudam com estes rótulos: `aberto`,
+ *  `fazendo` e companhia são o que está gravado no disco e nas preferências, e
+ *  renomear dado por causa de rótulo quebraria histórico que já existe.
+ *
+ *  Nenhum destes nomes pressupõe time. Os anteriores pressupunham — "Ninguém
+ *  pegou" e "Concluído por outros" não querem dizer nada numa conversa de duas
+ *  pessoas, e por isso havia um caso especial que trocava os dois. Com
+ *  "Backlog" e "Concluído" o caso especial deixou de ter razão de existir. */
+export function rotuloDaColuna(status: ColunaId): string {
+  if (status === 'meu') return 'Concluído por mim';
+  if (status === 'ignorada') return 'Fora do escopo';
+  if (status === 'fazendo') return 'Em andamento';
+  if (status === 'interagido') return 'Em atendimento';
+  if (status === 'feito') return 'Concluído';
+  return 'Backlog';
 }
 
 export function rotuloDoTipo(tipo: TipoFonte, subtipo: SubtipoFonte): string {
@@ -46,7 +48,7 @@ export function dataCurta(iso: string): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
-/** Cabeçalho de cada grupo da coluna "Feito por mim". Na daily você fala do
+/** Cabeçalho de cada grupo da coluna "Concluído por mim". Na daily você fala do
  *  que fez ontem, então "Ontem" precisa ser uma palavra e não uma data que
  *  obriga a conferir o calendário. */
 export function rotuloDoDia(iso: string): string {

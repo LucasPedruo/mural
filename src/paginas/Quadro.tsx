@@ -36,7 +36,7 @@ import './quadro.css';
  *  porque a coluna só enche quando a sua reação aparece — ou quando você marca. */
 function vazioDaColuna(coluna: ColunaId, emojiMeu: string): string | undefined {
   if (coluna === 'ignorada') {
-    return 'nada ignorado — no menu ⋯ de um card, "Não é pra mim"';
+    return 'nada aqui — no menu ⋯ de um card, "Não é pra mim"';
   }
   if (coluna !== 'meu') return undefined;
   return emojiMeu
@@ -119,11 +119,11 @@ export function Quadro() {
   });
 
   // Qualquer coluna pode ser colapsada: quem trabalha por sprint não olha
-  // "Interagido" toda hora, e quem só quer ver o que está em aberto fecha o
+  // "Em atendimento" toda hora, e quem só quer ver o que está em aberto fecha o
   // resto. A coluna fechada continua recebendo cards arrastados — é o gesto de
   // guardar sem abrir.
   //
-  // *Ignoradas* nasce colapsada: ela é onde se põe o que não se quer ver, e
+  // *Fora do escopo* nasce colapsada: ela é onde se põe o que não se quer ver, e
   // aberta por padrão roubaria largura das colunas que são trabalho.
   const chaveColapsadas = `mural:colunas-colapsadas:${muralId}`;
   const [colapsadas, setColapsadas] = useState<Set<ColunaId>>(() => {
@@ -279,7 +279,7 @@ export function Quadro() {
       // evita a impressão de que o quadro perdeu tasks da coluna do Teams.
       if (r.marcados.length) {
         partes.push(
-          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Feito por mim`,
+          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Concluído por mim`,
         );
       }
       // Uma rajada pode continuar depois da leitura: o autor manda mais uma
@@ -358,7 +358,7 @@ export function Quadro() {
     const atual = consumo?.preferencias.emojiMeu ?? '';
     const escolhido = window.prompt(
       'Qual reação você usa no Teams para dizer "fui eu que fiz"?\n\n' +
-        'Toda mensagem com ela cai em "Feito por mim" na próxima atualização. ' +
+        'Toda mensagem com ela cai em "Concluído por mim" na próxima atualização. ' +
         'Escolha algo que só você use — o check não serve, ele já significa ' +
         '"concluído" para o canal inteiro.\n\n' +
         'Deixe em branco para desligar e usar só o botão "fiz".',
@@ -374,14 +374,14 @@ export function Quadro() {
     }
   }
 
-  // A coluna Fazendo sai de uma convenção do TIME, não sua: qualquer um que
+  // A coluna Em andamento sai de uma convenção do TIME, não sua: qualquer um que
   // reagir com esse emoji move o card. Por isso ela mora no cabeçalho da coluna
   // e não nas suas preferências de daily.
   async function trocarEmojiFazendo() {
     const atual = consumo?.preferencias.emojiFazendo ?? '';
     const escolhido = window.prompt(
       'Qual reação o time usa no Teams para dizer "peguei esta"?\n\n' +
-        'Toda mensagem com ela cai na coluna Fazendo. Diferente do emoji de "fui eu", ' +
+        'Toda mensagem com ela cai na coluna Em andamento. Diferente do emoji de "fui eu", ' +
         'esta vale para qualquer pessoa que reagir.\n\n' +
         'Deixe em branco para desligar a coluna.',
       atual,
@@ -568,17 +568,17 @@ export function Quadro() {
       if (!task.podeMover || task.status === coluna) return;
     }
 
-    // "Interagido" não é um destino: não existe emoji que signifique isso. É o
+    // "Em atendimento" não é um destino: não existe emoji que signifique isso. É o
     // que sobra quando alguém reage com outra coisa.
     if (coluna === 'interagido') {
       setErro(
-        '"Interagido" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
-          'outra coisa na mensagem. Arraste para Ninguém pegou, Fazendo ou Concluído.',
+        '"Em atendimento" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
+          'outra coisa na mensagem. Arraste para Backlog, Em andamento ou Concluído.',
       );
       return;
     }
 
-    // Quem põe o card em "Concluído por outros" pode ser o crédito, não o
+    // Quem põe o card em "Concluído" pode ser o crédito, não o
     // Teams. Soltá-lo na mesma coluna não muda nada; sair de lá exige tirar o
     // crédito primeiro, senão ele voltaria sozinho no render seguinte.
     if (task.feitoPor) {
@@ -657,7 +657,7 @@ export function Quadro() {
       // aparece na daily por causa de um clique antigo.
       if (t.ignorada) porColuna.ignorada.push(t);
       else if (t.meu) porColuna.meu.push(t);
-      // Creditada a outra pessoa mora em "Concluído por outros" mesmo que o
+      // Creditada a outra pessoa mora em "Concluído" mesmo que o
       // check ainda não tenha aparecido no Teams: alguém disse aqui que está
       // feita, e é isso que a coluna significa. O `status` real continua no
       // dado — a marca move o card, não reescreve o que o canal disse.
@@ -910,7 +910,7 @@ export function Quadro() {
                   key={coluna}
                   status={coluna}
                   indiceDaColuna={i}
-                  rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
+                  rotulo={rotuloDaColuna(coluna)}
                   grupos={grupos[coluna]}
                   vazio={vazioDaColuna(coluna, emojiMeu)}
                   colapsada={colapsadas.has(coluna)}

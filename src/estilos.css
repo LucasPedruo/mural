@@ -99,7 +99,7 @@
   --marca-fazendo: var(--color-warning-500);
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-600);
-  /* Feito por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
+  /* Concluido por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
   --marca-meu: var(--color-brand-700);
   /* Ignorada nao tem cor: e a ausencia de trabalho. Cinza e o ponto. */
   --marca-ignorada: var(--color-neutral-300);

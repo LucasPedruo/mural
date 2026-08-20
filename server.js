@@ -680,7 +680,7 @@ function validarEmojiMeu(valor, atual) {
   return limpo;
 }
 
-// "Fazendo" e "fui eu" nao podem ser o mesmo emoji: um card cairia em duas
+// "Em andamento" e "fui eu" nao podem ser o mesmo emoji: um card cairia em duas
 // colunas e a contagem do quadro passaria a mentir.
 function validarEmojiFazendo(valor, atual, emojiMeu) {
   if (valor === undefined) return atual;
@@ -690,7 +690,7 @@ function validarEmojiFazendo(valor, atual, emojiMeu) {
   }
   if (limpo && normalizarEmoji(limpo) === normalizarEmoji(emojiMeu)) {
     throw new Error(
-      'Este emoji ja e o da sua assinatura em "Feito por mim". ' +
+      'Este emoji ja e o da sua assinatura em "Concluido por mim". ' +
       'Um card nao pode estar em duas colunas.'
     );
   }
@@ -956,7 +956,7 @@ function tagsDoMural(muralId) {
   return [...por.values()].sort((a, b) => b.quantas - a.quantas || a.tag.localeCompare(b.tag));
 }
 
-// "Feito por mim" NAO e um status do Teams — e uma marca pessoal, e por isso
+// "Concluido por mim" NAO e um status do Teams — e uma marca pessoal, e por isso
 // mora num campo separado. Assim a reacao continua mandando no status real e o
 // proximo sync nao apaga o que voce anotou para contar na daily.
 function marcarComoMeu(muralId, id, solucao) {
@@ -2083,12 +2083,12 @@ async function rotear(req, res) {
       const tarefaId = String(corpo.id || '');
       const novo = String(corpo.status || '');
       if (!STATUS_VALIDOS.includes(novo)) throw new Error('Status invalido.');
-      // "Interagido" nunca foi um estado que se escolhe, com ou sem escrita: e o
+      // "Em atendimento" nunca foi um estado que se escolhe, com ou sem escrita: e o
       // que sobra quando alguem reage com outra coisa.
       if (novo === 'interagido') {
         throw new Error(
-          '"Interagido" nao e um estado que se escolhe: e o que sobra quando alguem reage ' +
-          'com outra coisa. Arraste para Ninguem pegou, Fazendo ou Concluido.'
+          '"Em atendimento" nao e um estado que se escolhe: e o que sobra quando alguem reage ' +
+          'com outra coisa. Arraste para Backlog, Em andamento ou Concluido.'
         );
       }
 

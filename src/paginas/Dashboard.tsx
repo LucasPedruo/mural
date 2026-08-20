@@ -152,7 +152,7 @@ export function Dashboard() {
             >
               <GraficoDeRosca
                 fatias={COLUNAS.map((c) => ({
-                  rotulo: rotuloDaColuna(c, mural ?? undefined),
+                  rotulo: rotuloDaColuna(c),
                   valor: dados.porColuna[c] ?? 0,
                   cor: CORES_DE_STATUS[c],
                 }))}

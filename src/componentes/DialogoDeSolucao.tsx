@@ -24,7 +24,7 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
         aria-labelledby="titulo-solucao"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="titulo-solucao">{task.meu ? 'Editar a anotação' : 'Feito por mim'}</h2>
+        <h2 id="titulo-solucao">{task.meu ? 'Editar a anotação' : 'Concluído por mim'}</h2>
         <p className="explicacao">{task.summary}</p>
 
         <label className="campo">
@@ -42,7 +42,7 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
           />
           <span className="dica">
             Uma ou duas frases, no tom em que você falaria na daily. O card sai da coluna do Teams
-            e passa a viver em "Feito por mim", agrupado pelo dia de hoje.
+            e passa a viver em "Concluído por mim", agrupado pelo dia de hoje.
           </span>
         </label>
 

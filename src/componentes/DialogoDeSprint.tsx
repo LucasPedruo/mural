@@ -56,7 +56,7 @@ export function DialogoDeSprint({ sprint, primeiraVez, aoSalvar, aoCancelar }: P
           <p className="explicacao">
             Não precisa existir sprint no seu time: isto é só o ciclo que você fecha de vez em
             quando. Ao encerrar, o que está em <strong>Concluído</strong> e em{' '}
-            <strong>Feito por mim</strong> sai do quadro e vai para o arquivo da sprint — que é de
+            <strong>Concluído por mim</strong> sai do quadro e vai para o arquivo da sprint — que é de
             onde os painéis leem.
           </p>
         )}

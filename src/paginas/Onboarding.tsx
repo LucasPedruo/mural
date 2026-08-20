@@ -572,7 +572,7 @@ export function Onboarding() {
             <p className="dica">
               Não precisa existir sprint no seu time. Isto é só um período com começo e fim: quando
               você encerra, o que está em <strong>Concluído</strong> e em{' '}
-              <strong>Feito por mim</strong> sai do quadro e vai para o arquivo da sprint — de onde
+              <strong>Concluído por mim</strong> sai do quadro e vai para o arquivo da sprint — de onde
               os painéis leem. Sem isso, "concluído" acumula para sempre e a coluna deixa de dizer
               alguma coisa.
             </p>

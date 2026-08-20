@@ -78,7 +78,7 @@ export function DialogoDeFeitoPorOutro({ task, pessoas, aoSalvar, aoCancelar }: 
             }}
           />
           <span className="dica">
-            O card vai para "Concluído por outros" com o nome no rodapé. Isto não escreve nada no
+            O card vai para "Concluído" com o nome no rodapé. Isto não escreve nada no
             Teams: o status do canal continua sendo o que a reação de lá disser.
           </span>
         </label>

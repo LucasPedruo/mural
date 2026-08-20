@@ -93,7 +93,7 @@ export interface Task {
   foraDeAlcance: boolean;
   /** Pode trocar de coluna à mão: fora de alcance ou criada por você. */
   podeMover: boolean;
-  /** Pode sair de "Feito por mim" pelo quadro. Falso quando é a sua reação que
+  /** Pode sair de "Concluído por mim" pelo quadro. Falso quando é a sua reação que
    *  põe o card lá: nesse caso quem manda é o Teams. */
   podeDesmarcar: boolean;
   movidoAMao: boolean;
@@ -159,7 +159,7 @@ export interface Preferencias {
    *  detecção e deixa só o botão "fiz" — o Graph não diz quem reagiu, então
    *  isso é uma convenção sua, não um dado da API. */
   emojiMeu: string;
-  /** A reação que quer dizer "alguém pegou esta": a coluna *Fazendo*. Diferente
+  /** A reação que quer dizer "alguém pegou esta": a coluna *Em andamento*. Diferente
    *  do emojiMeu, esta é uma convenção do TIME — qualquer um que reagir com ela
    *  move o card. Vazio desliga a coluna. */
   emojiFazendo: string;
