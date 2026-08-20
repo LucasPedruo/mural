@@ -1,5 +1,7 @@
 import { Draggable } from '@hello-pangea/dnd';
-import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
+import { useRef, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
+
+import { useAlturaAnimada } from '../animacao';
 
 import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
 import type { Task } from '../tipos';
@@ -81,6 +83,11 @@ export function CartaoDeTask({
   aoIgnorar,
   aoApagar,
 }: Props) {
+  // A altura do card é animada no recolher, pela mesma razão da coluna: um card
+  // que encolhe de uma vez empurra os de baixo sem avisar para onde.
+  const caixa = useRef<HTMLElement | null>(null);
+  useAlturaAnimada(caixa, colapsado);
+
   const ehNovo = !!ultimaVisita && task.firstSeen > ultimaVisita;
   const mudou = !!ultimaVisita && task.statusChangedAt > ultimaVisita && !ehNovo;
   const dias = diasDesde(task.createdDateTime);
@@ -95,7 +102,9 @@ export function CartaoDeTask({
   const linhas = mensagens.filter((m) => !m.soPrint && m.summary !== task.summary);
   const agrupado = mensagens.length > 1;
 
-  // Recolher só faz sentido no card que tem o que esconder.
+  // Recolher vale para qualquer card, e não só para o que tem print ou rajada:
+  // desde que o título passou a ser o texto da mensagem verbatim, um card sozinho
+  // já pode ocupar seis linhas. O que ele esconde varia; que ele encolhe, não.
   const temDetalhe =
     prints.length > 0 ||
     linhas.length > 0 ||
@@ -123,14 +132,14 @@ export function CartaoDeTask({
   // disputando o canto do rodapé, todos escondidos atrás de hover e sem nome.
   const acoes: ItemDeMenu[] = [];
 
-  if (temDetalhe) {
-    acoes.push({
-      rotulo: colapsado ? 'Expandir' : 'Recolher',
-      icone: colapsado ? <IconeAbaixo /> : <IconeAcima />,
-      aoEscolher: () => aoColapsar(task, !colapsado),
-      dica: 'Esconde prints, continuação da rajada e anotação',
-    });
-  }
+  acoes.push({
+    rotulo: colapsado ? 'Expandir' : 'Recolher',
+    icone: colapsado ? <IconeAbaixo /> : <IconeAcima />,
+    aoEscolher: () => aoColapsar(task, !colapsado),
+    dica: temDetalhe
+      ? 'Deixa uma linha do texto; esconde prints, rajada e anotação'
+      : 'Deixa uma linha do texto',
+  });
 
   // Preso numa coluna sua, o card não tem status a mexer: ele saiu do fluxo do
   // Teams por escolha sua, e a única coisa a fazer é devolvê-lo. As ações de
@@ -269,7 +278,10 @@ export function CartaoDeTask({
         };
         return (
           <article
-            ref={fornecido.innerRef}
+            ref={(no) => {
+              fornecido.innerRef(no);
+              caixa.current = no;
+            }}
             {...fornecido.draggableProps}
             {...fornecido.dragHandleProps}
             style={estilo}
@@ -376,7 +388,7 @@ export function CartaoDeTask({
               )}
               {/* Recolhido, o card precisa avisar que esconde algo — senão a
                   faixa de print desaparecida parece card sem print. */}
-              {colapsado && temDetalhe && (
+              {colapsado && (
                 <span className="badge neutral" title="Use o menu para expandir">
                   recolhido
                 </span>

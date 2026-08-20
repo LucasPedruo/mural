@@ -140,61 +140,6 @@
 }
 
 
-/* A barra de filtros. Fica acima das colunas porque filtra todas elas. */
-.filtro {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 12px 24px 0;
-}
-
-.filtro .campo-de-filtro {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.filtro .rotulo {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/* O select herda a superficie e a borda dos outros controles do quadro; o que
-   ele NAO herda e a seta nativa, que em cada sistema tem um tamanho diferente —
-   por isso a seta e desenhada aqui, e o padding da direita abre espaco para ela. */
-.filtro select {
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--text-primary);
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 9px;
-  padding: 5px 28px 5px 10px;
-  max-width: 260px;
-  appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
-    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
-  background-position: calc(100% - 15px) center, calc(100% - 10px) center;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-}
-.filtro select:hover {
-  border-color: var(--border-strong);
-}
-
-/* Filtro ligado tem de se ver de longe: e ele que explica por que a coluna tem
-   menos card do que deveria. */
-.filtro select.ligado {
-  border-color: var(--marca-meu);
-  color: var(--marca-meu);
-  font-weight: 600;
-}
-
 
 /* O botão de criar coluna fica no fim da fila, com a largura de uma coluna
    colapsada: ele é um lugar vago, e desenhá-lo do tamanho de uma coluna cheia

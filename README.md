@@ -72,9 +72,11 @@ Encerrar a sprint **não** leva card preso numa coluna sua: ele está num passo 
 seu processo, não terminado — nem que o time já tenha dado o check no Teams.
 
 **Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
-fina com o rótulo de pé e a contagem. **Cada card também**: recolhido, ele mostra
-só o título e o rodapé, sem os prints, sem a continuação da rajada e sem a
-anotação da daily. Quem trabalha por sprint não olha *Em atendimento* toda hora, e o
+fina com o rótulo de pé e a contagem. **Cada card também**, sem exceção: recolhido,
+ele mostra uma linha do texto e o rodapé, sem os prints, sem a continuação da
+rajada e sem a anotação da daily. As duas transições são animadas (GSAP): sem
+elas o quadro salta de lugar e quem estava lendo precisa se reencontrar. Quem
+configurou `prefers-reduced-motion` recebe a mudança sem percurso. Quem trabalha por sprint não olha *Em atendimento* toda hora, e o
 espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
 recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
 por mural e ficam no navegador.
@@ -118,17 +120,24 @@ canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação
 ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de
 exigir que você decore o que cada símbolo faz.
 
-**Os filtros** ficam acima das colunas: dois selects, por **quem pediu** e por
-**etiqueta**, com a contagem em cada opção. São selects e não pílulas porque a
-lista de quem pede cresce com o time e a de etiquetas cresce com o uso — uma barra
-que quebra em três linhas empurra o quadro para baixo da dobra, e o select tem
-altura fixa por mais longa que a lista fique.
+**Os filtros** ficam no **funil**, ao lado do sino: por **quem pediu** e por
+**etiqueta**, com a contagem em cada opção. Antes eram dois selects numa barra
+acima das colunas, e a barra custava uma faixa de altura o tempo todo por uma
+escolha que se faz de vez em quando. O que não some no repouso é o *fato* de
+haver filtro ligado: o funil fica aceso e o `title` diz por quê — filtro
+escondido que corta o quadro em silêncio faria a contagem das colunas parecer
+errada.
 
 Eles cortam o quadro inteiro — enquanto um filtro está ligado, as contagens das
 colunas são as dele, não as do quadro todo.
 
 O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
 colunas existe só para os cards que o Teams não acompanha mais.
+
+**O título do card é o texto da mensagem, verbatim** — o Mural não resume mais o
+que a pessoa escreveu. Um card que diz outra coisa faz o time discutir uma demanda
+que ninguém pediu. Texto de gente não tem limite de tamanho, então o card corta em
+seis linhas e o clique abre a mensagem inteira no Teams.
 
 Um card não é uma mensagem: é uma **demanda**. Quando alguém manda dois prints e
 três linhas de texto em seguida, aquilo vira um card só — veja
@@ -612,7 +621,13 @@ Vale saber antes de adotar:
 - **Listar chats no onboarding leva 2 a 3 minutos**, porque o Teams entrega os
   chats em páginas de 25 e cada página é uma ida à API. Só acontece uma vez.
 - **A etiqueta `bug` é um palpite do modelo**, inferido do texto da mensagem —
-  não é um campo do Teams. Autor, data, link e reações, esses são literais.
+  não é um campo do Teams. Autor, data, link, reações **e o texto do card**, esses
+  são literais.
+- **Cards lidos por uma versão anterior mostram um resumo, não o texto.** Até
+  agosto de 2026 o modelo escrevia uma linha de ~100 caracteres descrevendo o
+  pedido; hoje ele copia o corpo da mensagem verbatim. Card que ainda esteja na
+  janela das ~20 se conserta sozinho na próxima leitura — os que já saíram dela
+  ficam com o resumo antigo para sempre, porque o Teams não os devolve mais.
 - **O agrupamento de rajada também é palpite**, e vai errar de vez em quando. Ele
   erra para o lado seguro (divide na dúvida), e ⧉ e ⑃ existem justamente porque
   card errado que não dá para consertar é pior que card errado.

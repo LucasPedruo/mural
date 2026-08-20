@@ -1197,7 +1197,12 @@ function mensagemDoSnapshot(m, agora) {
     id: String(m.id),
     author: m.author || '?',
     createdDateTime: m.createdDateTime || agora,
-    summary: m.summary || '(sem resumo)',
+    // O agente devolve `texto` — o corpo da mensagem verbatim. `summary` e o
+    // nome antigo do mesmo campo, de quando o modelo escrevia um resumo de uma
+    // linha: card que dizia outra coisa que a pessoa escreveu fazia o time
+    // discutir uma demanda que ninguem pediu. O fallback existe para o historico
+    // ja gravado continuar legivel — nao para o agente voltar a resumir.
+    summary: m.texto || m.summary || '(sem texto)',
     kind: m.kind === 'bug' ? 'bug' : 'sugestao',
     reactions: Array.isArray(m.reactions) ? m.reactions : [],
     webUrl: m.webUrl || '',
@@ -1323,7 +1328,9 @@ function agruparRajadas(snapshot, db, agora) {
 // diz o que a task e.
 function mensagemPrincipal(mensagens) {
   return (
-    mensagens.find((m) => !m.soPrint && m.summary && m.summary !== '(sem resumo)') || mensagens[0]
+    mensagens.find(
+      (m) => !m.soPrint && m.summary && m.summary !== '(sem resumo)' && m.summary !== '(sem texto)',
+    ) || mensagens[0]
   );
 }
 

@@ -177,8 +177,14 @@
   background: none;
   color: var(--text-secondary);
 }
-.coluna.colapsada .expandir:hover {
+/* O hover é da COLUNA, não do botão. Antes ele vivia no `.expandir`, que ocupa
+   só o topo da faixa: o resto da coluna — o alvo de soltar, que é a maior parte
+   dela — ficava sem realce, e o realce parava no meio de um retângulo que a
+   pessoa está apontando inteiro. */
+.coluna.colapsada:hover {
   background: var(--bg-surface);
+}
+.coluna.colapsada:hover .expandir {
   color: var(--text-primary);
 }
 

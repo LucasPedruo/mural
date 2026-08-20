@@ -73,10 +73,25 @@
 
 /* O titulo. Nao e mais um botao: o alvo do clique e o card, porque mirar na
    linha de texto era um detalhe de implementacao vazando para a mao de quem usa. */
+/* O título é o texto da mensagem, verbatim — o Mural não resume mais o que a
+   pessoa escreveu. Como texto de gente não tem limite de tamanho, o card corta
+   em seis linhas e guarda o resto atrás do "expandir"; as quebras de linha da
+   mensagem original ficam de pé, porque numa lista numerada elas são o sentido. */
 .cartao .texto {
   color: var(--text-primary);
   font-size: 13.5px;
   line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+
+/* Recolhido, uma linha só — é o que faz uma coluna cheia caber na tela. */
+.cartao.colapsado .texto {
+  -webkit-line-clamp: 1;
 }
 .cartao:hover .texto {
   text-decoration: underline;
@@ -149,6 +164,8 @@
    título é o que dá nome à task — mas visíveis, porque o detalhe que faz a
    task ser entendida quase sempre está aqui. */
 .cartao .continuacao {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   margin: 6px 0 0;
   padding-left: 9px;
   border-left: 2px solid var(--border-default);

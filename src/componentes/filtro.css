@@ -1,0 +1,152 @@
+/* O funil do cabeçalho e o painel que ele abre. Mesma família do sino ao lado:
+   superfície própria e sombra, porque também flutua sobre o quadro. */
+
+.filtro-do-quadro {
+  position: relative;
+  display: inline-flex;
+}
+
+.filtro-do-quadro .gatilho-filtro {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+.filtro-do-quadro .gatilho-filtro:hover,
+.filtro-do-quadro .gatilho-filtro.aberto {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* Filtro ligado tem de se ver de longe, mesmo com o painel fechado: é ele que
+   explica por que a coluna tem menos card do que deveria. */
+.filtro-do-quadro .gatilho-filtro.ligado {
+  border-color: var(--marca-meu);
+  color: var(--marca-meu);
+}
+.filtro-do-quadro .ponto-ligado {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--marca-meu);
+  border: 2px solid var(--bg-app);
+}
+
+.filtro-do-quadro .painel-filtro {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 7px);
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  max-height: min(440px, 70vh);
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-arrastando);
+}
+
+.filtro-do-quadro .painel-filtro > header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+}
+.filtro-do-quadro .painel-filtro > header .limpar {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.filtro-do-quadro .painel-filtro > header .limpar:hover {
+  color: var(--text-primary);
+}
+
+.filtro-do-quadro .grupo {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.filtro-do-quadro .grupo:last-of-type {
+  border-bottom: 0;
+}
+
+.filtro-do-quadro .titulo-do-grupo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* Pílulas e não um <select>: aqui elas cabem, porque a lista rola dentro do
+   painel em vez de empurrar o quadro para baixo da dobra — que era exatamente o
+   problema que fez a barra virar select um dia. */
+.filtro-do-quadro .opcoes-de-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filtro-do-quadro .opcoes-de-filtro button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--text-secondary);
+}
+.filtro-do-quadro .opcoes-de-filtro button .nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filtro-do-quadro .opcoes-de-filtro button .quantas {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.filtro-do-quadro .opcoes-de-filtro button.escolhida {
+  border-color: var(--marca-meu);
+  background: var(--bg-brand-subtle);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.filtro-do-quadro .opcoes-de-filtro button.escolhida .quantas {
+  color: var(--text-secondary);
+}
+
+.filtro-do-quadro .vazio-filtro,
+.filtro-do-quadro .aviso-do-filtro {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.filtro-do-quadro .aviso-do-filtro {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface-2);
+}

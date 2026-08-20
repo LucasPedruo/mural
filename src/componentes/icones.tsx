@@ -238,3 +238,12 @@ export function IconeSino(p: Props) {
     </Icone>
   );
 }
+
+/** lucide `funnel` — o filtro do quadro. */
+export function IconeFiltro(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="M10 20a1 1 0 0 0 1.447.894l2-1A1 1 0 0 0 14 19v-4.586a1 1 0 0 1 .293-.707l5.414-5.414A1 1 0 0 0 20 7.586V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2.586a1 1 0 0 0 .293.707l5.414 5.414a1 1 0 0 1 .293.707z" />
+    </Icone>
+  );
+}

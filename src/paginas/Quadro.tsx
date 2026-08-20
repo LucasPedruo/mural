@@ -14,16 +14,10 @@ import { DialogoDeColuna } from '../componentes/DialogoDeColuna';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
+import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
 import { Notificacoes } from '../componentes/Notificacoes';
 import { Toasts } from '../componentes/Toasts';
-import {
-  IconeApagar,
-  IconeEditar,
-  IconeEtiqueta,
-  IconeMais,
-  IconePessoa,
-  IconeVoltar,
-} from '../componentes/icones';
+import { IconeApagar, IconeEditar, IconeMais, IconeVoltar } from '../componentes/icones';
 import {
   COLUNAS,
   CORES_DE_STATUS,
@@ -47,16 +41,33 @@ import type {
 } from '../tipos';
 import './quadro.css';
 
-/** Mensagem de coluna vazia. A da daily não é "nada aqui": é uma instrução,
- *  porque a coluna só enche quando a sua reação aparece — ou quando você marca. */
-function vazioDaColuna(coluna: ColunaId, emojiMeu: string): string | undefined {
-  if (coluna === 'ignorada') {
-    return 'nada aqui — no menu ⋯ de um card, "Não é pra mim"';
+/** O que uma coluna vazia diz.
+ *
+ *  "Nada aqui" é a resposta preguiçosa: as seis colunas são regras, e uma coluna
+ *  vazia é a chance de contar QUAL regra não está sendo satisfeita — que é
+ *  justamente o que ninguém decora. Coluna vazia de Backlog é notícia boa;
+ *  coluna vazia de "Concluído por mim" é uma instrução.
+ *
+ *  Todas terminam sem ponto final: é legenda, não frase. */
+function vazioDaColuna(coluna: ColunaId, emojiMeu: string, emojiFazendo: string): string {
+  switch (coluna) {
+    case 'aberto':
+      return 'nada sem reação — tudo que chegou já teve resposta de alguém';
+    case 'fazendo':
+      return emojiFazendo
+        ? `ninguém anunciou que pegou — a reação ${emojiFazendo} no Teams enche esta coluna`
+        : 'coluna desligada — escolha no cabeçalho o emoji de "peguei esta"';
+    case 'interagido':
+      return 'ninguém reagiu com algo que não seja o check';
+    case 'feito':
+      return 'nada concluído ainda — o check ✅ no Teams traz os cards para cá';
+    case 'meu':
+      return emojiMeu
+        ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou "Fiz esta" no menu ⋯ do card`
+        : 'nada ainda — use "Fiz esta" no menu ⋯ de um card para anotar o que você resolveu';
+    case 'ignorada':
+      return 'nada descartado — no menu ⋯ de um card, "Não é pra mim"';
   }
-  if (coluna !== 'meu') return undefined;
-  return emojiMeu
-    ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou "Fiz esta" no menu ⋯ do card`
-    : 'nada ainda — use "Fiz esta" no menu ⋯ de um card para anotar o que você resolveu';
 }
 
 export function Quadro() {
@@ -996,6 +1007,18 @@ export function Quadro() {
             {sprint.atual.nome} · até {dataDoDiaISO(sprint.atual.fim)}
           </span>
         )}
+        {/* Filtro e sino juntos, à direita: um diz o que a tela está te
+            escondendo, o outro o que ela tem a te contar. A barra de selects que
+            morava acima das colunas custava uma faixa de altura o tempo todo por
+            uma escolha que se faz de vez em quando. */}
+        <FiltroDoQuadro
+          autores={autores}
+          tags={tags}
+          autorFiltro={autorFiltro}
+          tagFiltro={tagFiltro}
+          aoFiltrarAutor={setAutorFiltro}
+          aoFiltrarTag={setTagFiltro}
+        />
         {/* O sino fica ao lado de Atualizar porque é dela que quase tudo aqui
             dentro vem: o resumo de uma leitura se lê logo depois de pedir uma. */}
         <Notificacoes
@@ -1098,54 +1121,6 @@ export function Quadro() {
         </p>
       )}
 
-      {/* Select, e não pílulas: a lista de quem pede cresce com o time e a de
-          etiquetas cresce com o uso, e uma barra que quebra em três linhas
-          empurra o quadro para baixo da dobra. O select mantém a altura fixa por
-          mais longa que a lista fique, e a contagem cabe na própria opção. */}
-      {(autores.length > 1 || tags.length > 0) && (
-        <div className="filtro">
-          {autores.length > 1 && (
-            <label className="campo-de-filtro">
-              <span className="rotulo">
-                <IconePessoa tamanho={13} /> quem pediu
-              </span>
-              <select
-                className={autorFiltro ? 'ligado' : ''}
-                value={autorFiltro ?? ''}
-                onChange={(e) => setAutorFiltro(e.target.value || null)}
-              >
-                <option value="">todos ({tasks.length})</option>
-                {autores.map((a) => (
-                  <option key={a.autor} value={a.autor}>
-                    {a.autor} ({a.quantas})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {tags.length > 0 && (
-            <label className="campo-de-filtro">
-              <span className="rotulo">
-                <IconeEtiqueta tamanho={13} /> etiqueta
-              </span>
-              <select
-                className={tagFiltro ? 'ligado' : ''}
-                value={tagFiltro ?? ''}
-                onChange={(e) => setTagFiltro(e.target.value || null)}
-              >
-                <option value="">todas</option>
-                {tags.map((t) => (
-                  <option key={t.tag} value={t.tag.toLowerCase()}>
-                    {t.tag} ({t.quantas})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-      )}
-
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
         <Droppable droppableId="colunas" type={TIPO_COLUNA} direction="horizontal">
           {(fornecido) => (
@@ -1163,7 +1138,7 @@ export function Quadro() {
                   vazio={
                     sua
                       ? 'nada aqui — arraste um card para dentro; esta coluna não recebe sozinha'
-                      : vazioDaColuna(coluna as ColunaId, emojiMeu)
+                      : vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo)
                   }
                   colapsada={colapsadas.has(coluna)}
                   aoColapsar={(fechar) => colapsar(coluna, fechar)}
