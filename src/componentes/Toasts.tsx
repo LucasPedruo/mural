@@ -25,7 +25,7 @@ function Toast({ item, aoFechar }: { item: Notificacao; aoFechar: (id: string) =
         className="dispensar"
         type="button"
         onClick={() => aoFechar(item.id)}
-        title={permanente ? 'Fechar — continua no sino' : 'Fechar'}
+        title="Fechar"
         aria-label="Fechar o aviso"
       >
         <IconeFechar tamanho={13} />

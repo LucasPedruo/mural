@@ -287,10 +287,7 @@ export function Onboarding() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
       </div>
-      <p className="sub">
-        Um kanban montado a partir das reações de uma conversa do Teams. Cinco passos e o quadro
-        está de pé.
-      </p>
+      <p className="sub">Cinco passos e o quadro está de pé.</p>
 
       {/* 1 */}
       <section className="passo" data-estado={passo1}>
@@ -305,8 +302,7 @@ export function Onboarding() {
         {agentes && (
           <div className="corpo">
             <p className="dica">
-              O Mural não fala com o Teams: ele pede a um agente de IA já autenticado que leia a
-              conversa e grave o resultado. Escolha o seu.
+              Quem lê o Teams é um agente de IA já autenticado. Escolha o seu.
             </p>
 
             <div className="lista-agentes">
@@ -324,7 +320,7 @@ export function Onboarding() {
                   <span className="nome">
                     {a.nome}
                     {!a.verificado && !a.ajustado && (
-                      <span className="badge warning" title="Adaptador escrito a partir da documentação do CLI, não testado aqui. Se uma flag estiver errada, corrija nos ajustes abaixo.">
+                      <span className="badge warning" title="Escrito a partir da documentação, não testado aqui">
                         não verificado
                       </span>
                     )}
@@ -466,8 +462,7 @@ export function Onboarding() {
               {passo2 === 'erro' ? 'Tentar de novo' : 'Verificar conexão'}
             </button>
             <p className="dica">
-              O Mural não pede nem guarda sua senha. Quem autentica é o conector Microsoft 365 do
-              Claude Code — aqui só perguntamos quem já está logado. Leva cerca de 20 segundos.
+              Nenhuma senha é pedida aqui — só perguntamos quem já está logado no agente.
             </p>
           </div>
         )}
@@ -603,25 +598,19 @@ export function Onboarding() {
           <span className="num">4</span>
           <h2>As reações</h2>
         </div>
-        <p className="detalhe">qual emoji significa o quê no seu canal</p>
+        <p className="detalhe">qual emoji significa o quê</p>
 
         <div className="corpo">
-          <p className="dica">
-            O quadro inteiro sai daqui: o Mural lê as reações das mensagens e é isso que decide a
-            coluna de cada card. Duas você escolhe; a terceira já está decidida.
-          </p>
+          <p className="dica">A reação no Teams é o que decide a coluna de cada card.</p>
 
           <EscolherEmoji
             id="emoji-fazendo"
             titulo="peguei esta"
             dono="time"
-            explicacao={
-              'Enche a coluna Em andamento. Vale para QUALQUER pessoa que reagir: é o jeito de ' +
-              'alguém anunciar que já está mexendo, para dois não pegarem a mesma demanda.'
-            }
+            explicacao="Enche a coluna Em andamento. Vale para qualquer pessoa que reagir."
             valor={emojiFazendo}
             sugestoes={['⚪', '⏱️', '👀', '🔨', '🚧']}
-            rotuloDeDesligar="não usamos isso — desligar a coluna"
+            rotuloDeDesligar="desligar a coluna"
             aoMudar={(e) => void salvarEmoji({ emojiFazendo: e })}
           />
 
@@ -629,14 +618,10 @@ export function Onboarding() {
             id="emoji-meu"
             titulo="fui eu que fiz"
             dono="você"
-            explicacao={
-              'Manda o card para Concluído por mim, com a anotação da daily. Precisa ser um emoji ' +
-              'que SÓ VOCÊ usa nesse canal: o Teams não conta quem reagiu, então esta é a única ' +
-              'forma de o quadro saber que o trabalho foi seu.'
-            }
+            explicacao="Manda o card para Concluído por mim. Escolha um emoji que só você usa."
             valor={emojiMeu}
             sugestoes={['🟢', '💚', '🙌', '🦄', '🎯']}
-            rotuloDeDesligar="prefiro marcar à mão no card"
+            rotuloDeDesligar="marcar à mão no card"
             aoMudar={(e) => void salvarEmoji({ emojiMeu: e })}
           />
 
@@ -644,20 +629,15 @@ export function Onboarding() {
             <div className="check-fixo">
               <span className="emojis">{checks.slice(0, 3).join(' ')}</span>
               <p>
-                <strong>Concluído</strong> não se configura. O check já quer dizer "feito" para o
-                canal inteiro, e é a única reação com significado que não depende de combinar nada
-                — todas as formas acima contam como a mesma coisa. Por isso ele também não pode ser
-                nenhuma das duas de cima.
+                <strong>Concluído</strong> não se configura — o check já quer dizer "feito" para o
+                canal inteiro.
               </p>
             </div>
           )}
 
           {erroEmoji && <p className="aviso erro">{erroEmoji}</p>}
 
-          <p className="dica">
-            Dá para mudar depois, no cabeçalho das colunas do quadro. Trocar a reação não reescreve
-            o histórico: os cards se reorganizam na próxima leitura, pela regra nova.
-          </p>
+          <p className="dica">Dá para mudar depois, no cabeçalho das colunas.</p>
         </div>
       </section>
 
@@ -674,11 +654,8 @@ export function Onboarding() {
         {escolha && (
           <div className="corpo">
             <p className="dica">
-              Não precisa existir sprint no seu time. Isto é só um período com começo e fim: quando
-              você encerra, o que está em <strong>Concluído</strong> e em{' '}
-              <strong>Concluído por mim</strong> sai do quadro e vai para o arquivo da sprint — de onde
-              os painéis leem. Sem isso, "concluído" acumula para sempre e a coluna deixa de dizer
-              alguma coisa.
+              Um período com começo e fim. Ao encerrar, o que está concluído sai do quadro e vai
+              para o arquivo.
             </p>
 
             <div className="campos-sprint">
@@ -718,10 +695,7 @@ export function Onboarding() {
               </label>
             </div>
 
-            <p className="dica">
-              Dá para mudar tudo isso depois, no cabeçalho do quadro. Encerrar continua sendo um
-              gesto seu: a data só serve para o painel contar o que chegou dentro do período.
-            </p>
+            <p className="dica">Dá para mudar depois. Encerrar continua sendo um gesto seu.</p>
 
             {erro3 && <p className="aviso erro">{erro3}</p>}
 

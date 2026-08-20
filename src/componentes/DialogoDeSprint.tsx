@@ -54,10 +54,8 @@ export function DialogoDeSprint({ sprint, primeiraVez, aoSalvar, aoCancelar }: P
         <h2 id="titulo-sprint">{sprint ? 'Sprint do mural' : 'Definir a sprint'}</h2>
         {primeiraVez && (
           <p className="explicacao">
-            Não precisa existir sprint no seu time: isto é só o ciclo que você fecha de vez em
-            quando. Ao encerrar, o que está em <strong>Concluído</strong> e em{' '}
-            <strong>Concluído por mim</strong> sai do quadro e vai para o arquivo da sprint — que é de
-            onde os painéis leem.
+            Um ciclo com começo e fim. Ao encerrar, o que está concluído sai do quadro e vai para o
+            arquivo.
           </p>
         )}
 
@@ -70,9 +68,7 @@ export function DialogoDeSprint({ sprint, primeiraVez, aoSalvar, aoCancelar }: P
             maxLength={60}
             onChange={(e) => setNome(e.target.value)}
           />
-          <span className="dica">
-            Ao encerrar, a próxima nasce com o número seguinte — "Sprint 7" vira "Sprint 8".
-          </span>
+          <span className="dica">A próxima nasce com o número seguinte.</span>
         </label>
 
         <label className="campo">
@@ -99,9 +95,7 @@ export function DialogoDeSprint({ sprint, primeiraVez, aoSalvar, aoCancelar }: P
             ))}
           </div>
           <span className="dica">
-            {fim
-              ? `Vai até ${dataDoDiaISO(fim)}. A data serve para o painel contar o que chegou dentro do período — encerrar continua sendo um gesto seu, não um relógio.`
-              : 'Escolha a data de início.'}
+            {fim ? `Vai até ${dataDoDiaISO(fim)}` : 'Escolha a data de início'}
           </span>
         </div>
 

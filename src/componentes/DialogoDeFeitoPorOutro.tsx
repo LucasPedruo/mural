@@ -59,10 +59,7 @@ export function DialogoDeFeitoPorOutro({ task, pessoas, aoSalvar, aoCancelar }: 
               <option value={p} key={p} />
             ))}
           </datalist>
-          <span className="dica">
-            A sugestão sai de quem escreve neste canal, mas o campo é livre — quem resolve nem
-            sempre é quem pediu.
-          </span>
+          <span className="dica">Campo livre — quem resolve nem sempre é quem pediu.</span>
         </label>
 
         <label className="campo">
@@ -71,16 +68,13 @@ export function DialogoDeFeitoPorOutro({ task, pessoas, aoSalvar, aoCancelar }: 
             rows={3}
             value={solucao}
             maxLength={2000}
-            placeholder="Ex.: subiu o fix na 2.4.1 junto com o ajuste do cache"
+            placeholder="Como foi resolvido…"
             onChange={(e) => setSolucao(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) salvar();
             }}
           />
-          <span className="dica">
-            O card vai para "Concluído" com o nome no rodapé. Isto não escreve nada no
-            Teams: o status do canal continua sendo o que a reação de lá disser.
-          </span>
+          <span className="dica">O card vai para Concluído. Nada é escrito no Teams.</span>
         </label>
 
         <div className="acoes-modal">

@@ -34,16 +34,13 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
             value={solucao}
             autoFocus
             maxLength={2000}
-            placeholder="Ex.: era o cache do relatório; limpei na virada do mês e subi o fix na 2.4.1"
+            placeholder="Uma ou duas frases, do jeito que você contaria na daily…"
             onChange={(e) => setSolucao(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) aoSalvar(solucao);
             }}
           />
-          <span className="dica">
-            Uma ou duas frases, no tom em que você falaria na daily. O card sai da coluna do Teams
-            e passa a viver em "Concluído por mim", agrupado pelo dia de hoje.
-          </span>
+          <span className="dica">O card vai para Concluído por mim, no dia de hoje.</span>
         </label>
 
         <div className="acoes-modal">

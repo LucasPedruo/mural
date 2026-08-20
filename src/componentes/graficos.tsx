@@ -38,7 +38,7 @@ function diaCurto(dia: string): string {
 export function GraficoDeRitmo({ pontos }: { pontos: PontoDoRitmo[] }) {
   const total = pontos.reduce((s, p) => s + p.chegaram + p.concluidas, 0);
   if (!pontos.length || total === 0) {
-    return <Vazio>Nada chegou nem foi concluído nos últimos 30 dias.</Vazio>;
+    return <Vazio>Nada nos últimos 30 dias.</Vazio>;
   }
 
   const L = 720;
@@ -119,7 +119,7 @@ export interface Fatia {
 export function GraficoDeRosca({ fatias }: { fatias: Fatia[] }) {
   const presentes = fatias.filter((f) => f.valor > 0);
   const total = presentes.reduce((s, f) => s + f.valor, 0);
-  if (!total) return <Vazio>Nenhuma task neste mural ainda.</Vazio>;
+  if (!total) return <Vazio>Nenhuma task ainda.</Vazio>;
 
   const R = 70;
   const CIRC = 2 * Math.PI * R;
@@ -183,7 +183,7 @@ export interface BarraDeSprint {
  *  pergunta é a distância entre elas: uma sprint que recebe 20 e fecha 6 tem um
  *  problema que a soma de nenhuma das duas mostra sozinha. */
 export function GraficoDeSprints({ linhas }: { linhas: BarraDeSprint[] }) {
-  if (!linhas.length) return <Vazio>Nenhuma sprint definida — defina uma na sua listagem.</Vazio>;
+  if (!linhas.length) return <Vazio>Nenhuma sprint definida.</Vazio>;
 
   // Da mais antiga para a mais nova: o servidor manda a atual primeiro, que é a
   // ordem certa para uma lista e a errada para uma linha do tempo.
@@ -303,9 +303,7 @@ export function BarrasRanqueadas({
       ))}
       {/* Cortar sem avisar faria a lista parecer completa. */}
       {linhas.length > limite && (
-        <p className="grafico-vazio">
-          +{linhas.length - limite} fora desta lista, com menos que {mostradas[limite - 1].total}.
-        </p>
+        <p className="grafico-vazio">+{linhas.length - limite} fora desta lista.</p>
       )}
     </div>
   );

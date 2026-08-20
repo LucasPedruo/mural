@@ -48,30 +48,25 @@ import './quadro.css';
 
 /** O que uma coluna vazia diz.
  *
- *  "Nada aqui" é a resposta preguiçosa: as seis colunas são regras, e uma coluna
- *  vazia é a chance de contar QUAL regra não está sendo satisfeita — que é
- *  justamente o que ninguém decora. Coluna vazia de Backlog é notícia boa;
- *  coluna vazia de "Concluído por mim" é uma instrução.
+ *  Uma linha, e curta: a coluna tem 232px, e o vazio é uma legenda, não uma
+ *  aula. Diz o estado, não o mecanismo — quem quer saber como um card chega ali
+ *  descobre no menu do card, não numa coluna sem nada dentro.
  *
- *  Todas terminam sem ponto final: é legenda, não frase. */
+ *  Sem ponto final, sem instrução, sem exclamação. */
 function vazioDaColuna(coluna: ColunaId, emojiMeu: string, emojiFazendo: string): string {
   switch (coluna) {
     case 'aberto':
-      return 'nada sem reação — tudo que chegou já teve resposta de alguém';
+      return 'Tudo já teve resposta';
     case 'fazendo':
-      return emojiFazendo
-        ? `ninguém anunciou que pegou — a reação ${emojiFazendo} no Teams enche esta coluna`
-        : 'coluna desligada — escolha no cabeçalho o emoji de "peguei esta"';
+      return emojiFazendo ? 'Ninguém pegou nada' : 'Sem emoji definido';
     case 'interagido':
-      return 'ninguém reagiu com algo que não seja o check';
+      return 'Nenhuma reação ainda';
     case 'feito':
-      return 'nada concluído ainda — o check ✅ no Teams traz os cards para cá';
+      return 'Nada concluído';
     case 'meu':
-      return emojiMeu
-        ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou "Fiz esta" no menu ⋯ do card`
-        : 'nada ainda — use "Fiz esta" no menu ⋯ de um card para anotar o que você resolveu';
+      return emojiMeu ? 'Nada seu ainda' : 'Marque um card com "Fiz esta"';
     case 'ignorada':
-      return 'nada descartado — no menu ⋯ de um card, "Não é pra mim"';
+      return 'Nada descartado';
   }
 }
 
@@ -1177,7 +1172,7 @@ export function Quadro() {
                   grupos={grupos[coluna] ?? []}
                   vazio={
                     sua
-                      ? 'nada aqui — arraste um card para dentro; esta coluna não recebe sozinha'
+                      ? 'Arraste um card para cá'
                       : vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo)
                   }
                   colapsada={colapsadas.has(coluna)}
@@ -1254,7 +1249,7 @@ export function Quadro() {
               <button
                 className="nova-coluna"
                 onClick={() => setCriandoColuna(true)}
-                title="Uma coluna sua, sem regra: só recebe o que você arrastar"
+                title="Uma coluna sua — recebe só o que você arrastar"
               >
                 <IconeMais tamanho={16} />
                 nova coluna

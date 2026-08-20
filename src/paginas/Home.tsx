@@ -54,13 +54,9 @@ export function Home() {
       rotulo: 'Refazer a configuração',
       corpo: (
         <>
+          <p>Apaga o agente escolhido, a conta verificada e a lista de chats.</p>
           <p>
-            Apaga o cache do onboarding: o agente de IA escolhido, a conta Microsoft verificada, a
-            lista de chats e a preferência de confirmar antes de atualizar.
-          </p>
-          <p>
-            Seus murais, o histórico de tasks e o registro de gastos <strong>não</strong> são
-            tocados.
+            Seus murais e o histórico <strong>não</strong> são tocados.
           </p>
         </>
       ),
@@ -84,8 +80,8 @@ export function Home() {
       perigo: true,
       corpo: (
         <p>
-          O histórico acumulado deste mural é apagado — as anotações da daily, as etiquetas e o
-          arquivo das sprints encerradas. A conversa no Teams não é tocada.
+          O histórico deste mural é apagado — anotações, etiquetas e sprints arquivadas. A conversa
+          no Teams não é tocada.
         </p>
       ),
       aoConfirmar: () => void removerMesmo(m),
@@ -128,10 +124,7 @@ export function Home() {
             <strong>{terminadas}</strong> card(s) de <em>Concluído</em> e de{' '}
             <em>Concluído por mim</em> saem do quadro e vão para o arquivo desta sprint.
           </p>
-          <p>
-            Nada é apagado: o dashboard e os painéis leem de lá, com as anotações da daily inteiras.
-            A sprint seguinte começa hoje.
-          </p>
+          <p>Nada é apagado. A sprint seguinte começa hoje.</p>
         </>
       ),
       aoConfirmar: () => void encerrarMesmo(m),
@@ -158,14 +151,14 @@ export function Home() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
         <span className="espaco" />
-        <button onClick={resetarOnboarding} title="Limpa o cache do onboarding e recomeça">
+        <button onClick={resetarOnboarding} title="Recomeçar a configuração">
           Refazer configuração
         </button>
         <button className="primario" onClick={() => navegar('/onboarding')}>
           Novo mural
         </button>
       </div>
-      <p className="sub">Seus quadros. Cada um acompanha uma conversa do Teams.</p>
+      <p className="sub">Cada quadro acompanha uma conversa do Teams.</p>
 
       {erro && <p className="aviso erro">{erro}</p>}
 
@@ -215,7 +208,7 @@ export function Home() {
                         e.stopPropagation();
                         void encerrarSprint(m);
                       }}
-                      title="Arquiva Concluído e Concluído por mim, e abre a sprint seguinte"
+                      title="Arquiva o que está concluído e abre a sprint seguinte"
                     >
                       encerrar
                     </button>
@@ -245,7 +238,7 @@ export function Home() {
                   e.stopPropagation();
                   navegar(`/m/${m.id}/dashboard`);
                 }}
-                title="Ritmo, distribuição e quem carrega o quê, em gráficos"
+                title="Ritmo e distribuição, em gráficos"
               >
                 Dashboard
               </button>

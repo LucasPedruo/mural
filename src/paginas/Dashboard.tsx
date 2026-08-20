@@ -108,47 +108,47 @@ export function Dashboard() {
 
       {erro && <p className="aviso erro">{erro}</p>}
 
-      {!dados && !erro && <p className="carregando">Lendo o histórico…</p>}
+      {!dados && !erro && <p className="carregando">Carregando…</p>}
 
       {dados && t && (
         <>
           <div className="indicadores">
             <Indicador
               valor={String(t.tasks)}
-              rotulo={t.tasks === 1 ? 'task no histórico' : 'tasks no histórico'}
-              detalhe="Tudo que já passou por este mural: o que está no quadro agora mais o que as sprints encerradas arquivaram."
+              rotulo={t.tasks === 1 ? 'task' : 'tasks'}
+              detalhe="O que está no quadro agora, mais o arquivo das sprints encerradas."
             />
             <Indicador
               valor={String(t.emAberto)}
               rotulo="em aberto"
-              detalhe="Nem concluídas nem ignoradas. Ignorada não conta: ela foi decidida, só não foi feita."
+              detalhe="Nem concluídas, nem fora do escopo."
             />
             <Indicador
               valor={String(t.concluidas)}
               rotulo="concluídas"
-              detalhe="Check no Teams, 'Fiz esta' ou crédito a outra pessoa — as três contam."
+              detalhe="Check no Teams, 'Fiz esta' ou crédito a outra pessoa."
             />
             <Indicador
               valor={t.medianaDeDias === null ? '—' : `${t.medianaDeDias}d`}
-              rotulo="do pedido até pronta"
-              detalhe="Mediana, não média: uma task esquecida há seis meses puxaria a média para um número que não descreve nenhuma semana real."
+              rotulo="do pedido até pronto"
+              detalhe="Mediana, não média — uma task esquecida distorceria a média."
             />
             <Indicador
               valor={t.maisAntigaEmAbertoDias === null ? '—' : `${t.maisAntigaEmAbertoDias}d`}
-              rotulo="a mais velha parada"
-              detalhe="Há quantos dias está a task em aberto mais antiga. No quadro ela é só mais um card no fim da coluna."
+              rotulo="parada há mais tempo"
+              detalhe="Há quantos dias está a task em aberto mais antiga."
             />
             <Indicador
               valor={String(t.bugs)}
               rotulo={t.bugs === 1 ? 'bug' : 'bugs'}
-              detalhe={`${t.sugestoes} são sugestões ou pedidos, não defeitos.`}
+              detalhe={`${t.sugestoes} são sugestões, não defeitos.`}
             />
           </div>
 
           <div className="grade-graficos">
             <Cartao
               titulo="Onde o mural está"
-              explicacao="A proporção entre as colunas, agora. Contando o histórico arquivado das sprints encerradas."
+              explicacao="A proporção entre as colunas, contando o arquivo das sprints."
             >
               <GraficoDeRosca
                 fatias={COLUNAS.map((c) => ({
@@ -161,7 +161,7 @@ export function Dashboard() {
 
             <Cartao
               titulo="Ritmo · últimos 30 dias"
-              explicacao="Quanto chega contra quanto sai. É o que o quadro não mostra: lá dá para ver o acúmulo, não se ele está crescendo."
+              explicacao="Quanto chega contra quanto sai."
               largo
             >
               <GraficoDeRitmo pontos={dados.porDia} />
@@ -169,7 +169,7 @@ export function Dashboard() {
 
             <Cartao
               titulo="Por sprint"
-              explicacao="Chegou contra concluiu, ciclo a ciclo. A distância entre as duas barras é a pergunta."
+              explicacao="Chegou contra concluiu, ciclo a ciclo."
               largo
             >
               <GraficoDeSprints
@@ -184,7 +184,7 @@ export function Dashboard() {
 
             <Cartao
               titulo="Quem resolveu"
-              explicacao="Só aparece quem foi creditado à mão. O Teams conta que alguém deu o check, nunca quem — é para isso que existe o 'Feito por outra pessoa' no menu do card."
+              explicacao="Só quem foi creditado à mão — o Teams não conta quem deu o check."
             >
               <BarrasRanqueadas
                 linhas={dados.porPessoa.map((p) => ({
@@ -192,20 +192,18 @@ export function Dashboard() {
                   total: p.total,
                   destaque: p.ehVoce,
                 }))}
-                vazio="Ninguém creditado ainda. Use 'Fiz esta' ou 'Feito por outra pessoa' no menu ⋯ de um card concluído."
+                vazio="Ninguém creditado ainda."
               />
               {t.semCredito > 0 && (
                 <p className="grafico-vazio">
-                  {t.semCredito} concluída{t.semCredito === 1 ? '' : 's'} sem dono conhecido —
-                  {t.semCredito === 1 ? ' ela' : ' elas'} não{' '}
-                  {t.semCredito === 1 ? 'está' : 'estão'} acima.
+                  {t.semCredito} concluída{t.semCredito === 1 ? '' : 's'} sem dono conhecido.
                 </p>
               )}
             </Cartao>
 
             <Cartao
               titulo="Quem pede"
-              explicacao="De onde vem a demanda. A parte escura de cada barra é o que já foi concluído."
+              explicacao="De onde vem a demanda. A parte escura já foi concluída."
             >
               <BarrasRanqueadas
                 linhas={dados.porAutor.map((a) => ({
@@ -213,13 +211,13 @@ export function Dashboard() {
                   total: a.total,
                   concluidas: a.concluidas,
                 }))}
-                vazio="Nenhuma mensagem lida ainda — atualize o quadro."
+                vazio="Nenhuma mensagem lida ainda."
               />
             </Cartao>
 
             <Cartao
               titulo="Por etiqueta"
-              explicacao="As etiquetas atravessam sprint: 'quanto de Financeiro chegou' não se responde olhando uma coluna."
+              explicacao="As etiquetas atravessam sprint."
             >
               <BarrasRanqueadas
                 linhas={dados.tags.map((tag) => ({
@@ -227,7 +225,7 @@ export function Dashboard() {
                   total: tag.total,
                   concluidas: tag.concluidas,
                 }))}
-                vazio="Nenhuma etiqueta ainda — no menu ⋯ de um card, 'Etiquetas'."
+                vazio="Nenhuma etiqueta ainda."
               />
             </Cartao>
           </div>

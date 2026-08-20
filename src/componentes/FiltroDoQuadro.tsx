@@ -76,11 +76,7 @@ export function FiltroDoQuadro({
         aria-haspopup="dialog"
         aria-expanded={aberto}
         aria-label={ligados ? `Filtros — mostrando só ${resumo}` : 'Filtros'}
-        title={
-          ligados
-            ? `Mostrando só ${resumo}. As contagens das colunas são do filtro, não do quadro inteiro.`
-            : 'Filtrar por quem pediu e por etiqueta'
-        }
+        title={ligados ? `Mostrando só ${resumo}` : 'Filtrar'}
         onClick={() => setAberto((v) => !v)}
       >
         <IconeFiltro tamanho={16} />
@@ -103,7 +99,7 @@ export function FiltroDoQuadro({
               <IconePessoa tamanho={13} /> quem pediu
             </span>
             {autores.length === 0 ? (
-              <p className="vazio-filtro">ninguém ainda — atualize o quadro</p>
+              <p className="vazio-filtro">Ninguém ainda</p>
             ) : (
               <div className="opcoes-de-filtro">
                 <button
@@ -134,9 +130,7 @@ export function FiltroDoQuadro({
               <IconeEtiqueta tamanho={13} /> etiqueta
             </span>
             {tags.length === 0 ? (
-              <p className="vazio-filtro">
-                nenhuma etiqueta ainda — no menu ⋯ de um card, "Etiquetas"
-              </p>
+              <p className="vazio-filtro">Nenhuma etiqueta ainda</p>
             ) : (
               <div className="opcoes-de-filtro">
                 <button
@@ -165,9 +159,7 @@ export function FiltroDoQuadro({
           </div>
 
           {ligados > 0 && (
-            <p className="aviso-do-filtro">
-              As contagens das colunas são do filtro, não do quadro inteiro.
-            </p>
+            <p className="aviso-do-filtro">As contagens são do filtro, não do quadro.</p>
           )}
         </div>
       )}

@@ -55,7 +55,7 @@ function Item({
             value={rascunho}
             autoFocus
             maxLength={500}
-            placeholder="Ex.: esse custo foi a releitura do canal inteiro depois do feriado"
+            placeholder="Uma nota sobre esta atualização…"
             onChange={(e) => setRascunho(e.target.value)}
             onBlur={salvar}
             onKeyDown={(e) => {
@@ -85,7 +85,7 @@ function Item({
                 setRascunho(n.nota ?? '');
                 setAnotando(true);
               }}
-              title={n.nota ? 'Editar a sua nota' : 'Escrever uma nota sobre esta leitura'}
+              title={n.nota ? 'Editar a nota' : 'Adicionar uma nota'}
             >
               <IconeEditar tamanho={12} />
               {n.nota ? 'editar nota' : 'anotar'}
@@ -187,7 +187,7 @@ export function Notificacoes({
                 className="limpar"
                 type="button"
                 onClick={aoLimpar}
-                title="Tira as que você não anotou — as anotadas ficam"
+                title="Tira as que você não anotou"
               >
                 Limpar {limpaveis}
               </button>
@@ -201,7 +201,7 @@ export function Notificacoes({
                 className="dispensar"
                 type="button"
                 onClick={fixado.aoDispensar}
-                title="Dispensar — volta a aparecer se outra task sair da janela"
+                title="Dispensar"
                 aria-label="Dispensar o aviso"
               >
                 <IconeFechar tamanho={13} />
@@ -214,10 +214,7 @@ export function Notificacoes({
           ))}
 
           {!fixado && itens.length === 0 && (
-            <p className="vazio">
-              Nada por aqui. O resumo de cada leitura do Teams — o que mudou e quanto custou —
-              aparece nesta lista, e cada um aceita uma nota sua.
-            </p>
+            <p className="vazio">Nada por aqui. O resumo de cada atualização aparece nesta lista.</p>
           )}
         </div>
       )}

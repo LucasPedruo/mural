@@ -95,15 +95,6 @@ export function CartaoDeTask({
   const linhas = mensagens.filter((m) => !m.soPrint && m.summary !== task.summary);
   const agrupado = mensagens.length > 1;
 
-  // Recolher vale para qualquer card, e não só para o que tem print ou rajada:
-  // desde que o título passou a ser o texto da mensagem verbatim, um card sozinho
-  // já pode ocupar seis linhas. O que ele esconde varia; que ele encolhe, não.
-  const temDetalhe =
-    prints.length > 0 ||
-    linhas.length > 0 ||
-    (naColunaDaDaily && !!task.meu) ||
-    !!task.feitoPor?.solucao;
-
   // Arrastar entre as colunas do Teams so vale para task fora de alcance ou
   // gravada por uma versao anterior: enquanto a mensagem aparece no Teams, a
   // reacao de la manda e a proxima atualizacao desfaria o movimento. O servidor
@@ -113,13 +104,13 @@ export function CartaoDeTask({
 
   const dica = selecionando
     ? selecionado
-      ? 'Selecionada para juntar — clique para tirar da seleção'
-      : 'Clique para incluir na task que vai ser juntada'
+      ? 'Clique para tirar da seleção'
+      : 'Clique para juntar com o outro'
     : propria
-      ? 'Criada à mão numa versão anterior: não tem mensagem no Teams, mas você pode arrastá-la'
+      ? 'Criada à mão — não tem mensagem no Teams'
       : podeArrastar
-        ? 'Clique para abrir no Teams · fora de alcance: arraste para mudar de coluna'
-        : 'Clique para abrir a mensagem no Teams';
+        ? 'Clique para abrir no Teams · arraste para mudar de coluna'
+        : 'Clique para abrir no Teams';
 
   // Tudo o que se faz num card mora no menu de "…". Antes eram sete botões
   // disputando o canto do rodapé, todos escondidos atrás de hover e sem nome.
@@ -129,9 +120,7 @@ export function CartaoDeTask({
     rotulo: colapsado ? 'Expandir' : 'Recolher',
     icone: colapsado ? <IconeAbaixo /> : <IconeAcima />,
     aoEscolher: () => aoColapsar(task, !colapsado),
-    dica: temDetalhe
-      ? 'Deixa uma linha do texto; esconde prints, rajada e anotação'
-      : 'Deixa uma linha do texto',
+    dica: 'Deixa uma linha do texto',
   });
 
   // Preso numa coluna sua, o card não tem status a mexer: ele saiu do fluxo do
@@ -142,7 +131,7 @@ export function CartaoDeTask({
       rotulo: 'Devolver ao Teams',
       icone: <IconeDesfazer />,
       aoEscolher: () => aoSoltarDaColuna(task),
-      dica: 'Volta para a coluna que a reação no canal manda',
+      dica: 'Volta para a coluna que a reação manda',
     });
   }
 
@@ -171,7 +160,7 @@ export function CartaoDeTask({
       rotulo: 'Fiz esta',
       icone: <IconeFeito />,
       aoEscolher: () => aoMarcarComoMeu(task),
-      dica: 'Anotar a solução para a daily',
+      dica: 'Anotar a solução',
     });
     // O crédito de quem não é você. Fica ao lado do "Fiz esta" porque é a mesma
     // pergunta — quem resolveu — e o Teams não responde nenhuma das duas: ele
@@ -194,7 +183,7 @@ export function CartaoDeTask({
         rotulo: 'Feito por outra pessoa',
         icone: <IconePessoa />,
         aoEscolher: () => aoCreditarOutro(task),
-        dica: 'Anotar quem resolveu — o Teams não conta isso',
+        dica: 'Anotar quem resolveu',
       });
     }
   }
@@ -210,7 +199,7 @@ export function CartaoDeTask({
       rotulo: selecionado ? 'Tirar da seleção' : 'Juntar com outro',
       icone: <IconeJuntar />,
       aoEscolher: () => aoSelecionar(task),
-      dica: 'Para quando a mesma demanda virou dois cards',
+      dica: 'Quando a mesma demanda virou dois cards',
     });
   }
 
@@ -228,7 +217,7 @@ export function CartaoDeTask({
       rotulo: 'Não é pra mim',
       icone: <IconeIgnorar />,
       aoEscolher: () => aoIgnorar(task, true),
-      dica: 'Tira o card do quadro sem tocar no Teams',
+      dica: 'Tira do quadro, sem tocar no Teams',
     });
   }
 
@@ -246,7 +235,7 @@ export function CartaoDeTask({
       icone: <IconeApagar />,
       aoEscolher: () => aoApagar(task),
       perigo: true,
-      dica: 'A mensagem não volta em nenhuma atualização',
+      dica: 'Não tem volta',
     });
   }
 
@@ -335,7 +324,7 @@ export function CartaoDeTask({
                 {naColunaDaDaily && task.meu && (
                   <p className="solucao">
                     {task.meu.solucao || (
-                      <span className="sem-nota">sem anotação — use o menu para escrever</span>
+                      <span className="sem-nota">Sem anotação</span>
                     )}
                   </p>
                 )}
@@ -357,7 +346,7 @@ export function CartaoDeTask({
               {propria && (
                 <span
                   className="badge marca"
-                  title="Criada à mão numa versão anterior do Mural, não veio do Teams"
+                  title="Criada à mão numa versão anterior — não veio do Teams"
                 >
                   à mão
                 </span>
@@ -395,7 +384,7 @@ export function CartaoDeTask({
               {task.feitoPor && (
                 <span
                   className="badge marca"
-                  title={`Creditado a ${task.feitoPor.quem} em ${dataCurta(task.feitoPor.em)}. É uma anotação sua — nada foi escrito no Teams.`}
+                  title={`Creditado a ${task.feitoPor.quem} em ${dataCurta(task.feitoPor.em)}`}
                 >
                   feito por {task.feitoPor.quem}
                 </span>
@@ -403,7 +392,7 @@ export function CartaoDeTask({
               {task.meu?.via === 'emoji' && (
                 <span
                   className="badge marca"
-                  title="Está aqui porque a sua reação está na mensagem. Para tirar, remova a reação no Teams."
+                  title="Está aqui pela sua reação na mensagem"
                 >
                   pela reação
                 </span>
@@ -414,7 +403,7 @@ export function CartaoDeTask({
               {task.coluna && (
                 <span
                   className="badge marca"
-                  title={`Você prendeu este card nesta coluna. No Teams ele está como "${task.status}", e nenhuma leitura o move enquanto estiver preso.`}
+                  title={`Preso por você. No Teams está como "${task.status}".`}
                 >
                   fora do fluxo
                 </span>
@@ -422,7 +411,7 @@ export function CartaoDeTask({
               {task.foraDeAlcance && !propria && (
                 <span
                   className="badge alerta"
-                  title="Saiu das ~20 mensagens que a API devolve. O Teams não conta mais nada sobre este card: quem move é você, arrastando."
+                  title="O Teams não atualiza mais este card — quem move é você, arrastando"
                 >
                   sem sinal do Teams
                 </span>

@@ -36,11 +36,7 @@ export function DialogoDeColuna({ coluna, aoSalvar, aoCancelar }: Props) {
       >
         <h2 id="titulo-coluna">{coluna ? 'Renomear a coluna' : 'Nova coluna'}</h2>
         {!coluna && (
-          <p className="explicacao">
-            Ela não vai receber card sozinha: as seis colunas do quadro saem da reação no Teams, e
-            esta não tem regra nenhuma. Você arrasta o que quiser para dentro — inclusive card que
-            o Teams ainda acompanha, que passa a ficar preso aqui até você devolvê-lo.
-          </p>
+          <p className="explicacao">Recebe só o que você arrastar para dentro.</p>
         )}
 
         <label className="campo">
@@ -56,7 +52,7 @@ export function DialogoDeColuna({ coluna, aoSalvar, aoCancelar }: Props) {
               if (e.key === 'Enter') salvar();
             }}
           />
-          <span className="dica">Curto: o cabeçalho da coluna tem a largura de um card.</span>
+          <span className="dica">Curto — cabe a largura de um card.</span>
         </label>
 
         <div className="campo">
@@ -75,10 +71,7 @@ export function DialogoDeColuna({ coluna, aoSalvar, aoCancelar }: Props) {
               />
             ))}
           </div>
-          <span className="dica">
-            É a faixa que identifica a coluna, do mesmo jeito que a cor de status identifica as
-            outras seis.
-          </span>
+
         </div>
 
         <div className="acoes-modal">

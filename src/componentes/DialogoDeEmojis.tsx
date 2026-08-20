@@ -38,22 +38,16 @@ export function DialogoDeEmojis({ emojiFazendo, emojiMeu, checks, aoSalvar, aoFe
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="titulo-emojis">As reações</h2>
-        <p className="explicacao">
-          O quadro inteiro sai daqui: o Mural lê as reações das mensagens, e é isso que decide a
-          coluna de cada card. Duas você escolhe; a terceira já está decidida.
-        </p>
+        <p className="explicacao">A reação no Teams é o que decide a coluna de cada card.</p>
 
         <EscolherEmoji
           id="emoji-fazendo-quadro"
           titulo="peguei esta"
           dono="time"
-          explicacao={
-            'Enche a coluna Em andamento. Vale para QUALQUER pessoa que reagir: é o jeito de ' +
-            'alguém anunciar que já está mexendo, para dois não pegarem a mesma demanda.'
-          }
+          explicacao="Enche a coluna Em andamento. Vale para qualquer pessoa que reagir."
           valor={emojiFazendo}
           sugestoes={['⚪', '⏱️', '👀', '🔨', '🚧']}
-          rotuloDeDesligar="não usamos isso — desligar a coluna"
+          rotuloDeDesligar="desligar a coluna"
           aoMudar={(e) => void mudar({ emojiFazendo: e })}
         />
 
@@ -61,14 +55,10 @@ export function DialogoDeEmojis({ emojiFazendo, emojiMeu, checks, aoSalvar, aoFe
           id="emoji-meu-quadro"
           titulo="fui eu que fiz"
           dono="você"
-          explicacao={
-            'Manda o card para Concluído por mim, com a anotação da daily. Precisa ser um emoji ' +
-            'que SÓ VOCÊ usa nesse canal: o Teams não conta quem reagiu, então esta é a única ' +
-            'forma de o quadro saber que o trabalho foi seu.'
-          }
+          explicacao="Manda o card para Concluído por mim. Escolha um emoji que só você usa."
           valor={emojiMeu}
           sugestoes={['🟢', '💚', '🙌', '🦄', '🎯']}
-          rotuloDeDesligar="prefiro marcar à mão no card"
+          rotuloDeDesligar="marcar à mão no card"
           aoMudar={(e) => void mudar({ emojiMeu: e })}
         />
 
@@ -76,8 +66,8 @@ export function DialogoDeEmojis({ emojiFazendo, emojiMeu, checks, aoSalvar, aoFe
           <div className="check-fixo">
             <span className="emojis">{checks.slice(0, 3).join(' ')}</span>
             <p>
-              <strong>Concluído</strong> não se configura: o check já quer dizer "feito" para o
-              canal inteiro. Por isso ele também não pode ser nenhuma das duas de cima.
+              <strong>Concluído</strong> não se configura — o check já quer dizer "feito" para o
+              canal inteiro.
             </p>
           </div>
         )}

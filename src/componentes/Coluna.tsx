@@ -77,7 +77,7 @@ export function Coluna({
   ultimaVisita,
   acessorio,
   menu,
-  vazio = 'nada aqui',
+  vazio = 'Nada aqui',
   colapsada,
   aoColapsar,
   selecionando,
