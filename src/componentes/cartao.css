@@ -23,23 +23,27 @@
 
 /* Fora de alcance: o Teams nao conta mais nada sobre este card, entao ele e o
    unico que pode ser movido a mao — e o quadro precisa dizer isso de longe, nao
-   so quando a pessoa passa o mouse. Tracejado sozinho nao segurava o recado:
-   agora vem com cor propria, hachura e alca de arraste. */
+   so quando a pessoa passa o mouse.
+   A distincao e de RELEVO, nao de cor: neste quadro cor significa status, e um
+   fundo colorido competia com a faixa lateral em vez de somar. Sem superficie
+   propria e sem sombra, o card afunda na coluna — que e exatamente o que ele e:
+   um card que ninguem alimenta mais. */
 .cartao.fora {
   border-style: dashed;
-  border-color: var(--marca-legado);
+  border-color: var(--border-strong);
   border-left: 3px solid var(--linha);
+  background: transparent;
+  box-shadow: none;
   cursor: grab;
-  /* Hachura levíssima: a textura diz "este card é de outra natureza" antes de
-     qualquer badge ser lido, e sobrevive ao card estar em qualquer coluna. */
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--tinta-legado) 0 6px,
-    transparent 6px 13px
-  );
 }
-/* A alça de arraste: só nestes cards e nos seus o gesto existe, então só neles
-   ela aparece. É o que substitui a explicação em texto. */
+/* No hover ele sobe para a superficie normal: e o sinal de que aqui, ao
+   contrario dos outros, a mao manda. */
+.cartao.fora:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+}
+/* A alça de arraste: só nestes cards o gesto existe, então só neles ela
+   aparece. É o que substitui a explicação em texto. */
 .cartao.fora::before {
   content: '';
   position: absolute;
@@ -47,12 +51,12 @@
   right: 11px;
   width: 9px;
   height: 13px;
-  opacity: 0.5;
-  background-image: radial-gradient(circle, var(--marca-legado) 1.1px, transparent 1.2px);
+  opacity: 0.45;
+  background-image: radial-gradient(circle, var(--text-muted) 1.1px, transparent 1.2px);
   background-size: 4px 4px;
 }
 .cartao.fora:hover::before {
-  opacity: 1;
+  opacity: 0.9;
 }
 .cartao.fora:active {
   cursor: grabbing;
@@ -60,6 +64,7 @@
 .cartao.preso {
   cursor: default;
 }
+
 
 .cartao.arrastando {
   box-shadow: var(--shadow-arrastando);
@@ -92,37 +97,17 @@
 
 .cartao .print {
   position: relative;
-  display: block;
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
   width: 100%;
   height: 30px;
   border-radius: 6px;
   background: var(--bg-surface-2);
   border: 1px solid var(--border-default);
   overflow: hidden;
-}
-
-/* A moldura vazia desenhada em CSS: o disco e a montanha que toda miniatura de
-   imagem tem. Nada de asset — e nada de emoji, que muda de forma por sistema. */
-.cartao .print::before {
-  content: '';
-  position: absolute;
-  left: 11px;
-  top: 10px;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--border-strong);
-}
-.cartao .print::after {
-  content: '';
-  position: absolute;
-  left: 21px;
-  bottom: 7px;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 9px solid var(--border-strong);
+  /* O ícone herda a cor daqui, como qualquer texto. */
+  color: var(--text-muted);
 }
 
 /* O brilho que atravessa a faixa: sem ele a barra cinza parece um erro de
@@ -193,27 +178,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.cartao .abrir-web {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-  text-decoration: none;
-  border: 1px solid var(--border-default);
-  border-radius: 999px;
-  padding: 1px 8px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.cartao:hover .abrir-web {
-  opacity: 1;
-}
-.cartao .abrir-web:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
-/* Task escrita aqui dentro: sem tracejado, porque ela nunca "se perdeu" do
-   Teams — nasceu movível. O selo "minha" no rodapé é quem diz o que ela é. */
+/* Task que uma versao anterior gravou: sem tracejado, porque ela nunca "se
+   perdeu" do Teams — nasceu movivel. O selo "a mao" no rodape diz o que ela e. */
 .cartao.propria {
   cursor: grab;
   border-style: solid;
@@ -247,38 +213,45 @@
   gap: 5px;
 }
 
-/* Mesma discrição do atalho "web": só aparece no hover, para o rodapé não
-   virar uma barra de ferramentas. */
-.cartao .acao {
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-  padding: 1px 8px;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: none;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
-}
-.cartao:hover .acao,
-.cartao .acao:focus-visible {
-  opacity: 1;
-}
-.cartao .acao:hover {
-  color: var(--marca-meu);
-  border-color: var(--marca-meu);
+
+/* Etiqueta: e texto seu, nao dado do Teams. Por isso tem a cor da marca e nao a
+   de status — e por isso vem antes das reacoes no rodape. */
+.cartao .badge.etiqueta {
   background: var(--bg-brand-subtle);
+  color: var(--marca-meu);
+  border: 1px solid transparent;
+  font-weight: 500;
 }
 
-/* Ação ligada — o card está na seleção do juntar. Fica visível sem hover: uma
-   seleção que desaparece quando o mouse sai não é uma seleção. */
-.cartao .acao.ligada {
-  opacity: 1;
-  color: var(--marca-meu);
-  border-color: var(--marca-meu);
-  background: var(--bg-brand-subtle);
+/* Apagar e o unico gesto irreversivel do quadro: ele nao pode parecer com os
+   outros. */
+.cartao .acao.perigo:hover {
+  color: var(--text-danger);
+  border-color: var(--color-danger-500);
+  background: var(--bg-danger);
 }
 
-.cartao .abrir-web {
-  margin-left: 0;
+/* Card ignorado: ele existe para ser encontrado se voce mudar de ideia, nao para
+   ser lido. Fica apagado, e volta ao normal no hover. */
+.cartao.ignorada {
+  opacity: 0.62;
+  background: transparent;
+  box-shadow: none;
+}
+.cartao.ignorada:hover {
+  opacity: 1;
+  background: var(--bg-surface);
+}
+
+/* Card recolhido: so o titulo e o rodape. O aperto no padding e de proposito —
+   recolher existe para caber mais card na tela, e um card recolhido do mesmo
+   tamanho do aberto nao teria feito nada. */
+.cartao.colapsado {
+  padding: 8px 13px;
+}
+.cartao.colapsado .texto {
+  font-size: 13px;
+}
+.cartao.colapsado .rodape {
+  margin-top: 6px;
 }

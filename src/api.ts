@@ -6,13 +6,13 @@ import type {
   FonteEscolhida,
   Mural,
   MuralNaLista,
-  NovaTask,
   Preferencias,
   RespostaAgentes,
   RespostaConsumo,
   RespostaPainel,
   RespostaSprint,
   RespostaTasks,
+  TagComContagem,
   ResultadoEncerramento,
   ResultadoSync,
   SomaDeConsumo,
@@ -106,6 +106,26 @@ export const api = {
   separar: (muralId: string, id: string) =>
     pedir<RespostaTasks & { quantas: number }>(`/api/separar?mural=${muralId}`, json({ id })),
 
+  // --- marcas pessoais: ignorar, apagar, etiquetar ---
+  // Nenhuma delas toca no Teams: são opiniões suas sobre a mensagem, guardadas
+  // em campo próprio para o sync não as apagar.
+
+  ignorar: (muralId: string, id: string, ignorar = true) =>
+    pedir<RespostaTasks>(`/api/ignorar?mural=${muralId}`, json({ id, ignorar })),
+
+  // Irreversível: o card sai do arquivo e a mensagem entra na lista de
+  // arquivados, para a próxima leitura não a trazer de volta.
+  apagar: (muralId: string, id: string) =>
+    pedir<RespostaTasks>(`/api/apagar?mural=${muralId}`, json({ id })),
+
+  tags: (muralId: string) => pedir<{ tags: TagComContagem[] }>(`/api/tags?mural=${muralId}`),
+
+  salvarTags: (muralId: string, id: string, tags: string[]) =>
+    pedir<RespostaTasks & { tags: TagComContagem[] }>(
+      `/api/tags?mural=${muralId}`,
+      json({ id, tags }),
+    ),
+
   // --- sprint ---
 
   sprint: (muralId: string) => pedir<RespostaSprint>(`/api/sprint?mural=${muralId}`),
@@ -122,23 +142,6 @@ export const api = {
 
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
-
-  // --- tasks próprias ---
-
-  criarTask: (muralId: string, task: NovaTask) =>
-    pedir<RespostaTasks & { id: string }>(`/api/task?mural=${muralId}`, json(task)),
-
-  editarTask: (muralId: string, task: NovaTask & { id: string }) =>
-    pedir<RespostaTasks>(`/api/task?mural=${muralId}`, {
-      ...json(task),
-      method: 'PUT',
-    }),
-
-  removerTask: (muralId: string, id: string) =>
-    pedir<RespostaTasks>(
-      `/api/task?mural=${muralId}&id=${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    ),
 
   // A marca pessoal vale para qualquer card, inclusive os que o Teams ainda
   // acompanha: ela não mexe no status, então não há o que o sync desfazer.

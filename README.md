@@ -17,17 +17,59 @@ coluna com o que eu fiz, agrupada por dia, com a anotação de como resolvi.
 
 ## Em 30 segundos
 
-Quatro colunas:
+As colunas:
 
 | Coluna | O que cai nela |
 | --- | --- |
 | **Ninguém pegou** | mensagem sem reação nenhuma |
-| **Interagido** | mensagem com qualquer reação que não seja check |
-| **Concluído** | mensagem com check (✅ ☑️ ✔️) |
+| **Fazendo** | mensagem com ⚪ — a reação de "peguei esta" (configurável) |
+| **Interagido** | mensagem com qualquer outra reação que não seja check |
+| **Concluído por outros** | mensagem com check (✅ ☑️ ✔️) que não é sua |
 | **Feito por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
+| **Ignoradas** | o que você decidiu que não é pra você — nasce colapsada |
+
+*Concluído por outros* se chama assim porque o que **você** fez sai dali para
+*Feito por mim*: o que resta é o trabalho do resto do time. Numa conversa de duas
+pessoas a coluna volta a ser só *Concluído*, como a primeira volta a ser *Sem
+reação* — "por outros" pressupõe um time.
 
 Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
 **Atualizar** relê a conversa.
+
+**A ordem das colunas é sua**: arraste uma coluna pelo cabeçalho e ela troca de
+lugar. Fica guardada por mural, no navegador, e é validada na leitura — uma versão
+nova do Mural pode ter coluna que a ordem salva não conhece, e uma lista velha no
+navegador não pode fazer coluna desaparecer do quadro.
+
+As colunas ficam numa **fila única que rola no horizontal**, sem quebrar linha: é
+o que o arraste entende como lista, e é o que faz um quadro parecer um quadro em
+vez de duas fileiras de colunas. Quem tem tela pequena colapsa o que não está
+usando — foi para isso que o colapsar existe.
+
+**Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
+fina com o rótulo de pé e a contagem. **Cada card também**: recolhido, ele mostra
+só o título e o rodapé, sem os prints, sem a continuação da rajada e sem a
+anotação da daily. Quem trabalha por sprint não olha *Interagido* toda hora, e o
+espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
+recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
+por mural e ficam no navegador.
+
+**Tudo o que se faz num card mora no menu ⋯** dele. Eram sete botões disputando o
+canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação tem
+ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de
+exigir que você decore o que cada símbolo faz.
+
+**Os filtros** ficam acima das colunas: dois selects, por **quem pediu** e por
+**etiqueta**, com a contagem em cada opção. São selects e não pílulas porque a
+lista de quem pede cresce com o time e a de etiquetas cresce com o uso — uma barra
+que quebra em três linhas empurra o quadro para baixo da dobra, e o select tem
+altura fixa por mais longa que a lista fique.
+
+Eles cortam o quadro inteiro, e uma faixa avisa quando algo está escondido:
+contagem de coluna que mente é pior que filtro que não existe.
+
+O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
+colunas existe só para os cards que o Teams não acompanha mais.
 
 Um card não é uma mensagem: é uma **demanda**. Quando alguém manda dois prints e
 três linhas de texto em seguida, aquilo vira um card só — veja
@@ -62,7 +104,7 @@ servidor e abre o navegador. Para trocar a porta:
 `MURAL_PORT=5000 node server.js`.
 
 Não existe login próprio. A autenticação com a Microsoft é a do agente e do MCP
-dele — este servidor nunca vê nem guarda credencial nenhuma. Quando o token
+dele — **este servidor nunca vê nem guarda credencial nenhuma**. Quando o token
 expira, o Mural para de atualizar até você reautorizar no agente (no Claude Code,
 `/mcp`).
 
@@ -133,14 +175,13 @@ custo — veja [Quanto custa atualizar](#quanto-custa-atualizar).
 
 **Mover uma task** se faz no Teams: reaja na mensagem lá e atualize. A fonte da
 verdade é sempre a conversa. O arraste entre colunas só funciona nos cards que o
-Teams não acompanha mais (os "fora de alcance") e nas tasks que você mesmo criou.
+Teams não acompanha mais — os "fora de alcance".
 
-**Nova task** abre um formulário — texto, tipo e coluna — para o que não passou
-pelo canal: o que combinaram no corredor, o bug que você mesmo achou. Essas são
-livres: arraste, edite, apague. Um selo **minha** no rodapé diz de onde veio.
+Nem para eles vale arrastar até *Interagido*: não existe emoji que signifique
+"interagido", é o que sobra quando alguém reage com outra coisa.
 
-**fiz**, no rodapé de qualquer card, joga ele para *Feito por mim*. Ou reaja no
-Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
+**Fiz esta**, no menu ⋯ de qualquer card, joga ele para *Feito por mim*. Ou reaja
+no Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
 próxima atualização.
 
 **Juntar e separar** (⧉ e ⑃ no rodapé) consertam o agrupamento quando ele erra:
@@ -226,6 +267,33 @@ com a anotação de como resolveu — incluindo o que já saiu do quadro em spri
 encerradas. O botão **copiar** de cada dia devolve a lista em texto, para colar
 no chat de quem faltou na reunião.
 
+## Ignorar, apagar e etiquetar
+
+Três marcas suas, e nenhuma delas é status do Teams. Como o *feito por mim*, elas
+moram em campos próprios justamente para nenhuma leitura as apagar.
+
+**Ignorar** ("Não é pra mim", no menu ⋯ do card) é para o que não é pra você: chegou no canal, alguém vai
+cuidar, e não precisa ocupar espaço no seu quadro. O card sai das colunas de
+trabalho e vai para *Ignoradas* — que nasce **colapsada**, porque uma coluna de
+descartes não pode roubar largura das que são trabalho. Ao ignorar o primeiro card
+ela abre uma vez, para você ver onde ele foi. Nada é escrito no Teams: ignorar
+em público seria outra coisa, e não é essa.
+
+**Apagar de vez** existe dentro de *Ignoradas*, e é o **único gesto irreversível
+do Mural**: o card sai do histórico e a mensagem entra na lista de arquivados,
+para nenhuma atualização trazê-la de volta — mesmo que ela continue no Teams. É a
+mesma máquina que o encerramento de sprint usa.
+
+**Etiquetas** (no menu ⋯ do card) são suas: o Teams não tem esse campo. Até seis por task,
+normalizadas na entrada — "Financeiro", "financeiro" e "financeiro " são a mesma
+etiqueta, senão o filtro se quebraria sozinho em três. A barra acima das colunas
+lista as que existem com a contagem de cada uma; clicar filtra o quadro inteiro, e
+o painel soma por etiqueta atravessando as sprints.
+
+Ao encerrar a sprint, as ignoradas são arquivadas junto com o que terminou: elas
+já foram decididas, e arrastar a mesma lista de descartes de sprint em sprint não
+serve a nada.
+
 ## Como funciona
 
 ```
@@ -257,23 +325,47 @@ Não há lista de emojis para manter. Times reais não usam um emoji fixo para
 no lugar certo sozinho. O emoji usado aparece como badge no card, porque sem
 convenção fixa é a única forma de saber o que aconteceu ali.
 
+Há **duas exceções**, e as duas são emojis que o time combina de propósito:
+
+- o **check** (✅ ☑️ ✔️), que significa concluído em qualquer canal;
+- o **⚪ de "peguei esta"**, que enche a coluna *Fazendo* — configurável no
+  cabeçalho dela, e vale para **qualquer pessoa** que reagir, não só para você.
+
+Esses dois não aparecem como badge: a coluna já diz o que eles significam.
+Quando as duas reações estão na mesma mensagem, o check ganha — quem terminou
+terminou, e não faz sentido obrigar alguém a tirar a bolinha para o quadro ficar
+certo.
+
+O ⚪ de *Fazendo* é diferente do 🟢 de *Feito por mim*: aquele é uma convenção do
+time, este é sua. O Mural recusa configurar os dois com o mesmo emoji, senão um
+card cairia em duas colunas e a contagem passaria a mentir.
+
 Numa conversa de duas pessoas a primeira coluna se chama **Sem reação** —
 "ninguém pegou" pressupõe um time dividindo trabalho.
 </details>
 
 <details>
-<summary><b>Tasks fora de alcance (as de borda âmbar)</b></summary>
+<summary><b>Tasks fora de alcance (as de borda tracejada)</b></summary>
 
 A API devolve só as ~20 mensagens mais recentes. Quando uma task sai dessa
 janela, o Teams para de contar qualquer coisa sobre ela: se alguém reagir com
 check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
 "em aberto" para sempre.
 
-Esses cards têm aparência própria — borda âmbar tracejada, uma hachura de fundo,
-alça de arraste no canto e o selo *sem sinal do Teams* — porque, junto com as
-tasks que você mesmo criou, são os **únicos que você pode arrastar** entre as
-colunas do Teams. Tracejado sozinho não segurava esse recado: o card só se
-explicava quando a pessoa tentava arrastar os outros e nada acontecia. Nos demais o
+Esses cards têm aparência própria e são os **únicos que você pode arrastar**
+entre as colunas do Teams. A distinção é de **relevo, não de cor**: eles perdem a
+superfície e a sombra, então afundam na coluna em vez de flutuar sobre ela — que
+é exatamente o que são, cards que ninguém alimenta mais. Somam a borda
+tracejada, a alça de arraste no canto e o selo *sem sinal do Teams*, e voltam à
+superfície no hover, onde a mão manda.
+
+Cor aqui já significa status, na faixa lateral. Um fundo colorido competia com
+ela em vez de somar — foi o que uma primeira tentativa em âmbar mostrou.
+
+O quadro avisa quantas são numa faixa amarela no topo, e a faixa **fecha**. O que
+fica guardado não é "fechei", é **quantas havia quando você fechou**: as mesmas 23
+não voltam a incomodar, e a 24ª traz o aviso de volta — que é a única hora em que
+ele tem algo novo a dizer. Nos demais o
 arraste nem começa: a próxima atualização desfaria a mudança, e um quadro que
 mente por dois minutos é pior que um quadro que não deixa você fazer o gesto. O
 servidor recusa esse caso mesmo que a interface deixasse passar.
@@ -283,16 +375,23 @@ mandar e o resumo da atualização avisa que o status foi corrigido.
 </details>
 
 <details>
-<summary><b>Tasks suas: por que nenhuma atualização as alcança</b></summary>
+<summary><b>Por que não existe "nova task"</b></summary>
 
-A task que você cria tem id próprio, então nenhuma atualização a alcança: o
-merge só mexe em ids que vieram do snapshot do Teams. Por isso ela é livre —
-arraste entre colunas, edite o texto, apague. Clicar no texto abre a edição em
-vez do Teams, que não tem mensagem para abrir.
+Existiu: dava para escrever uma task aqui dentro, com id próprio, que nenhuma
+atualização alcançava. Foi removida.
 
-A recíproca também vale: task que veio do Teams não pode ser editada nem apagada
-aqui. Mudar o texto criaria um quadro que discorda da conversa, e a próxima
+O Mural é um espelho da conversa, e task que só existe aqui não é espelho de
+nada: ela não tem mensagem para abrir, não tem reação para mudar de coluna e não
+tem autor além de você. O que ela cobria — o combinado no corredor, o bug que
+você mesmo achou — cabe melhor numa mensagem no canal, que é onde o time já olha.
+
+Task que veio do Teams nunca pôde ser editada nem apagada aqui, e continua
+assim: mudar o texto criaria um quadro que discorda da conversa, e a próxima
 leitura desfaria.
+
+Se o seu histórico tem tasks criadas na versão antiga, elas continuam no quadro,
+com o selo **à mão** e móveis entre colunas — apagar dado de alguém por causa de
+uma funcionalidade removida seria pior que manter duas linhas de código.
 </details>
 
 <details>
@@ -324,8 +423,8 @@ Tirar a reação no Teams tira o card da coluna na atualização seguinte. A exc
 é quando você já escreveu a anotação: aí a marca fica, porque texto que você
 escreveu não pode sumir por causa de um clique numa reação.
 
-**Pelo botão.** Todo card tem um **fiz** no rodapé, para o que você esqueceu de
-reagir e para as tasks suas, que nunca tiveram mensagem no Teams.
+**Pelo menu.** Todo card tem **Fiz esta** no menu ⋯, para o que você esqueceu de
+reagir no Teams.
 
 Marcar como seu **não muda o status no Teams**. É uma marca pessoal, guardada
 num campo separado justamente para o sync não a apagar — o status real continua
@@ -402,6 +501,9 @@ Vale saber antes de adotar:
   displayName, id e email nulos — dá para contar quantos foram, não quem. O
   quadro diz "alguém interagiu", nunca "fulano pegou", e "feito por mim" precisa
   de um emoji de assinatura em vez da identidade real.
+- **Ignorar é só seu.** O time não vê que você ignorou algo — não há reação nem
+  mensagem para isso. Se a demanda era sua e você ignorou, ela continua em aberto
+  para todo mundo no Teams.
 - **Não dá para ler respostas de thread.** Um "pego essa" escrito como resposta
   é invisível aqui — só a reação na mensagem principal conta.
 - **20 mensagens por leitura.** É o teto da API. O histórico acumulado no disco
@@ -437,7 +539,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | arquivo | o que é |
 | --- | --- |
 | `murais.json` | índice dos murais e suas conversas |
-| `murais/<id>/tasks.json` | o histórico daquele mural, com as tasks suas e as anotações da daily — o insubstituível |
+| `murais/<id>/tasks.json` | o histórico daquele mural, com as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — os painéis vivem daqui |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
@@ -453,5 +555,10 @@ O servidor escuta apenas em `127.0.0.1`.
 
 Fonte [DM Sans](https://fonts.google.com/specimen/DM+Sans) sob SIL Open Font
 License 1.1, embutida em `assets/`.
+
+**Todos** os ícones vêm do [lucide](https://lucide.dev), sob licença ISC, copiados
+como SVG inline em `src/componentes/icones.tsx` — meia dúzia de traçados não
+justifica uma dependência, e glifo de texto (⧉, ⊘, ✎) muda de forma a cada
+sistema operacional.
 
 MIT.

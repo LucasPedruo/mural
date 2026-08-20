@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { IconeFechar } from '../componentes/icones';
 import { COLUNAS, CORES_DE_STATUS, rotuloDaColuna, rotuloDoTipo, tempoRelativo } from '../rotulos';
 import type { MuralNaLista } from '../tipos';
 import './home.css';
@@ -112,7 +113,7 @@ export function Home() {
                 void remover(m);
               }}
             >
-              ✕
+              <IconeFechar />
             </button>
           </Link>
         ))}

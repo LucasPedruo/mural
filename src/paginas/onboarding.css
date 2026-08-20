@@ -49,6 +49,7 @@
   flex: none;
   display: grid;
   place-items: center;
+  line-height: 1;
   font-size: 12px;
   font-weight: 600;
   background: var(--bg-surface-3);

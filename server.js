@@ -8,7 +8,8 @@
 // inventado nem perdido.
 //
 // Nao ha login proprio: a autenticacao com a Microsoft e a do agente e do MCP
-// que ele usa para o Graph. Este servidor nunca ve nem guarda credencial.
+// que ele usa para o Graph. Este servidor nunca ve nem guarda credencial, e o
+// Mural so LE o Teams — nao existe caminho de escrita aqui.
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -80,20 +81,32 @@ function temEmojiDeAssinatura(reactions, assinatura) {
   return (reactions || []).some((e) => normalizarEmoji(e) === alvo);
 }
 
-function statusDe(reactions) {
+// O emoji de "fazendo" e o unico status alem do check que tem emoji proprio, e
+// por isso e configuravel: ele existe porque alguem PRECISA anunciar que pegou a
+// demanda, e cada time faz isso com um simbolo diferente. Sem ele configurado a
+// regra e a de antes, e nada muda.
+//
+// O check ganha do "fazendo": quem terminou terminou, mesmo com a bolinha ainda
+// na mensagem — e tirar as duas reacoes para o quadro ficar certo seria trabalho
+// que o quadro pode fazer sozinho.
+function statusDe(reactions, emojiFazendo) {
   const r = reactions || [];
   if (r.some(ehCheck)) return 'feito';
+  if (temEmojiDeAssinatura(r, emojiFazendo)) return 'fazendo';
   if (r.length > 0) return 'interagido';
   return 'aberto';
 }
 
 // Os emojis que motivaram o "interagido" aparecem crus no card: sem lista fixa,
 // ver qual reacao foi usada e a unica forma de saber o que aconteceu ali.
-function emojisDoCard(reactions) {
-  return (reactions || []).filter((e) => !ehCheck(e));
+function emojisDoCard(reactions, emojiFazendo) {
+  const fazendo = normalizarEmoji(emojiFazendo);
+  return (reactions || []).filter(
+    (e) => !ehCheck(e) && (!fazendo || normalizarEmoji(e) !== fazendo),
+  );
 }
 
-const STATUS_VALIDOS = ['aberto', 'interagido', 'feito'];
+const STATUS_VALIDOS = ['aberto', 'fazendo', 'interagido', 'feito'];
 
 // ------------------------------------------------------------------ indice
 
@@ -255,7 +268,9 @@ function encerrarSprint(muralId) {
   const arquivadas = [];
 
   for (const t of Object.values(db.tasks)) {
-    if (t.status !== 'feito' && !t.meu) continue;
+    // Ignorada tambem sai do quadro no encerramento: ela ja foi decidida, e
+    // arrastar a mesma lista de descartes de sprint em sprint nao serve a nada.
+    if (t.status !== 'feito' && !t.meu && !t.ignorada) continue;
     arquivadas.push({ ...t, sprint: s.atual.nome, arquivadaEm: agora });
     // Task sua nunca esteve no Teams: nao ha mensagem para o merge ressuscitar,
     // e marcar o id dela em `arquivados` so sujaria o arquivo.
@@ -325,7 +340,9 @@ function painelDoMural(muralId) {
       sugestoes: dentro.filter((t) => t.kind !== 'bug').length,
       concluidas: dentro.filter((t) => t.status === 'feito' || t.meu).length,
       minhas: dentro.filter((t) => t.meu).length,
-      emAberto: dentro.filter((t) => !t.meu && t.status !== 'feito').length,
+      ignoradas: dentro.filter((t) => t.ignorada).length,
+      // Ignorada nao e "em aberto": ela foi decidida, so nao foi feita.
+      emAberto: dentro.filter((t) => !t.meu && !t.ignorada && t.status !== 'feito').length,
       mensagens: dentro.reduce((s, t) => s + mensagensDaTask(t).length, 0),
     };
   });
@@ -367,7 +384,22 @@ function painelDoMural(muralId) {
     });
   }
 
+  // As tags atravessam sprint: a pergunta "quanto de Financeiro chegou este mes"
+  // nao se responde olhando uma coluna do quadro.
+  const porTag = new Map();
+  for (const t of tasks) {
+    for (const tag of t.tags || []) {
+      const chave = tag.toLowerCase();
+      const atual = porTag.get(chave) || { tag, total: 0, concluidas: 0, abertas: 0 };
+      atual.total++;
+      if (t.status === 'feito' || t.meu) atual.concluidas++;
+      else if (!t.ignorada) atual.abertas++;
+      porTag.set(chave, atual);
+    }
+  }
+
   return {
+    tags: [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag)),
     sprints: linhas,
     foraDeSprint: soltas.length
       ? {
@@ -458,6 +490,7 @@ function lerPreferencias() {
 // O emoji de assinatura: a reacao que, na SUA mao, quer dizer "fui eu que fiz".
 // Nao pode ser o check — esse todo mundo usa, e o significado dele ja e outro.
 const EMOJI_MEU_PADRAO = '🟢';
+const EMOJI_FAZENDO_PADRAO = '⚪';
 
 function prefsDoUsuario(usuario) {
   const todas = lerPreferencias();
@@ -466,6 +499,7 @@ function prefsDoUsuario(usuario) {
   return {
     confirmarAntesDeAtualizar: true,
     emojiMeu: EMOJI_MEU_PADRAO,
+    emojiFazendo: EMOJI_FAZENDO_PADRAO,
     ...(todas.porUsuario[usuario] || {}),
   };
 }
@@ -479,6 +513,23 @@ function validarEmojiMeu(valor, atual) {
     throw new Error(
       'O check ja significa "concluido" para o canal inteiro. ' +
       'Escolha um emoji que so voce use.'
+    );
+  }
+  return limpo;
+}
+
+// "Fazendo" e "fui eu" nao podem ser o mesmo emoji: um card cairia em duas
+// colunas e a contagem do quadro passaria a mentir.
+function validarEmojiFazendo(valor, atual, emojiMeu) {
+  if (valor === undefined) return atual;
+  const limpo = String(valor).trim().slice(0, 8);
+  if (limpo && ehCheck(limpo)) {
+    throw new Error('O check ja significa "concluido". Escolha outro emoji para "fazendo".');
+  }
+  if (limpo && normalizarEmoji(limpo) === normalizarEmoji(emojiMeu)) {
+    throw new Error(
+      'Este emoji ja e o da sua assinatura em "Feito por mim". ' +
+      'Um card nao pode estar em duas colunas.'
     );
   }
   return limpo;
@@ -618,14 +669,18 @@ function gravarTasks(muralId, db) {
 // mensagens que a API devolve. Dali em diante o Teams nao conta mais nada sobre
 // ela, entao o quadro para de receber atualizacoes automaticas desse card.
 function foraDeAlcance(t, lastSync) {
-  // Task criada aqui dentro nunca esteve na janela do Teams, entao "saiu dela"
-  // nao quer dizer nada: ela e movivel por natureza, nao por ter se perdido.
+  // `manual` e task que uma versao anterior do Mural deixou gravada, quando dava
+  // para criar task a mao. Ela nunca esteve na janela do Teams, entao "saiu
+  // dela" nao quer dizer nada — e continua movivel, para nao virar um card
+  // preso no quadro de quem atualizou.
   if (t.origem === 'manual') return false;
   return !!lastSync && t.lastSeen !== lastSync;
 }
 
-// Quem pode trocar de coluna a mao: as que o Teams nao acompanha mais e as que
-// nasceram aqui. Nas demais a reacao manda, e o proximo sync desfaria o gesto.
+// Quem pode trocar de coluna arrastando: as que o Teams nao acompanha mais e as
+// `manual` do historico antigo. Nas demais a reacao de la manda, e o proximo sync
+// desfaria o gesto — um quadro que mente por dois minutos e pior que um quadro
+// que nao deixa voce fazer o gesto.
 function podeMover(t, lastSync) {
   return t.origem === 'manual' || foraDeAlcance(t, lastSync);
 }
@@ -640,13 +695,16 @@ function podeDesmarcar(t, lastSync) {
 
 function tasksParaTela(muralId) {
   const db = lerTasks(muralId);
+  const prefs = prefsDoUsuario(usuarioAtual());
   const lista = Object.values(db.tasks).map((t) => ({
     ...t,
     origem: t.origem === 'manual' ? 'manual' : 'teams',
     meu: t.meu || null,
+    ignorada: t.ignorada || null,
+    tags: Array.isArray(t.tags) ? t.tags : [],
     mensagens: mensagensDaTask(t),
     agrupamento: t.agrupamento || null,
-    emojis: emojisDoCard(t.reactions),
+    emojis: emojisDoCard(t.reactions, prefs.emojiFazendo),
     foraDeAlcance: foraDeAlcance(t, db.lastSync),
     podeMover: podeMover(t, db.lastSync),
     podeDesmarcar: podeDesmarcar(t, db.lastSync),
@@ -654,81 +712,85 @@ function tasksParaTela(muralId) {
   return { lastSync: db.lastSync, tasks: lista };
 }
 
-// ------------------------------------------------------------- tasks proprias
+// ---------------------------------------------------- ignorar, apagar e tags
 
-// Nem tudo que vira trabalho passa pelo canal: o que combinaram no corredor, o
-// bug que voce mesmo achou. Essas tasks nascem aqui, tem id proprio e o sync
-// nunca as toca — o merge so mexe em ids que vieram do snapshot.
-function nomeDoUsuario() {
-  const conta = lerJson(CONTA_FILE, {});
-  return conta.displayName || conta.mail || 'você';
-}
+// Tres marcas pessoais, e nenhuma delas e status do Teams: elas moram em campos
+// proprios justamente para o sync nao as apagar. A mesma escolha do "feito por
+// mim" — o que voce escreveu no quadro nao pode sumir porque alguem reagiu.
 
-function textoDeTask(valor, campo) {
-  const t = String(valor || '').trim();
-  if (!t) throw new Error(`Escreva ${campo}.`);
-  return t.slice(0, 1000);
-}
+const MAX_TAGS = 6;
+const MAX_LETRAS_DA_TAG = 24;
 
-function criarTaskManual(muralId, corpo) {
-  const summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
-  const status = STATUS_VALIDOS.includes(corpo.status) ? corpo.status : 'aberto';
-
+/** "Nao e pra mim" e uma decisao sua sobre uma mensagem do time: ela nao pode
+ *  virar reacao no Teams (ignorar em publico seria outra coisa) nem apagar o
+ *  historico. So tira o card das colunas de trabalho. */
+function ignorarTask(muralId, id, ignorar) {
   const db = lerTasks(muralId);
-  const agora = new Date().toISOString();
-  const id = 'manual-' + crypto.randomUUID();
-
-  db.tasks[id] = {
-    id,
-    origem: 'manual',
-    author: nomeDoUsuario(),
-    createdDateTime: agora,
-    summary,
-    kind: corpo.kind === 'bug' ? 'bug' : 'sugestao',
-    reactions: [],
-    webUrl: '',
-    status,
-    firstSeen: agora,
-    statusChangedAt: agora,
-    statusAnterior: null,
-    lastSeen: agora,
-    movidoAMao: false,
-    meu: null,
-  };
-  gravarTasks(muralId, db);
-  return id;
-}
-
-// So task manual pode ser editada ou apagada: mexer no texto de uma mensagem do
-// Teams criaria um quadro que discorda da conversa, e o proximo sync desfaria.
-function taskManual(db, id) {
-  const t = db.tasks[String(id || '')];
+  const t = db.tasks[String(id)];
   if (!t) throw new Error('Task desconhecida.');
-  if (t.origem !== 'manual') {
-    throw new Error('Esta task veio do Teams — edite a mensagem por lá e atualize.');
-  }
-  return t;
-}
-
-function editarTaskManual(muralId, corpo) {
-  const db = lerTasks(muralId);
-  const t = taskManual(db, corpo.id);
-
-  t.summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
-  t.kind = corpo.kind === 'bug' ? 'bug' : 'sugestao';
-  if (STATUS_VALIDOS.includes(corpo.status) && corpo.status !== t.status) {
-    t.statusAnterior = t.status;
-    t.status = corpo.status;
-    t.statusChangedAt = new Date().toISOString();
-  }
+  t.ignorada = ignorar === false ? null : new Date().toISOString();
   gravarTasks(muralId, db);
 }
 
-function removerTaskManual(muralId, id) {
+/** Apagar de vez. Diferente de ignorar: o card sai do arquivo e a mensagem entra
+ *  na lista de arquivados, para a proxima leitura nao a ressuscitar. E o unico
+ *  gesto irreversivel do Mural, e por isso a interface confirma antes. */
+function apagarTask(muralId, id) {
   const db = lerTasks(muralId);
-  taskManual(db, id);
+  const t = db.tasks[String(id)];
+  if (!t) throw new Error('Task desconhecida.');
+  if (!db.arquivados) db.arquivados = {};
+  if (t.origem !== 'manual') {
+    for (const m of mensagensDaTask(t)) db.arquivados[m.id] = 'apagada';
+    db.arquivados[t.id] = 'apagada';
+  }
   delete db.tasks[String(id)];
   gravarTasks(muralId, db);
+}
+
+/** As tags sao suas, escritas aqui — o Teams nao tem esse campo. Normalizar na
+ *  entrada e o que impede "Financeiro", "financeiro" e "financeiro " de virarem
+ *  tres colunas diferentes na hora de filtrar. */
+function normalizarTags(valor) {
+  if (!Array.isArray(valor)) throw new Error('Mande uma lista de tags.');
+  const vistas = new Set();
+  const tags = [];
+  for (const bruta of valor) {
+    const tag = String(bruta || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LETRAS_DA_TAG);
+    if (!tag) continue;
+    const chave = tag.toLowerCase();
+    if (vistas.has(chave)) continue;
+    vistas.add(chave);
+    tags.push(tag);
+    if (tags.length >= MAX_TAGS) break;
+  }
+  return tags;
+}
+
+function definirTags(muralId, id, valor) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id)];
+  if (!t) throw new Error('Task desconhecida.');
+  t.tags = normalizarTags(valor);
+  gravarTasks(muralId, db);
+  return t.tags;
+}
+
+/** Todas as tags que existem neste mural, com quantas tasks cada uma tem. E o
+ *  que a barra de filtro mostra, e o que faz uma tag ser reaproveitada em vez de
+ *  redigitada com outra grafia. */
+function tagsDoMural(muralId) {
+  const db = lerTasks(muralId);
+  const por = new Map();
+  for (const t of Object.values(db.tasks)) {
+    for (const tag of t.tags || []) {
+      const chave = tag.toLowerCase();
+      const atual = por.get(chave) || { tag, quantas: 0 };
+      atual.quantas++;
+      por.set(chave, atual);
+    }
+  }
+  return [...por.values()].sort((a, b) => b.quantas - a.quantas || a.tag.localeCompare(b.tag));
 }
 
 // "Feito por mim" NAO e um status do Teams — e uma marca pessoal, e por isso
@@ -988,7 +1050,9 @@ function juntarTasks(muralId, ids) {
     const t = db.tasks[id];
     if (!t) throw new Error('Uma das tasks escolhidas nao existe mais.');
     if (t.origem === 'manual') {
-      throw new Error('Task sua nao entra num grupo: ela nao tem mensagem no Teams para juntar.');
+      throw new Error(
+        'Esta task foi criada a mao numa versao anterior e nao tem mensagem no Teams para juntar.'
+      );
     }
     return t;
   });
@@ -1048,6 +1112,7 @@ function juntarTasks(muralId, ids) {
 
 function separarTask(muralId, id) {
   const db = lerTasks(muralId);
+  const emojiFazendo = prefsDoUsuario(usuarioAtual()).emojiFazendo;
   const t = db.tasks[String(id)];
   if (!t) throw new Error('Task desconhecida.');
   const mensagens = mensagensDaTask(t);
@@ -1069,7 +1134,7 @@ function separarTask(muralId, id) {
       {
         id: m.id,
         origem: 'teams',
-        status: statusDe(m.reactions),
+        status: statusDe(m.reactions, emojiFazendo),
         firstSeen: t.firstSeen,
         statusChangedAt: agora,
         statusAnterior: null,
@@ -1117,7 +1182,7 @@ function aplicarAssinatura(t, agora, assinatura, marcados) {
   }
 }
 
-function merge(db, snapshot, agora, assinatura) {
+function merge(db, snapshot, agora, assinatura, emojiFazendo) {
   const novos = [];
   const mudaram = [];
   const retomadas = [];
@@ -1151,7 +1216,7 @@ function merge(db, snapshot, agora, assinatura) {
         },
         vindas,
       );
-      t.status = statusDe(t.reactions);
+      t.status = statusDe(t.reactions, emojiFazendo);
       db.tasks[g.ancora] = t;
       novos.push(g.ancora);
       aplicarAssinatura(t, agora, assinatura, marcados);
@@ -1167,7 +1232,7 @@ function merge(db, snapshot, agora, assinatura) {
     if (antigo.agrupamento !== 'mao' && antigo.mensagens.length > 1) antigo.agrupamento = 'auto';
     antigo.lastSeen = agora;
 
-    const status = statusDe(antigo.reactions);
+    const status = statusDe(antigo.reactions, emojiFazendo);
 
     // A task voltou a aparecer na janela: o Teams volta a mandar. Se ela tinha
     // sido movida a mao enquanto estava fora de alcance, a reacao real vence —
@@ -1451,6 +1516,7 @@ function rodarSync(muralId) {
         const r = merge(
           db, snapshot, new Date().toISOString(),
           prefsDoUsuario(usuario).emojiMeu,
+          prefsDoUsuario(usuario).emojiFazendo,
         );
         gravarTasks(muralId, db);
 
@@ -1657,14 +1723,16 @@ async function rotear(req, res) {
   if (p === '/api/murais' && req.method === 'GET') {
     const indice = lerIndice();
     const murais = indice.murais.map((m) => {
-      let totais = { aberto: 0, interagido: 0, feito: 0, meu: 0 };
+      let totais = { aberto: 0, fazendo: 0, interagido: 0, feito: 0, meu: 0, ignorada: 0 };
       let foraDeAlcance = 0;
       try {
         const db = lerTasks(m.id);
         for (const t of Object.values(db.tasks)) {
           // Card marcado como seu sai da coluna do Teams e conta so na sua —
-          // e a mesma regra do quadro, senao a home diria outro numero.
-          if (t.meu) totais.meu++;
+          // e a mesma regra do quadro, senao a home diria outro numero. Ignorada
+          // vence tudo: ela nao esta em nenhuma coluna de trabalho.
+          if (t.ignorada) totais.ignorada++;
+          else if (t.meu) totais.meu++;
           else if (totais[t.status] !== undefined) totais[t.status]++;
           if (foraDeAlcance_(t, db.lastSync)) foraDeAlcance++;
         }
@@ -1750,6 +1818,11 @@ async function rotear(req, res) {
           ? atuais.confirmarAntesDeAtualizar
           : corpo.confirmarAntesDeAtualizar !== false,
         emojiMeu: validarEmojiMeu(corpo.emojiMeu, atuais.emojiMeu),
+        emojiFazendo: validarEmojiFazendo(
+          corpo.emojiFazendo,
+          atuais.emojiFazendo,
+          validarEmojiMeu(corpo.emojiMeu, atuais.emojiMeu),
+        ),
       };
       gravarJsonAtomico(PREFS_FILE, todas);
       return json(res, 200, { ok: true, preferencias: todas.porUsuario[usuario] });
@@ -1768,9 +1841,9 @@ async function rotear(req, res) {
     }
   }
 
-  // Mover a mao so vale para task fora de alcance. Se ela ainda esta na janela,
-  // o proximo sync desfaria a mudanca — deixar mover ali criaria um quadro que
-  // mente por 2 minutos e depois se corrige sozinho.
+  // Mover a mao so vale para task fora de alcance. Se ela ainda aparece no Teams,
+  // a reacao de la manda e o proximo sync desfaria a mudanca — deixar mover ali
+  // criaria um quadro que mente por 2 minutos e depois se corrige sozinho.
   if (p === '/api/mover' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
@@ -1780,6 +1853,14 @@ async function rotear(req, res) {
       const tarefaId = String(corpo.id || '');
       const novo = String(corpo.status || '');
       if (!STATUS_VALIDOS.includes(novo)) throw new Error('Status invalido.');
+      // "Interagido" nunca foi um estado que se escolhe, com ou sem escrita: e o
+      // que sobra quando alguem reage com outra coisa.
+      if (novo === 'interagido') {
+        throw new Error(
+          '"Interagido" nao e um estado que se escolhe: e o que sobra quando alguem reage ' +
+          'com outra coisa. Arraste para Ninguem pegou, Fazendo ou Concluido.'
+        );
+      }
 
       const db = lerTasks(muralId);
       const t = db.tasks[tarefaId];
@@ -1787,7 +1868,7 @@ async function rotear(req, res) {
       if (!podeMover(t, db.lastSync)) {
         throw new Error(
           'Esta task ainda aparece no Teams — reaja na mensagem de la e atualize. ' +
-          'Mover a mao so vale para as que sairam do alcance e para as suas proprias.'
+          'Mover a mao so vale para as que sairam do alcance.'
         );
       }
 
@@ -1804,38 +1885,47 @@ async function rotear(req, res) {
     }
   }
 
-  // ---- tasks proprias ----
-
-  // Task que voce escreve aqui dentro: o que nao passou pelo canal mas e
-  // trabalho igual. Nasce com id proprio, entao nenhum sync a alcanca.
-  if (p === '/api/task' && req.method === 'POST') {
+  // Nao e pra mim: tira o card das colunas de trabalho sem tocar no Teams e sem
+  // apagar nada. E marca sua, entao nenhum sync a desfaz.
+  if (p === '/api/ignorar' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      const id = criarTaskManual(muralId, await lerCorpoJson(req));
-      return json(res, 200, { ok: true, id, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/task' && req.method === 'PUT') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      editarTaskManual(muralId, await lerCorpoJson(req));
+      const corpo = await lerCorpoJson(req);
+      ignorarTask(muralId, corpo.id, corpo.ignorar);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }
   }
 
-  if (p === '/api/task' && req.method === 'DELETE') {
+  // O unico gesto irreversivel do Mural: o card sai do arquivo e a mensagem
+  // entra na lista de arquivados, para nao voltar na proxima leitura.
+  if (p === '/api/apagar' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      removerTaskManual(muralId, url.searchParams.get('id') || '');
+      const corpo = await lerCorpoJson(req);
+      apagarTask(muralId, corpo.id);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/tags' && req.method === 'GET') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    return json(res, 200, { ok: true, tags: tagsDoMural(muralId) });
+  }
+
+  if (p === '/api/tags' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      definirTags(muralId, corpo.id, corpo.tags);
+      return json(res, 200, { ok: true, tags: tagsDoMural(muralId), ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }

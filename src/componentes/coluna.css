@@ -4,11 +4,54 @@
   border-radius: 12px;
 }
 
+/* O cabecalho e a alca da coluna: e por ele que ela se arrasta. O cursor e a
+   alca de pontinhos dizem isso — sem sinal nenhum, um gesto que existe e um
+   gesto que ninguem descobre. */
 .coluna > header {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 12px 14px 10px;
+  cursor: grab;
+}
+.coluna > header:active {
+  cursor: grabbing;
+}
+
+.coluna > header .pegar {
+  display: inline-flex;
+  margin-right: -4px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.coluna:hover > header .pegar {
+  opacity: 1;
+}
+
+/* A contagem empurrava sozinha os controles para a direita; agora ela divide o
+   canto com o botao de colapsar. */
+.coluna .colapsar {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 5px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border-color: transparent;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.coluna:hover .colapsar,
+.coluna .colapsar:focus-visible {
+  opacity: 1;
+}
+.coluna .colapsar:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  background: var(--bg-surface);
 }
 
 /* Selo no vocabulario do design system: superficie propria, ponto colorido
@@ -107,4 +150,72 @@
 }
 .coluna .assinatura:hover {
   border-color: var(--marca-meu);
+}
+
+/* ---------------------------------------------------------------- colapsada */
+
+/* Uma faixa fina, com o rotulo de pe. O que ela precisa dizer e "esta coluna
+   existe, tem N cards, e cabe aqui se voce quiser" — o resto e espaco devolvido
+   para as colunas que sao trabalho agora. */
+.coluna.colapsada {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.coluna.colapsada .expandir {
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 12px 0 14px;
+  border: 0;
+  border-radius: 12px 12px 0 0;
+  background: none;
+  color: var(--text-secondary);
+}
+.coluna.colapsada .expandir:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.coluna.colapsada .ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.coluna.colapsada .contagem {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Texto de pe: e o unico jeito de o rotulo caber em 46px sem virar sigla — e
+   sigla exigiria decorar o que cada uma quer dizer. */
+.coluna.colapsada .rotulo-de-pe {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 12px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* O alvo de soltar continua existindo na coluna fechada: arrastar para ca e o
+   gesto de guardar sem abrir. */
+.coluna.colapsada .faixa {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  transition: background-color 0.12s;
+}
+.coluna.colapsada .faixa.recebendo {
+  background: var(--bg-brand-subtle);
 }

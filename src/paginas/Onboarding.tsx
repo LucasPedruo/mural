@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { IconeFeito } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
   AgenteDisponivel,
@@ -254,7 +255,7 @@ export function Onboarding() {
       {/* 1 */}
       <section className="passo" data-estado={passo1}>
         <div className="passo-topo">
-          <span className="num">{passo1 === 'ok' ? '✓' : '1'}</span>
+          <span className="num">{passo1 === 'ok' ? <IconeFeito tamanho={13} /> : '1'}</span>
           <h2>Agente de IA</h2>
         </div>
         <p className={'detalhe ' + (passo1 === 'ok' ? 'bom' : passo1 === 'erro' ? 'ruim' : '')}>
@@ -413,7 +414,7 @@ export function Onboarding() {
       {/* 2 */}
       <section className="passo" data-estado={passo1 === 'ok' ? passo2 : 'espera'}>
         <div className="passo-topo">
-          <span className="num">{passo2 === 'ok' ? '✓' : '2'}</span>
+          <span className="num">{passo2 === 'ok' ? <IconeFeito tamanho={13} /> : '2'}</span>
           <h2>Conta Microsoft conectada</h2>
         </div>
         <p className={'detalhe ' + (passo2 === 'ok' ? 'bom' : passo2 === 'erro' ? 'ruim' : '')}>

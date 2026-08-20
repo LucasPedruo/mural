@@ -3,10 +3,16 @@ import type { ColunaId, Mural, Status, SubtipoFonte, TipoFonte } from './tipos';
 /** "Ninguém pegou" pressupõe um time dividindo trabalho — numa conversa de duas
  *  pessoas isso não quer dizer nada. */
 export function rotuloDaColuna(status: ColunaId, fonte?: Pick<Mural, 'tipo' | 'subtipo'>): string {
+  const doisApenas = fonte?.tipo === 'chat' && fonte.subtipo === 'oneOnOne';
   if (status === 'meu') return 'Feito por mim';
+  if (status === 'ignorada') return 'Ignoradas';
+  if (status === 'fazendo') return 'Fazendo';
   if (status === 'interagido') return 'Interagido';
-  if (status === 'feito') return 'Concluído';
-  return fonte?.tipo === 'chat' && fonte.subtipo === 'oneOnOne' ? 'Sem reação' : 'Ninguém pegou';
+  // O que você fez sai daqui para "Feito por mim", então o que fica nesta coluna
+  // é o que o resto do time concluiu. Numa conversa de duas pessoas "por outros"
+  // soaria estranho, e o rótulo volta a ser o simples.
+  if (status === 'feito') return doisApenas ? 'Concluído' : 'Concluído por outros';
+  return doisApenas ? 'Sem reação' : 'Ninguém pegou';
 }
 
 export function rotuloDoTipo(tipo: TipoFonte, subtipo: SubtipoFonte): string {
@@ -18,15 +24,19 @@ export function rotuloDoTipo(tipo: TipoFonte, subtipo: SubtipoFonte): string {
 
 export const CORES_DE_STATUS: Record<ColunaId, string> = {
   aberto: 'var(--marca-aberto)',
+  fazendo: 'var(--marca-fazendo)',
   interagido: 'var(--marca-interagido)',
   feito: 'var(--marca-feito)',
   meu: 'var(--marca-meu)',
+  ignorada: 'var(--marca-ignorada)',
 };
 
 /** Os três status do Teams. Usados onde a lista precisa ser só de status. */
-export const STATUS: Status[] = ['aberto', 'interagido', 'feito'];
+export const STATUS: Status[] = ['aberto', 'fazendo', 'interagido', 'feito'];
 
-export const COLUNAS: ColunaId[] = ['aberto', 'interagido', 'feito', 'meu'];
+export const COLUNAS: ColunaId[] = [
+  'aberto', 'fazendo', 'interagido', 'feito', 'meu', 'ignorada',
+];
 
 export function dataCurta(iso: string): string {
   const d = new Date(iso);
