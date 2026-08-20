@@ -336,6 +336,13 @@ export interface Notificacao {
   em: string;
   tom: 'info' | 'erro';
   texto: string;
+  /** O que VOCÊ escreveu sobre esta leitura. O texto acima é o que o Mural
+   *  contou; a nota é o que aquilo significou — "esse custo foi a releitura do
+   *  canal inteiro", "falhou porque o token venceu". Sem ela o histórico só
+   *  responde o que aconteceu, nunca por quê.
+   *
+   *  É trabalho seu, e por isso "Limpar" não a leva junto. */
+  nota?: string;
 }
 
 // ----------------------------------------------------------------- dashboard

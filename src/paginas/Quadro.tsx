@@ -14,6 +14,7 @@ import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { Notificacoes } from '../componentes/Notificacoes';
+import { Toasts } from '../componentes/Toasts';
 import {
   IconeEtiqueta,
   IconePessoa,
@@ -202,24 +203,42 @@ export function Quadro() {
   // mais do que alguém rola, e o navegador não é onde se guarda registro.
   const MAX_NOTIFICACOES = 30;
 
+  // Os que estão aparecendo no canto agora. Só entram os que NASCEM nesta
+  // sessão: os que vieram do disco já foram vistos quando aconteceram, e
+  // despejar dez toasts ao abrir o quadro seria contar de novo o que já passou.
+  const [toasts, setToasts] = useState<Notificacao[]>([]);
+
+  function gravarNotificacoes(proximas: Notificacao[]) {
+    localStorage.setItem(chaveNotificacoes, JSON.stringify(proximas));
+    return proximas;
+  }
+
   const avisar = useCallback(
     (texto: string, tom: Notificacao['tom'] = 'info') => {
+      const nova: Notificacao = {
+        // O instante já identifica: duas leituras não terminam no mesmo
+        // milissegundo, e o sufixo cobre o empate improvável sem inventar uuid.
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        em: new Date().toISOString(),
+        tom,
+        texto,
+      };
       setNotificacoes((atuais) => {
-        const nova: Notificacao = {
-          // O instante já identifica: duas leituras não terminam no mesmo
-          // milissegundo, e o sufixo cobre o empate improvável sem inventar uuid.
-          id: `${Date.now()}-${atuais.length}`,
-          em: new Date().toISOString(),
-          tom,
-          texto,
-        };
         const proximas = [nova, ...atuais].slice(0, MAX_NOTIFICACOES);
         localStorage.setItem(chaveNotificacoes, JSON.stringify(proximas));
         return proximas;
       });
+      // Guardar sem contar faria você descobrir o resultado de uma leitura de
+      // dois minutos só se lembrasse de abrir o sino. Três é o teto: uma pilha
+      // maior que isso deixa de ser aviso e vira parede.
+      setToasts((atuais) => [nova, ...atuais].slice(0, 3));
     },
     [chaveNotificacoes],
   );
+
+  function fecharToast(id: string) {
+    setToasts((atuais) => atuais.filter((t) => t.id !== id));
+  }
 
   function marcarNotificacoesLidas() {
     const agora = new Date().toISOString();
@@ -227,9 +246,27 @@ export function Quadro() {
     setLidasEm(agora);
   }
 
+  // A sua nota sobre uma leitura: o texto do item conta o que aconteceu, ela
+  // conta o que aquilo significou. Nota vazia apaga o campo em vez de guardar
+  // string vazia — o histórico não precisa registrar que você desistiu.
+  function anotarNotificacao(id: string, nota: string) {
+    const limpa = nota.trim();
+    setNotificacoes((atuais) =>
+      gravarNotificacoes(
+        atuais.map((n) => (n.id === id ? { ...n, nota: limpa || undefined } : n)),
+      ),
+    );
+  }
+
+  function removerNotificacao(id: string) {
+    setNotificacoes((atuais) => gravarNotificacoes(atuais.filter((n) => n.id !== id)));
+  }
+
+  // Limpar leva só o que você NÃO anotou. Nota é trabalho seu, e um botão
+  // chamado "limpar" não pode descartar trabalho por tabela — o que tem nota
+  // sai uma a uma, pelo ícone do item.
   function limparNotificacoes() {
-    localStorage.removeItem(chaveNotificacoes);
-    setNotificacoes([]);
+    setNotificacoes((atuais) => gravarNotificacoes(atuais.filter((n) => n.nota)));
   }
 
   const naoLidas = notificacoes.filter((n) => n.em > lidasEm).length;
@@ -855,6 +892,8 @@ export function Quadro() {
               : null
           }
           aoAbrir={marcarNotificacoesLidas}
+          aoAnotar={anotarNotificacao}
+          aoRemover={removerNotificacao}
           aoLimpar={limparNotificacoes}
         />
         {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
@@ -899,6 +938,8 @@ export function Quadro() {
           aoCancelar={() => setCreditando(null)}
         />
       )}
+
+      <Toasts itens={toasts} aoFechar={fecharToast} />
 
       <BarraDeSync progresso={progresso} />
 

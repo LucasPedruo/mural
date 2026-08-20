@@ -66,11 +66,23 @@ fora de alcance" é **condição**: vale enquanto for verdade, então fica fixad
 topo do painel em vez de entrar na lista. Empilhar a mesma frase a cada leitura
 transformaria o sino num carimbo de repetição.
 
-Uma leitura que **falha** também vira notificação, e só isso: o contador acende
-ao lado do botão que você acabou de clicar. Os demais erros continuam em faixa no
-topo do quadro — "não dá para mover este card" existe para explicar o gesto que
-acabou de voltar atrás, e explicação atrasada por um clique no sino não explica
-nada.
+Uma leitura que **falha** também vira notificação, e só isso: o toast aparece e
+fica, e o contador acende ao lado do botão que você acabou de clicar. Os demais
+erros continuam em faixa no topo do quadro — "não dá para mover este card" existe
+para explicar o gesto que acabou de voltar atrás, e explicação atrasada por um
+clique no sino não explica nada.
+
+Cada aviso novo também aparece como **toast** no canto de baixo. O sino guarda, o
+toast conta na hora: guardar sem contar faria você descobrir o resultado de uma
+leitura de dois minutos só se lembrasse de abrir o painel. Os comuns somem em 8
+segundos; a falha fica até você fechar. Fechar um toast não apaga nada — o item
+continua no sino, e é por isso que ele pode sumir sozinho sem custo nenhum.
+
+**Cada item aceita uma nota sua.** O texto do aviso conta o que aconteceu; a nota
+conta o que aquilo *significou* — "esse custo foi a releitura do canal inteiro",
+"falhou porque o token venceu". Sem ela o histórico responde o quê e nunca o
+porquê. Nota é trabalho seu, então **Limpar** leva só as que você não anotou, e o
+botão diz quantas são; as anotadas saem uma a uma, pelo ícone do item.
 
 O histórico é do navegador, por mural. É relato da sua sessão, não dado do
 quadro — o servidor não teria o que fazer com ele.

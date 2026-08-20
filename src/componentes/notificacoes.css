@@ -151,3 +151,139 @@
   line-height: 1.5;
   color: var(--text-muted);
 }
+
+/* A nota é sua, então parece escrita à mão sobre o item: recuada, com um filete
+   à esquerda, e não numa caixa própria — caixa faria parecer outro aviso. */
+.notificacoes .notificacao .nota {
+  margin: 6px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.notificacoes .notificacao.anotada {
+  border-left-color: var(--marca-meu);
+}
+
+.notificacoes .campo-nota {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 7px 9px;
+  resize: vertical;
+}
+.notificacoes .campo-nota:focus {
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+/* A hora e o "anotar" na mesma linha: o botão só aparece com o item, e uma
+   linha própria para ele daria a cada notificação a altura de duas. */
+.notificacoes .rodape-notificacao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+.notificacoes .rodape-notificacao .quando {
+  margin: 0;
+}
+
+.notificacoes .acao-nota {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.notificacoes .acao-nota:hover {
+  color: var(--text-primary);
+}
+
+/* ---- toasts ---- */
+
+/* Canto inferior direito: longe do sino, que fica no alto à direita — um toast
+   nascendo em cima do botão que o gerou taparia o contador que ele confirma.
+   Longe também das colunas, que se lê de cima para baixo. */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 9px;
+  width: min(380px, calc(100vw - 40px));
+  pointer-events: none;
+}
+
+.toasts .toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--marca-interagido);
+  border-radius: 11px;
+  box-shadow: var(--shadow-arrastando);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  pointer-events: auto;
+  animation: toast-entra 0.18s ease-out;
+}
+
+.toasts .toast.erro {
+  border-left-color: var(--marca-aberto);
+  color: var(--text-danger);
+}
+
+.toasts .toast .corpo {
+  flex: 1;
+  min-width: 0;
+}
+
+.toasts .toast .dispensar {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 2px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  line-height: 0;
+}
+.toasts .toast .dispensar:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+}
+
+@keyframes toast-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Quem pediu menos movimento na tela recebe menos movimento na tela. */
+@media (prefers-reduced-motion: reduce) {
+  .toasts .toast {
+    animation: none;
+  }
+}
