@@ -357,13 +357,15 @@ export function Quadro() {
       avisar(partes.length ? partes.join(', ') : 'nada mudou');
       void api.consumo(muralId).then(setConsumo).catch(() => {});
     } catch (e) {
-      // Duas vezes de propósito, e não é redundância: a faixa vermelha explica a
-      // ação que você acabou de tentar, e some quando você tenta outra coisa. A
-      // notificação é o registro — "por que o quadro não atualizou hoje de
-      // manhã" é uma pergunta que se faz horas depois.
-      const motivo = (e as Error).message;
-      setErro(motivo);
-      avisar(`a leitura do Teams falhou: ${motivo}`, 'erro');
+      // Só na notificação. A falha da leitura é a única coisa nesta tela que já
+      // tem outro lugar para morar, e o contador do sino acende ao lado do botão
+      // que você acabou de clicar — a faixa vermelha repetiria, dois centímetros
+      // abaixo, o que o sino já está dizendo.
+      //
+      // Os outros erros continuam na faixa: "não dá para mover este card" existe
+      // para explicar o gesto que acabou de voltar atrás, e explicação de gesto
+      // atrasada por um clique no sino não explica nada.
+      avisar(`a leitura do Teams falhou: ${(e as Error).message}`, 'erro');
     } finally {
       pararDeAcompanhar();
       setSincronizando(false);

@@ -66,6 +66,12 @@ fora de alcance" é **condição**: vale enquanto for verdade, então fica fixad
 topo do painel em vez de entrar na lista. Empilhar a mesma frase a cada leitura
 transformaria o sino num carimbo de repetição.
 
+Uma leitura que **falha** também vira notificação, e só isso: o contador acende
+ao lado do botão que você acabou de clicar. Os demais erros continuam em faixa no
+topo do quadro — "não dá para mover este card" existe para explicar o gesto que
+acabou de voltar atrás, e explicação atrasada por um clique no sino não explica
+nada.
+
 O histórico é do navegador, por mural. É relato da sua sessão, não dado do
 quadro — o servidor não teria o que fazer com ele.
 
