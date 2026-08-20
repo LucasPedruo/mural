@@ -1,0 +1,198 @@
+/* Os gráficos herdam o tema pelas variáveis: nenhuma cor literal aqui, então
+   claro e escuro saem de graça. */
+
+.grafico {
+  margin: 0;
+}
+
+.svg-grafico {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.grade {
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+.rotulo-eixo {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.rotulo-eixo.fim {
+  text-anchor: end;
+}
+.rotulo-eixo.meio {
+  text-anchor: middle;
+}
+
+/* Chegadas: o volume, em área. Conclusões: só o traço, senão uma cobriria a
+   outra e o gráfico passaria a mostrar uma medida só. */
+.area-chegaram {
+  fill: var(--marca-aberto);
+  opacity: 0.14;
+}
+.linha-chegaram {
+  fill: none;
+  stroke: var(--marca-aberto);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.linha-concluidas {
+  fill: none;
+  stroke: var(--marca-feito);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.barra-chegaram {
+  fill: var(--marca-aberto);
+  opacity: 0.75;
+}
+.barra-concluidas {
+  fill: var(--marca-feito);
+}
+
+/* ---- rosca ---- */
+
+.grafico.rosca {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.svg-rosca {
+  width: 168px;
+  height: 168px;
+  flex: none;
+}
+
+.rosca-numero {
+  fill: var(--text-primary);
+  font-size: 34px;
+  font-weight: 600;
+  text-anchor: middle;
+  font-variant-numeric: tabular-nums;
+}
+.rosca-texto {
+  fill: var(--text-muted);
+  font-size: 12px;
+  text-anchor: middle;
+}
+
+/* ---- legenda ---- */
+
+.legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.legenda.coluna {
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 0;
+  flex: 1;
+  min-width: 150px;
+}
+.legenda .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.legenda .item.nota {
+  color: var(--text-muted);
+}
+.legenda .valor {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.legenda .amostra {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+.legenda .amostra.chegaram {
+  background: var(--marca-aberto);
+}
+.legenda .amostra.concluidas {
+  background: var(--marca-feito);
+}
+
+/* ---- listas ranqueadas ---- */
+
+.ranqueadas {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ranqueadas .linha {
+  display: grid;
+  grid-template-columns: minmax(80px, 130px) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.ranqueadas .rotulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.ranqueadas .linha.destaque .rotulo {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ranqueadas .trilho {
+  background: var(--bg-surface-2);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.ranqueadas .barra {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 999px;
+  background: var(--marca-interagido);
+  opacity: 0.45;
+}
+
+/* A parte já concluída vive DENTRO da barra do total: duas barras separadas
+   fariam parecer duas medidas independentes, quando uma é pedaço da outra. */
+.ranqueadas .parte-concluida {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--marca-feito);
+  opacity: 1;
+}
+
+.ranqueadas .valor {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ranqueadas .valor .secundario {
+  color: var(--text-muted);
+}
+
+.grafico-vazio {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

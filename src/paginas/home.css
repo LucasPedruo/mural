@@ -94,3 +94,47 @@
   border-radius: 999px;
   flex: none;
 }
+
+/* Botão que se lê como texto. A sprint mora na linha de meta, junto do tipo e
+   da última leitura: é a mesma classe de informação, e desenhá-la como botão
+   de verdade faria um ajuste raro parecer a ação principal do cartão. */
+.cartao-mural .ligacao {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cartao-mural .ligacao:hover {
+  color: var(--text-primary);
+}
+
+/* As duas leituras do histórico, à direita das contagens. Sempre visíveis: no
+   quadro elas viviam num cabeçalho cheio, e o que se perde num cabeçalho cheio
+   é justamente o que não se usa todo dia. */
+.cartao-mural .acessos {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.cartao-mural .acessos button {
+  font-size: 12.5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+
+/* Num cartão estreito as contagens e os acessos empilham em vez de espremer o
+   nome do mural, que é o que se lê primeiro. */
+@media (max-width: 720px) {
+  .cartao-mural {
+    flex-wrap: wrap;
+  }
+  .cartao-mural .info {
+    flex-basis: 100%;
+  }
+}

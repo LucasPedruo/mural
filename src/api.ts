@@ -9,6 +9,7 @@ import type {
   Preferencias,
   RespostaAgentes,
   RespostaConsumo,
+  RespostaDashboard,
   RespostaPainel,
   RespostaSprint,
   RespostaTasks,
@@ -140,6 +141,11 @@ export const api = {
 
   painel: (muralId: string) => pedir<RespostaPainel>(`/api/painel?mural=${muralId}`),
 
+  // Séries já agregadas, prontas para virar gráfico. Rota própria porque a
+  // pergunta é outra: o painel quer a lista de itens da daily para copiar no
+  // chat, o dashboard quer a forma. Nenhum dos dois deve pagar o peso do outro.
+  dashboard: (muralId: string) => pedir<RespostaDashboard>(`/api/dashboard?mural=${muralId}`),
+
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
 
@@ -150,6 +156,15 @@ export const api = {
 
   desmarcarComoMeu: (muralId: string, id: string) =>
     pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, marcar: false })),
+
+  // O espelho do de cima. O Graph conta que alguém reagiu com o check, nunca
+  // QUEM — `reactions[].users` vem vazio. Então o nome de quem resolveu é uma
+  // anotação sua, guardada em campo próprio, que nenhuma leitura sobrescreve.
+  marcarFeitoPorOutro: (muralId: string, id: string, quem: string, solucao: string) =>
+    pedir<RespostaTasks>(`/api/feito-por?mural=${muralId}`, json({ id, quem, solucao })),
+
+  desmarcarFeitoPorOutro: (muralId: string, id: string) =>
+    pedir<RespostaTasks>(`/api/feito-por?mural=${muralId}`, json({ id, marcar: false })),
 
   abrirNoTeams: (muralId: string, id: string) =>
     pedir<{ via: string }>(

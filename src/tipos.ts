@@ -27,6 +27,9 @@ export interface Mural {
 export interface MuralNaLista extends Mural {
   totais: Record<ColunaId, number>;
   foraDeAlcance: number;
+  /** A sprint corrente. Vem na listagem porque é daqui que ela passa a ser
+   *  definida e encerrada — o quadro só a mostra. */
+  sprint: Sprint | null;
 }
 
 /** O que você anotou ao marcar a task como feita por você. `em` é a data da
@@ -37,6 +40,20 @@ export interface MeuFeito {
   solucao: string;
   /** `emoji` = veio da sua reação no Teams; `mao` = você marcou aqui. */
   via: 'emoji' | 'mao';
+}
+
+/** O espelho do `MeuFeito` para quando quem resolveu não foi você. O Teams
+ *  conta que ALGUÉM reagiu com o check, nunca quem — o Graph devolve
+ *  `reactions[].users` vazio. Então o nome de quem fez é uma anotação sua, do
+ *  mesmo naipe da etiqueta, e mora em campo próprio para o sync não a apagar.
+ *
+ *  Não é status: o card muda de coluna na tela, e o que o canal diz continua em
+ *  `status`. Escrever 'feito' ali seria inventar uma reação que ninguém deu. */
+export interface FeitoPorOutro {
+  /** A data da marcação — é ela que ordena, não a da última edição do texto. */
+  em: string;
+  quem: string;
+  solucao: string;
 }
 
 /** Uma mensagem do Teams dentro de um card. Uma demanda raramente chega como
@@ -81,6 +98,9 @@ export interface Task {
   podeDesmarcar: boolean;
   movidoAMao: boolean;
   meu: MeuFeito | null;
+  /** Quem resolveu, quando não foi você. Exclusivo com `meu`: o crédito é de uma
+   *  pessoa só, senão o mesmo card apareceria em duas colunas. */
+  feitoPor: FeitoPorOutro | null;
   /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */
@@ -298,6 +318,59 @@ export interface RespostaPainel {
     diasAtivos: number;
     arquivadas: number;
   };
+}
+
+// ----------------------------------------------------------------- dashboard
+
+/** Um dia da série de 30. Os dias vazios vêm no meio: um gráfico que pula o fim
+ *  de semana mente sobre o ritmo — o vale de sábado faz parte da resposta. */
+export interface DiaDoDashboard {
+  /** Dia local, ano-mês-dia. */
+  dia: string;
+  chegaram: number;
+  bugs: number;
+  concluidas: number;
+}
+
+export interface CreditoDePessoa {
+  pessoa: string;
+  total: number;
+  /** Você — o card veio do "Fiz esta", não do crédito a outra pessoa. */
+  ehVoce: boolean;
+}
+
+export interface LinhaDeAutor {
+  autor: string;
+  total: number;
+  bugs: number;
+  concluidas: number;
+}
+
+export interface RespostaDashboard {
+  totais: {
+    tasks: number;
+    bugs: number;
+    sugestoes: number;
+    concluidas: number;
+    emAberto: number;
+    ignoradas: number;
+    minhas: number;
+    porOutros: number;
+    /** Concluídas sem dono conhecido: o check está lá, mas ninguém foi
+     *  creditado. É o número que mede o quanto os gráficos de pessoa NÃO
+     *  cobrem — escondê-lo faria o painel parecer mais completo do que é. */
+    semCredito: number;
+    /** Mediana, não média: uma task esquecida há seis meses puxaria a média
+     *  para um número que não descreve nenhuma semana real. */
+    medianaDeDias: number | null;
+    maisAntigaEmAbertoDias: number | null;
+  };
+  porColuna: Record<ColunaId, number>;
+  porDia: DiaDoDashboard[];
+  sprints: LinhaDeSprint[];
+  tags: LinhaDeTag[];
+  porPessoa: CreditoDePessoa[];
+  porAutor: LinhaDeAutor[];
 }
 
 // ------------------------------------------------------------------- agentes

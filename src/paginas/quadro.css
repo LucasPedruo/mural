@@ -50,23 +50,25 @@
 
 /* A sprint no cabecalho. Pilula, e nao botao comum, porque ela e um estado do
    mural que por acaso da para editar — o mesmo vocabulario do "gasto". */
+/* A sprint e um selo, nao um botao: definir e encerrar mudaram para a listagem,
+   e aqui ela so diz ate quando vale o que esta na tela. Como deixou de ser
+   <button>, a borda passa a ser escrita — antes vinha do estilo global. */
 .topo-quadro .sprint {
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
+  border: 1px solid var(--border-default);
   border-radius: 999px;
   padding: 4px 11px;
   background: var(--bg-surface);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-}
-.topo-quadro .sprint:hover {
-  border-color: var(--marca-meu);
-  color: var(--text-primary);
+  white-space: nowrap;
 }
 
-/* Atualizar, Encerrar sprint e Paineis sao as tres acoes do cabecalho e tem o
-   MESMO peso: nenhuma delas e "o que voce veio fazer aqui". Painel e um link
-   (outra pagina) e as outras duas sao botoes, entao o estilo e escrito para os
-   dois elementos em vez de herdar do botao. */
+/* Atualizar e a unica acao do cabecalho, e mesmo assim sem cor de destaque:
+   fazer o quadro sugerir que ler o Teams e o que voce veio fazer aqui seria
+   mentir sobre o uso normal. */
 .topo-quadro .acao-topo {
   display: inline-flex;
   align-items: center;
@@ -197,19 +199,6 @@
 
 /* Filtro ligado esconde cards, e um quadro que esconde precisa dizer que esconde
    — senao a contagem da coluna parece errada. */
-.faixa.filtrando {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  background: var(--bg-surface-2);
-  color: var(--text-secondary);
-}
-.faixa.filtrando button {
-  font-size: 12px;
-  padding: 4px 11px;
-}
-
 /* Faixa centrada, com o fechar no canto. O texto no meio porque este aviso fala
    do quadro inteiro, nao de uma coluna — e o botao absoluto para o texto ficar
    centrado na tela, e nao no espaco que sobra ao lado dele. */

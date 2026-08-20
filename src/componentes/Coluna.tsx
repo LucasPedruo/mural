@@ -44,6 +44,8 @@ interface Props {
   acessorio?: ReactNode;
   aoAbrir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
+  aoCreditarOutro: (task: Task) => void;
+  aoTirarCredito: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
@@ -70,6 +72,8 @@ export function Coluna({
   selecionados,
   aoAbrir,
   aoMarcarComoMeu,
+  aoCreditarOutro,
+  aoTirarCredito,
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
@@ -195,6 +199,8 @@ export function Coluna({
                           selecionado={selecionados.has(t.id)}
                           aoAbrir={aoAbrir}
                           aoMarcarComoMeu={aoMarcarComoMeu}
+                          aoCreditarOutro={aoCreditarOutro}
+                          aoTirarCredito={aoTirarCredito}
                           aoDesmarcarComoMeu={aoDesmarcarComoMeu}
                           aoSelecionar={aoSelecionar}
                           aoSeparar={aoSeparar}

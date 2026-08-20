@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api';
 import { BarraDeSync } from '../componentes/BarraDeSync';
@@ -10,8 +10,8 @@ import {
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
+import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
-import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import {
   IconeEtiqueta,
@@ -67,9 +67,9 @@ export function Quadro() {
   const [confirmando, setConfirmando] = useState(false);
 
   const [anotando, setAnotando] = useState<Task | null>(null);
+  const [creditando, setCreditando] = useState<Task | null>(null);
 
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
-  const [editandoSprint, setEditandoSprint] = useState(false);
 
 
   // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
@@ -324,6 +324,34 @@ export function Quadro() {
     }
   }
 
+  // ---- crédito a outra pessoa ------------------------------------------
+
+  // O mesmo gesto do "fiz esta", virado para fora. Pela mesma razão de ser
+  // manual: o Graph conta que alguém reagiu com o check, nunca quem — então o
+  // nome de quem resolveu só existe se alguém escrever.
+  async function salvarCredito(quem: string, solucao: string) {
+    const task = creditando;
+    setCreditando(null);
+    if (!task) return;
+    setErro(null);
+    try {
+      const r = await api.marcarFeitoPorOutro(muralId, task.id, quem, solucao);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function tirarCredito(task: Task) {
+    setErro(null);
+    try {
+      const r = await api.desmarcarFeitoPorOutro(muralId, task.id);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   // O Graph não diz quem reagiu — `reactions[].users` vem com tudo nulo. Então
   // "fui eu" é uma convenção sua: um emoji que só você usa naquele canal.
   async function trocarEmojiMeu() {
@@ -499,44 +527,6 @@ export function Quadro() {
     }
   }
 
-  // ---- sprint ----------------------------------------------------------
-
-  async function salvarSprint(dados: { nome: string; inicio: string; dias: number }) {
-    setEditandoSprint(false);
-    setErro(null);
-    try {
-      setSprint(await api.definirSprint(muralId, dados));
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
-  async function encerrarSprint() {
-    const atual = sprint?.atual;
-    if (!atual) return;
-    const terminadas = tasks.filter((t) => t.meu || t.status === 'feito').length;
-    const confirmado = window.confirm(
-      `Encerrar a ${atual.nome}?\n\n` +
-        `${terminadas} card(s) de Concluído e de Feito por mim saem do quadro e vão para o ` +
-        'arquivo desta sprint. Nada é apagado: os painéis leem de lá, com as anotações da ' +
-        'daily.\n\nA sprint seguinte começa hoje.',
-    );
-    if (!confirmado) return;
-    setErro(null);
-    try {
-      const r = await api.encerrarSprint(muralId);
-      setTasks(r.tasks);
-      setSprint(r.sprints);
-      setResumo(
-        r.arquivadas === 0
-          ? `${atual.nome} encerrada — não havia nada concluído para arquivar`
-          : `${atual.nome} encerrada: ${r.arquivadas} card(s) arquivado(s)`,
-      );
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
   // ---- drag ------------------------------------------------------------
 
   async function aoSoltar(resultado: DropResult) {
@@ -586,6 +576,15 @@ export function Quadro() {
           'outra coisa na mensagem. Arraste para Ninguém pegou, Fazendo ou Concluído.',
       );
       return;
+    }
+
+    // Quem põe o card em "Concluído por outros" pode ser o crédito, não o
+    // Teams. Soltá-lo na mesma coluna não muda nada; sair de lá exige tirar o
+    // crédito primeiro, senão ele voltaria sozinho no render seguinte.
+    if (task.feitoPor) {
+      if (coluna === 'feito') return;
+      await tirarCredito(task);
+      if (!task.podeMover || task.status === coluna) return;
     }
 
     // Saindo da daily: a marca sai e o card volta para a coluna que o Teams
@@ -658,6 +657,11 @@ export function Quadro() {
       // aparece na daily por causa de um clique antigo.
       if (t.ignorada) porColuna.ignorada.push(t);
       else if (t.meu) porColuna.meu.push(t);
+      // Creditada a outra pessoa mora em "Concluído por outros" mesmo que o
+      // check ainda não tenha aparecido no Teams: alguém disse aqui que está
+      // feita, e é isso que a coluna significa. O `status` real continua no
+      // dado — a marca move o card, não reescreve o que o canal disse.
+      else if (t.feitoPor) porColuna.feito.push(t);
       else (porColuna[t.status] ?? porColuna.aberto).push(t);
     }
     porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
@@ -753,36 +757,22 @@ export function Quadro() {
             {formatarUsd(consumo.totais.custoUsd)} gastos
           </span>
         )}
-        {/* A sprint fica no cabeçalho porque é ali que ela age: é o botão ao
-            lado que a encerra e zera o que já terminou. */}
-        <button
-          className="sprint"
-          onClick={() => setEditandoSprint(true)}
-          title={
-            sprint?.atual
-              ? `${sprint.atual.nome}: ${dataDoDiaISO(sprint.atual.inicio)} a ${dataDoDiaISO(sprint.atual.fim)}. Clique para corrigir.`
-              : 'Definir o ciclo que você fecha de vez em quando'
-          }
-        >
-          {sprint?.atual
-            ? `${sprint.atual.nome} · até ${dataDoDiaISO(sprint.atual.fim)}`
-            : 'definir sprint'}
-        </button>
+        {/* A sprint aparece, mas não se mexe daqui: definir e encerrar são
+            gestos de organização, e organização é o assunto da listagem. Aqui o
+            ciclo é contexto — saber até quando vale o que está na tela. */}
         {sprint?.atual && (
-          <button
-            className="acao-topo"
-            onClick={() => void encerrarSprint()}
-            title="Arquiva Concluído e Feito por mim, e abre a sprint seguinte"
+          <span
+            className="sprint"
+            title={
+              `${sprint.atual.nome}: ${dataDoDiaISO(sprint.atual.inicio)} a ` +
+              `${dataDoDiaISO(sprint.atual.fim)}. Para mudar ou encerrar, volte para meus murais.`
+            }
           >
-            Encerrar sprint
-          </button>
+            {sprint.atual.nome} · até {dataDoDiaISO(sprint.atual.fim)}
+          </span>
         )}
-        <Link className="acao-topo" to={`/m/${muralId}/painel`} title="Sprints e daily">
-          Painéis
-        </Link>
-        {/* As três ações do cabeçalho têm o mesmo peso visual: escolher uma para
-            ser verde faria o quadro sugerir que atualizar é o que você veio
-            fazer aqui, e quase nunca é. */}
+        {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
+            Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
         <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
           {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
         </button>
@@ -807,20 +797,20 @@ export function Quadro() {
         />
       )}
 
-      {editandoSprint && (
-        <DialogoDeSprint
-          sprint={sprint?.atual ?? null}
-          primeiraVez={!sprint?.atual}
-          aoSalvar={(d) => void salvarSprint(d)}
-          aoCancelar={() => setEditandoSprint(false)}
-        />
-      )}
-
       {anotando && (
         <DialogoDeSolucao
           task={anotando}
           aoSalvar={(s) => void salvarSolucao(s)}
           aoCancelar={() => setAnotando(null)}
+        />
+      )}
+
+      {creditando && (
+        <DialogoDeFeitoPorOutro
+          task={creditando}
+          pessoas={autores.map((a) => a.autor)}
+          aoSalvar={(quem, solucao) => void salvarCredito(quem, solucao)}
+          aoCancelar={() => setCreditando(null)}
         />
       )}
 
@@ -911,23 +901,6 @@ export function Quadro() {
         </div>
       )}
 
-      {(tagFiltro || autorFiltro) && (
-        <p className="aviso faixa filtrando">
-          Mostrando só {autorFiltro && <strong>o que {autorFiltro} pediu</strong>}
-          {autorFiltro && tagFiltro && ' e '}
-          {tagFiltro && <strong>a etiqueta {tagFiltro}</strong>} — as contagens das colunas são do
-          filtro, não do quadro inteiro.
-          <button
-            onClick={() => {
-              setTagFiltro(null);
-              setAutorFiltro(null);
-            }}
-          >
-            Mostrar tudo
-          </button>
-        </p>
-      )}
-
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
         <Droppable droppableId="colunas" type={TIPO_COLUNA} direction="horizontal">
           {(fornecido) => (
@@ -974,6 +947,8 @@ export function Quadro() {
                   selecionados={selecionados}
                   aoAbrir={(t) => void abrir(t)}
                   aoMarcarComoMeu={setAnotando}
+                  aoCreditarOutro={setCreditando}
+                  aoTirarCredito={(t) => void tirarCredito(t)}
                   aoDesmarcarComoMeu={(t) => void desmarcar(t)}
                   aoSelecionar={alternarSelecao}
                   aoSeparar={(t) => void separar(t)}

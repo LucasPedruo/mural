@@ -270,7 +270,7 @@ function encerrarSprint(muralId) {
   for (const t of Object.values(db.tasks)) {
     // Ignorada tambem sai do quadro no encerramento: ela ja foi decidida, e
     // arrastar a mesma lista de descartes de sprint em sprint nao serve a nada.
-    if (t.status !== 'feito' && !t.meu && !t.ignorada) continue;
+    if (t.status !== 'feito' && !t.meu && !t.feitoPor && !t.ignorada) continue;
     arquivadas.push({ ...t, sprint: s.atual.nome, arquivadaEm: agora });
     // Task sua nunca esteve no Teams: nao ha mensagem para o merge ressuscitar,
     // e marcar o id dela em `arquivados` so sujaria o arquivo.
@@ -319,10 +319,28 @@ function janelasDeSprint(sprints) {
   return janelas;
 }
 
-function painelDoMural(muralId) {
-  const { sprints, tasks } = historicoCompleto(muralId);
-  const janelas = janelasDeSprint(sprints);
+// Concluida e uma pergunta com tres respostas certas: o check do Teams, o "fiz
+// esta" e o credito a outra pessoa. Mora aqui porque painel, dashboard e a
+// listagem precisam responder a mesma coisa — se cada um decidisse sozinho, a
+// mesma task apareceria concluida numa tela e aberta na outra.
+function tarefaConcluida(t) {
+  return t.status === 'feito' || !!t.meu || !!t.feitoPor;
+}
 
+// A coluna em que o card esta HOJE, pela mesma regra do quadro. Ignorada vence
+// tudo; depois o credito (seu ou de outra pessoa); e so entao o status do Teams.
+function colunaDaTask(t) {
+  if (t.ignorada) return 'ignorada';
+  if (t.meu) return 'meu';
+  if (t.feitoPor) return 'feito';
+  return t.status || 'aberto';
+}
+
+// Uma linha por sprint, mais o que chegou fora de qualquer uma delas. Usada
+// pelos dois paineis: a conta de "quantos chegaram na sprint 3" tem de dar o
+// mesmo numero nas duas telas.
+function linhasDeSprint(sprints, tasks) {
+  const janelas = janelasDeSprint(sprints);
   const dia = (t) => diaLocalDe(t.createdDateTime);
   const dentroDe = (j) => tasks.filter((t) => dia(t) >= j.inicio && dia(t) <= j.fim);
 
@@ -338,11 +356,11 @@ function painelDoMural(muralId) {
       chegaram: dentro.length,
       bugs: dentro.filter((t) => t.kind === 'bug').length,
       sugestoes: dentro.filter((t) => t.kind !== 'bug').length,
-      concluidas: dentro.filter((t) => t.status === 'feito' || t.meu).length,
+      concluidas: dentro.filter((t) => t.status === 'feito' || t.meu || t.feitoPor).length,
       minhas: dentro.filter((t) => t.meu).length,
       ignoradas: dentro.filter((t) => t.ignorada).length,
       // Ignorada nao e "em aberto": ela foi decidida, so nao foi feita.
-      emAberto: dentro.filter((t) => !t.meu && !t.ignorada && t.status !== 'feito').length,
+      emAberto: dentro.filter((t) => !t.meu && !t.feitoPor && !t.ignorada && t.status !== 'feito').length,
       mensagens: dentro.reduce((s, t) => s + mensagensDaTask(t).length, 0),
     };
   });
@@ -352,6 +370,30 @@ function painelDoMural(muralId) {
   const cobertas = new Set();
   for (const j of janelas) for (const t of dentroDe(j)) cobertas.add(t.id);
   const soltas = tasks.filter((t) => !cobertas.has(t.id));
+
+  return { linhas, soltas };
+}
+
+// As tags atravessam sprint: a pergunta "quanto de Financeiro chegou este mes"
+// nao se responde olhando uma coluna do quadro.
+function tagsDoHistorico(tasks) {
+  const porTag = new Map();
+  for (const t of tasks) {
+    for (const tag of t.tags || []) {
+      const chave = tag.toLowerCase();
+      const atual = porTag.get(chave) || { tag, total: 0, concluidas: 0, abertas: 0 };
+      atual.total++;
+      if (tarefaConcluida(t)) atual.concluidas++;
+      else if (!t.ignorada) atual.abertas++;
+      porTag.set(chave, atual);
+    }
+  }
+  return [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag));
+}
+
+function painelDoMural(muralId) {
+  const { sprints, tasks } = historicoCompleto(muralId);
+  const { linhas, soltas } = linhasDeSprint(sprints, tasks);
 
   // A daily le por dia da MARCA, nao da mensagem: o que importa na reuniao e o
   // dia em que voce fez, nao o dia em que o pedido chegou.
@@ -384,28 +426,14 @@ function painelDoMural(muralId) {
     });
   }
 
-  // As tags atravessam sprint: a pergunta "quanto de Financeiro chegou este mes"
-  // nao se responde olhando uma coluna do quadro.
-  const porTag = new Map();
-  for (const t of tasks) {
-    for (const tag of t.tags || []) {
-      const chave = tag.toLowerCase();
-      const atual = porTag.get(chave) || { tag, total: 0, concluidas: 0, abertas: 0 };
-      atual.total++;
-      if (t.status === 'feito' || t.meu) atual.concluidas++;
-      else if (!t.ignorada) atual.abertas++;
-      porTag.set(chave, atual);
-    }
-  }
-
   return {
-    tags: [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag)),
+    tags: tagsDoHistorico(tasks),
     sprints: linhas,
     foraDeSprint: soltas.length
       ? {
           chegaram: soltas.length,
           bugs: soltas.filter((t) => t.kind === 'bug').length,
-          concluidas: soltas.filter((t) => t.status === 'feito' || t.meu).length,
+          concluidas: soltas.filter((t) => t.status === 'feito' || t.meu || t.feitoPor).length,
         }
       : null,
     daily: {
@@ -415,6 +443,140 @@ function painelDoMural(muralId) {
       diasAtivos: porDia.length,
       arquivadas: feitas.filter((t) => t.arquivada).length,
     },
+  };
+}
+
+// ------------------------------------------------------------------ dashboard
+
+// O painel responde "o que aconteceu nesta sprint" em texto, para ler em voz
+// alta na daily. O dashboard responde "como esta este mural" em forma — ritmo,
+// distribuicao, quem carrega o que. Sao perguntas diferentes, e por isso duas
+// rotas: mandar a lista inteira da daily para desenhar seis graficos, ou mandar
+// series agregadas para quem quer copiar o texto de um item, seria o peso de uma
+// tela pagando pela outra.
+
+const DIAS_DO_DASHBOARD = 30;
+
+function dashboardDoMural(muralId) {
+  const { sprints, tasks } = historicoCompleto(muralId);
+
+  const porColuna = { aberto: 0, fazendo: 0, interagido: 0, feito: 0, meu: 0, ignorada: 0 };
+  for (const t of tasks) {
+    const c = colunaDaTask(t);
+    if (porColuna[c] !== undefined) porColuna[c]++;
+  }
+
+  // Quando a task foi concluida. So o que foi marcado AQUI tem data propria: o
+  // check do Teams nao carrega horario, e o mais proximo disso e a leitura em
+  // que o status virou 'feito'.
+  const concluidaEm = (t) => {
+    if (t.meu && t.meu.em) return t.meu.em;
+    if (t.feitoPor && t.feitoPor.em) return t.feitoPor.em;
+    return t.status === 'feito' ? t.statusChangedAt || null : null;
+  };
+
+  // Os ultimos 30 dias COM os dias vazios: um grafico que pula o fim de semana
+  // mente sobre o ritmo do time — o vale de sabado faz parte da resposta.
+  const hoje = hojeLocal();
+  const porDia = [];
+  const indiceDoDia = new Map();
+  for (let i = DIAS_DO_DASHBOARD - 1; i >= 0; i--) {
+    const linha = { dia: somarDias(hoje, -i), chegaram: 0, bugs: 0, concluidas: 0 };
+    porDia.push(linha);
+    indiceDoDia.set(linha.dia, linha);
+  }
+  for (const t of tasks) {
+    const chegou = indiceDoDia.get(diaLocalDe(t.createdDateTime));
+    if (chegou) {
+      chegou.chegaram++;
+      if (t.kind === 'bug') chegou.bugs++;
+    }
+    const em = concluidaEm(t);
+    const fechou = em ? indiceDoDia.get(diaLocalDe(em)) : null;
+    if (fechou) fechou.concluidas++;
+  }
+
+  // Quem resolveu. O Graph nunca diz quem reagiu — `reactions[].users` vem nulo
+  // — entao aqui so aparece quem foi creditado A MAO: voce, pelo "fiz esta", e
+  // as pessoas do "feito por outra pessoa". O resto vira `semCredito`, que e
+  // justamente o numero que mede o quanto do quadro esta concluido sem dono
+  // conhecido. Escondê-lo faria os graficos parecerem mais completos do que sao.
+  const porPessoa = new Map();
+  let semCredito = 0;
+  for (const t of tasks) {
+    if (!tarefaConcluida(t)) continue;
+    const quem = t.meu ? 'Você' : t.feitoPor ? t.feitoPor.quem : null;
+    if (!quem) {
+      semCredito++;
+      continue;
+    }
+    const atual = porPessoa.get(quem) || { pessoa: quem, total: 0, ehVoce: !!t.meu };
+    atual.total++;
+    porPessoa.set(quem, atual);
+  }
+
+  // Quem PEDE — outra pergunta, e a unica das duas que o Teams responde sozinho.
+  const porAutor = new Map();
+  for (const t of tasks) {
+    const nome = t.author || 'sem autor';
+    const atual = porAutor.get(nome) || { autor: nome, total: 0, bugs: 0, concluidas: 0 };
+    atual.total++;
+    if (t.kind === 'bug') atual.bugs++;
+    if (tarefaConcluida(t)) atual.concluidas++;
+    porAutor.set(nome, atual);
+  }
+
+  // Quanto tempo uma task leva do pedido ate ficar pronta. So entram as que tem
+  // as duas pontas: sem data de conclusao nao ha o que medir, e chutar a data
+  // faria a metrica dizer qualquer coisa.
+  const duracoes = [];
+  for (const t of tasks) {
+    const em = concluidaEm(t);
+    if (!em || !t.createdDateTime) continue;
+    const dias = (new Date(em).getTime() - new Date(t.createdDateTime).getTime()) / 86_400_000;
+    if (Number.isFinite(dias) && dias >= 0) duracoes.push(dias);
+  }
+  duracoes.sort((a, b) => a - b);
+  // Mediana, nao media: uma task esquecida por seis meses puxaria a media para
+  // um numero que nao descreve nenhuma semana real do time.
+  const medianaDeDias = duracoes.length
+    ? Math.round(duracoes[Math.floor(duracoes.length / 2)] * 10) / 10
+    : null;
+
+  const abertas = tasks.filter((t) => !tarefaConcluida(t) && !t.ignorada);
+
+  return {
+    totais: {
+      tasks: tasks.length,
+      bugs: tasks.filter((t) => t.kind === 'bug').length,
+      sugestoes: tasks.filter((t) => t.kind !== 'bug').length,
+      concluidas: tasks.filter(tarefaConcluida).length,
+      emAberto: abertas.length,
+      ignoradas: tasks.filter((t) => t.ignorada).length,
+      minhas: tasks.filter((t) => t.meu).length,
+      porOutros: tasks.filter((t) => !t.meu && t.feitoPor).length,
+      semCredito,
+      medianaDeDias,
+      // A mais velha ainda em aberto: um numero que o quadro nao mostra, porque
+      // la ela e so mais um card no fim da coluna.
+      maisAntigaEmAbertoDias: abertas.length
+        ? Math.max(
+            ...abertas.map((t) =>
+              Math.floor((Date.now() - new Date(t.createdDateTime).getTime()) / 86_400_000),
+            ),
+          )
+        : null,
+    },
+    porColuna,
+    porDia,
+    sprints: linhasDeSprint(sprints, tasks).linhas,
+    tags: tagsDoHistorico(tasks),
+    porPessoa: [...porPessoa.values()].sort(
+      (a, b) => b.total - a.total || a.pessoa.localeCompare(b.pessoa),
+    ),
+    porAutor: [...porAutor.values()].sort(
+      (a, b) => b.total - a.total || a.autor.localeCompare(b.autor),
+    ),
   };
 }
 
@@ -700,6 +862,7 @@ function tasksParaTela(muralId) {
     ...t,
     origem: t.origem === 'manual' ? 'manual' : 'teams',
     meu: t.meu || null,
+    feitoPor: t.feitoPor || null,
     ignorada: t.ignorada || null,
     tags: Array.isArray(t.tags) ? t.tags : [],
     mensagens: mensagensDaTask(t),
@@ -823,6 +986,41 @@ function desmarcarComoMeu(muralId, id) {
     );
   }
   t.meu = null;
+  gravarTasks(muralId, db);
+}
+
+// O espelho do "fiz esta": o card foi resolvido, mas nao por voce. O Teams so
+// conta que ALGUEM reagiu com check — nunca QUEM — entao o nome de quem fez e
+// uma anotacao sua, do mesmo naipe da tag e da solucao da daily. Por isso mora
+// em campo proprio, que nenhuma leitura sobrescreve.
+//
+// Nao mexe em `status`: o card muda de coluna na tela (ver o agrupamento do
+// quadro), e o status continua sendo o que o canal diz. Escrever 'feito' aqui
+// seria inventar uma reacao que ninguem deu — e o proximo sync desfaria.
+function marcarFeitoPorOutro(muralId, id, quem, solucao) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  const nome = String(quem || '').trim().slice(0, 80);
+  if (!nome) throw new Error('Diga quem fez esta task.');
+  t.feitoPor = {
+    // A data da marcacao, nao a da ultima edicao do texto — a mesma regra do
+    // `meu`: corrigir uma virgula nao pode mudar o dia em que a coisa foi feita.
+    em: (t.feitoPor && t.feitoPor.em) || new Date().toISOString(),
+    quem: nome,
+    solucao: String(solucao || '').trim().slice(0, 2000),
+  };
+  // O credito e de uma pessoa so. Se estava marcada como sua, deixa de estar —
+  // senao o card apareceria em duas colunas e contaria duas vezes no dashboard.
+  t.meu = null;
+  gravarTasks(muralId, db);
+}
+
+function desmarcarFeitoPorOutro(muralId, id) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  t.feitoPor = null;
   gravarTasks(muralId, db);
 }
 
@@ -1065,6 +1263,7 @@ function juntarTasks(muralId, ids) {
   let mensagens = [];
   let status = ancora.status;
   let meu = null;
+  let feitoPor = null;
   let movidoAMao = false;
   let firstSeen = ancora.firstSeen;
   let lastSeen = ancora.lastSeen;
@@ -1089,7 +1288,27 @@ function juntarTasks(muralId, ids) {
         };
       }
     }
+    // O credito a outra pessoa segue a mesma regra da anotacao: juntar dois
+    // cards e um gesto de organizacao, e nao pode apagar o nome de quem
+    // resolveu. Nomes diferentes ficam os dois — duas pessoas mexeram nisso, e
+    // escolher uma seria o codigo decidindo por voce.
+    if (t.feitoPor) {
+      if (!feitoPor) feitoPor = { ...t.feitoPor };
+      else {
+        const primeiro = String(t.feitoPor.em) < String(feitoPor.em) ? t.feitoPor : feitoPor;
+        const segundo = primeiro === feitoPor ? t.feitoPor : feitoPor;
+        const nomes = [...new Set([primeiro.quem, segundo.quem].filter(Boolean))];
+        feitoPor = {
+          em: primeiro.em,
+          quem: nomes.join(' e ').slice(0, 80),
+          solucao: [primeiro.solucao, segundo.solucao].filter(Boolean).join('\n'),
+        };
+      }
+    }
   }
+
+  // O credito e de uma pessoa so — a mesma regra de marcarFeitoPorOutro.
+  if (meu) feitoPor = null;
 
   for (const t of escolhidas) if (t.id !== ancora.id) delete db.tasks[t.id];
 
@@ -1102,6 +1321,7 @@ function juntarTasks(muralId, ids) {
     lastSeen,
     movidoAMao,
     meu,
+    feitoPor,
     agrupamento: 'mao',
   };
   aplicarMensagensNaTask(juntada, mensagens);
@@ -1733,11 +1953,21 @@ async function rotear(req, res) {
           // vence tudo: ela nao esta em nenhuma coluna de trabalho.
           if (t.ignorada) totais.ignorada++;
           else if (t.meu) totais.meu++;
+          // Creditada a outra pessoa conta como concluida, igual ao quadro: o
+          // status pode ainda ser 'aberto' porque ninguem deu o check no Teams,
+          // mas alguem disse aqui que esta feita.
+          else if (t.feitoPor) totais.feito++;
           else if (totais[t.status] !== undefined) totais[t.status]++;
           if (foraDeAlcance_(t, db.lastSync)) foraDeAlcance++;
         }
       } catch { /* historico ilegivel nao pode derrubar a lista inteira */ }
-      return { ...m, totais, foraDeAlcance };
+      // A sprint vem junto porque e daqui que ela passa a ser editada: o quadro
+      // so a mostra, quem a define e a listagem.
+      let sprint = null;
+      try {
+        sprint = lerSprints(m.id).atual || null;
+      } catch { /* idem: sprint ilegivel nao derruba a lista */ }
+      return { ...m, totais, foraDeAlcance, sprint };
     });
     return json(res, 200, { murais });
   }
@@ -1947,6 +2177,21 @@ async function rotear(req, res) {
     }
   }
 
+  // O credito de quem NAO e voce. Mesma familia do /api/meu: marca pessoal, em
+  // campo proprio, que o sync nao encosta.
+  if (p === '/api/feito-por' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      if (corpo.marcar === false) desmarcarFeitoPorOutro(muralId, corpo.id);
+      else marcarFeitoPorOutro(muralId, corpo.id, corpo.quem, corpo.solucao);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
   if (p === '/api/abrir' && req.method === 'POST') {
     try {
       const r = await abrirNoTeams(
@@ -2041,6 +2286,16 @@ async function rotear(req, res) {
     if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
     try {
       return json(res, 200, { ok: true, ...painelDoMural(muralId) });
+    } catch (e) {
+      return json(res, 500, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/dashboard') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    try {
+      return json(res, 200, { ok: true, ...dashboardDoMural(muralId) });
     } catch (e) {
       return json(res, 500, { ok: false, erro: e.message });
     }

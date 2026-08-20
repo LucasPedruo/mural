@@ -24,7 +24,7 @@ As colunas:
 | **Ninguém pegou** | mensagem sem reação nenhuma |
 | **Fazendo** | mensagem com ⚪ — a reação de "peguei esta" (configurável) |
 | **Interagido** | mensagem com qualquer outra reação que não seja check |
-| **Concluído por outros** | mensagem com check (✅ ☑️ ✔️) que não é sua |
+| **Concluído por outros** | mensagem com check (✅ ☑️ ✔️) que não é sua — ou creditada por você a alguém |
 | **Feito por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
 | **Ignoradas** | o que você decidiu que não é pra você — nasce colapsada |
 
@@ -65,8 +65,8 @@ lista de quem pede cresce com o time e a de etiquetas cresce com o uso — uma b
 que quebra em três linhas empurra o quadro para baixo da dobra, e o select tem
 altura fixa por mais longa que a lista fique.
 
-Eles cortam o quadro inteiro, e uma faixa avisa quando algo está escondido:
-contagem de coluna que mente é pior que filtro que não existe.
+Eles cortam o quadro inteiro — enquanto um filtro está ligado, as contagens das
+colunas são as dele, não as do quadro todo.
 
 O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
 colunas existe só para os cards que o Teams não acompanha mais.
@@ -187,9 +187,19 @@ próxima atualização.
 **Juntar e separar** (⧉ e ⑃ no rodapé) consertam o agrupamento quando ele erra:
 ⧉ marca cards para virarem um, ⑃ desmancha um card em suas mensagens.
 
-**Encerrar sprint**, no cabeçalho, arquiva o que já terminou e zera as duas
-colunas de trabalho concluído. **Painéis** mostra o que chegou em cada sprint e
-tudo que você fez, dia a dia.
+**Feito por outra pessoa**, no mesmo menu ⋯, é o espelho do *Fiz esta*: você
+escreve quem resolveu e o card vai para *Concluído por outros* com o nome no
+rodapé. Existe porque o Graph conta que **alguém** reagiu com o check, nunca
+quem — `reactions[].users` vem vazio. Sem essa anotação, o quadro sabe que a
+task acabou e não sabe por obra de quem, que é justamente a pergunta da
+retrospectiva. Como o *Fiz esta*, não escreve nada no Teams: mora em campo
+próprio, e nenhuma leitura o apaga.
+
+O ciclo e as leituras do histórico não moram aqui: **definir e encerrar a
+sprint**, o **Dashboard** e os **Painéis** ficam na listagem de murais. Nenhum
+dos três é coisa que se faz no meio de mexer nos cards, e no cabeçalho do quadro
+eles só disputavam espaço com *Atualizar*. No quadro a sprint continua visível,
+como selo, para você saber até quando vale o que está na tela.
 
 ## Rajadas: quando a demanda chega em pedaços
 
@@ -242,14 +252,14 @@ responde: *concluído desde quando?* Sem ciclo, a coluna Concluído acumula mese
 e deixa de dizer alguma coisa.
 
 Você define a sprint no onboarding — nome, data de início e duração — e pode
-corrigir tudo depois, na pílula do cabeçalho do quadro.
+corrigir tudo depois, na linha de cada mural na **listagem**.
 
-**Encerrar sprint** faz três coisas: tira do quadro os cards de *Concluído* e de
+**Encerrar sprint**, também na listagem, faz três coisas: tira do quadro os cards de *Concluído* e de
 *Feito por mim*, guarda todos no arquivo daquela sprint, e abre a sprint seguinte
 começando hoje ("Sprint 7" vira "Sprint 8" sozinha).
 
 Nada é apagado. Os cards arquivados continuam em `sprints.json` com as anotações
-da daily inteiras, e é de lá que os dois painéis leem. O que muda é que o merge
+da daily inteiras, e é de lá que o dashboard e os painéis leem. O que muda é que o merge
 passa a **ignorar aquelas mensagens para sempre** — sem isso, a mensagem que
 ainda está na janela das ~20 voltaria como task nova na leitura seguinte, e a
 coluna que você acabou de zerar se encheria de novo.
@@ -266,6 +276,36 @@ dois números é o tamanho do ruído que o agrupamento de rajadas absorveu.
 com a anotação de como resolveu — incluindo o que já saiu do quadro em sprints
 encerradas. O botão **copiar** de cada dia devolve a lista em texto, para colar
 no chat de quem faltou na reunião.
+
+## Dashboard
+
+Os painéis leem a sprint **item a item**, para falar em voz alta na daily. O
+dashboard responde outra pergunta: *como está este mural* — está melhorando ou
+piorando, e quem carrega o quê. Abre pela listagem, ao lado de *Painéis*.
+
+Seis leituras, em gráficos desenhados em SVG à mão — sem biblioteca, porque
+trazer 200 kB para desenhar três formas faria o maior pacote do projeto existir
+por causa da tela que se abre menos:
+
+- **Onde o mural está** — a proporção entre as colunas, contando o arquivo das
+  sprints encerradas.
+- **Ritmo (30 dias)** — quanto chega contra quanto sai. É o que o quadro não
+  mostra: lá dá para ver o acúmulo, não se ele está crescendo. Os dias vazios
+  aparecem, de propósito: um gráfico que pula o fim de semana faz o time parecer
+  mais constante do que é.
+- **Por sprint** — chegou contra concluiu, ciclo a ciclo. A distância entre as
+  duas barras é a pergunta.
+- **Quem resolveu** — só quem foi creditado à mão, por *Fiz esta* ou *Feito por
+  outra pessoa*. O que sobra aparece como **concluídas sem dono conhecido**, e
+  esse número fica à vista: escondê-lo faria o gráfico parecer mais completo do
+  que é.
+- **Quem pede** e **por etiqueta** — de onde vem a demanda, e quanto de cada
+  assunto já fechou.
+
+Em cima, seis números que o quadro não dá de relance — entre eles a **mediana**
+de dias entre o pedido e a conclusão (mediana, não média: uma task esquecida há
+seis meses puxaria a média para um número que não descreve nenhuma semana real)
+e há quantos dias está parada a mais velha em aberto.
 
 ## Ignorar, apagar e etiquetar
 
@@ -500,7 +540,9 @@ Vale saber antes de adotar:
 - **Não dá para saber quem reagiu.** O Graph devolve os usuários da reação com
   displayName, id e email nulos — dá para contar quantos foram, não quem. O
   quadro diz "alguém interagiu", nunca "fulano pegou", e "feito por mim" precisa
-  de um emoji de assinatura em vez da identidade real.
+  de um emoji de assinatura em vez da identidade real. Para o crédito de quem
+  não é você, a saída é escrever o nome à mão — é o que faz o "Feito por outra
+  pessoa" do menu ⋯ existir.
 - **Ignorar é só seu.** O time não vê que você ignorou algo — não há reação nem
   mensagem para isso. Se a demanda era sua e você ignorou, ela continua em aberto
   para todo mundo no Teams.
@@ -541,7 +583,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | `murais.json` | índice dos murais e suas conversas |
 | `murais/<id>/tasks.json` | o histórico daquele mural, com as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
-| `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — os painéis vivem daqui |
+| `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — o dashboard e os painéis vivem daqui |
 | `murais/<id>/snapshot.json` | última leitura crua; descartável |
 | `agentes.json` | qual agente de IA lê o Teams, e os ajustes dele |
 | `conta.json`, `chats.json` | cache do onboarding |

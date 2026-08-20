@@ -15,6 +15,7 @@ import {
   IconeIgnorar,
   IconeImagem,
   IconeJuntar,
+  IconePessoa,
   IconeSeparar,
 } from './icones';
 import { MenuFlutuante, type ItemDeMenu } from './MenuFlutuante';
@@ -44,6 +45,8 @@ interface Props {
   aoAbrir: (task: Task) => void;
   aoColapsar: (task: Task, colapsar: boolean) => void;
   aoMarcarComoMeu: (task: Task) => void;
+  aoCreditarOutro: (task: Task) => void;
+  aoTirarCredito: (task: Task) => void;
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
@@ -64,6 +67,8 @@ export function CartaoDeTask({
   aoAbrir,
   aoColapsar,
   aoMarcarComoMeu,
+  aoCreditarOutro,
+  aoTirarCredito,
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
@@ -86,7 +91,11 @@ export function CartaoDeTask({
   const agrupado = mensagens.length > 1;
 
   // Recolher só faz sentido no card que tem o que esconder.
-  const temDetalhe = prints.length > 0 || linhas.length > 0 || (naColunaDaDaily && !!task.meu);
+  const temDetalhe =
+    prints.length > 0 ||
+    linhas.length > 0 ||
+    (naColunaDaDaily && !!task.meu) ||
+    !!task.feitoPor?.solucao;
 
   // Arrastar entre as colunas do Teams so vale para task fora de alcance ou
   // gravada por uma versao anterior: enquanto a mensagem aparece no Teams, a
@@ -145,6 +154,30 @@ export function CartaoDeTask({
       aoEscolher: () => aoMarcarComoMeu(task),
       dica: 'Anotar a solução para a daily',
     });
+    // O crédito de quem não é você. Fica ao lado do "Fiz esta" porque é a mesma
+    // pergunta — quem resolveu — e o Teams não responde nenhuma das duas: ele
+    // conta que alguém deu o check, nunca quem.
+    if (task.feitoPor) {
+      acoes.push({
+        rotulo: 'Editar o crédito',
+        icone: <IconePessoa />,
+        aoEscolher: () => aoCreditarOutro(task),
+        dica: `Hoje: ${task.feitoPor.quem}`,
+      });
+      acoes.push({
+        rotulo: 'Tirar o crédito',
+        icone: <IconeDesfazer />,
+        aoEscolher: () => aoTirarCredito(task),
+        dica: 'O card volta para a coluna que a reação manda',
+      });
+    } else {
+      acoes.push({
+        rotulo: 'Feito por outra pessoa',
+        icone: <IconePessoa />,
+        aoEscolher: () => aoCreditarOutro(task),
+        dica: 'Anotar quem resolveu — o Teams não conta isso',
+      });
+    }
   }
 
   acoes.push({
@@ -215,7 +248,7 @@ export function CartaoDeTask({
 
         const estilo: CSSProperties = {
           ...fornecido.draggableProps.style,
-          ['--linha' as string]: CORES_DE_STATUS[task.meu ? 'meu' : task.status],
+          ['--linha' as string]: CORES_DE_STATUS[task.meu ? 'meu' : task.feitoPor ? 'feito' : task.status],
         };
         return (
           <article
@@ -287,6 +320,11 @@ export function CartaoDeTask({
                     )}
                   </p>
                 )}
+
+                {/* O que a outra pessoa fez, quando você anotou. O nome fica no
+                    rodapé, com os outros selos; aqui vai só o texto — repetir
+                    "Fulano" duas vezes no mesmo card não conta nada a mais. */}
+                {task.feitoPor?.solucao && <p className="solucao">{task.feitoPor.solucao}</p>}
               </>
             )}
 
@@ -331,6 +369,16 @@ export function CartaoDeTask({
               {naColunaDaDaily && !propria && (
                 <span className="badge neutral" title="Status da mensagem no Teams">
                   no Teams: {task.status === 'feito' ? 'concluído' : task.status}
+                </span>
+              )}
+              {/* Quem resolveu. É a única forma de saber: o check do Teams diz
+                  que a task acabou, nunca por obra de quem. */}
+              {task.feitoPor && (
+                <span
+                  className="badge marca"
+                  title={`Creditado a ${task.feitoPor.quem} em ${dataCurta(task.feitoPor.em)}. É uma anotação sua — nada foi escrito no Teams.`}
+                >
+                  feito por {task.feitoPor.quem}
                 </span>
               )}
               {task.meu?.via === 'emoji' && (
