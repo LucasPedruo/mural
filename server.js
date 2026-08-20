@@ -1,13 +1,15 @@
 // Mural — kanbans montados a partir das reacoes de conversas do Microsoft Teams.
 //
 // Cada mural aponta para uma conversa (canal ou chat) e tem historico proprio.
-// O botao "Atualizar" roda o Claude Code headless, que apenas LE as mensagens e
+// O botao "Atualizar" roda o AGENTE ESCOLHIDO em modo headless — Claude Code,
+// Codex, Gemini CLI ou outro, ver agentes.js — que apenas LE as mensagens e
 // grava um snapshot cru. O merge com o historico e feito aqui, em JS
-// deterministico — o LLM nunca toca no historico, para o acumulado nao poder
-// ser inventado nem perdido.
+// deterministico: o LLM nunca toca no historico, para o acumulado nao poder ser
+// inventado nem perdido.
 //
-// Nao ha login proprio: a autenticacao com a Microsoft e a do Claude Code e do
-// conector Microsoft 365. Este servidor nunca ve nem guarda credencial.
+// Nao ha login proprio: a autenticacao com a Microsoft e a do agente e do MCP
+// que ele usa para o Graph. Este servidor nunca ve nem guarda credencial, e o
+// Mural so LE o Teams — nao existe caminho de escrita aqui.
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -15,6 +17,20 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+
+// Quem fala com o Teams e um agente de IA ja autenticado — Claude Code, Codex,
+// Gemini CLI ou outro. Qual deles e escolha de quem instala, e mora aqui para
+// nao virar um `if` espalhado pelo servidor.
+import {
+  adaptadorEscolhido,
+  adaptadores,
+  comandoDe,
+  detectarVersao,
+  idEscolhido,
+  IDS_DE_AGENTE,
+  interpretarLinha,
+  paraTela,
+} from './agentes.js';
 
 // ESM nao tem __dirname; o package.json declara "type": "module" por causa do
 // Vite, entao o servidor tambem roda como modulo.
@@ -31,6 +47,7 @@ const CONTA_FILE = path.join(DATA_DIR, 'conta.json');
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
 const CONSUMO_FILE = path.join(DATA_DIR, 'consumo.json');
 const PREFS_FILE = path.join(DATA_DIR, 'preferencias.json');
+const AGENTES_FILE = path.join(DATA_DIR, 'agentes.json');
 
 const PORT = Number(process.env.MURAL_PORT) || 4317;
 
@@ -64,20 +81,32 @@ function temEmojiDeAssinatura(reactions, assinatura) {
   return (reactions || []).some((e) => normalizarEmoji(e) === alvo);
 }
 
-function statusDe(reactions) {
+// O emoji de "fazendo" e o unico status alem do check que tem emoji proprio, e
+// por isso e configuravel: ele existe porque alguem PRECISA anunciar que pegou a
+// demanda, e cada time faz isso com um simbolo diferente. Sem ele configurado a
+// regra e a de antes, e nada muda.
+//
+// O check ganha do "fazendo": quem terminou terminou, mesmo com a bolinha ainda
+// na mensagem — e tirar as duas reacoes para o quadro ficar certo seria trabalho
+// que o quadro pode fazer sozinho.
+function statusDe(reactions, emojiFazendo) {
   const r = reactions || [];
   if (r.some(ehCheck)) return 'feito';
+  if (temEmojiDeAssinatura(r, emojiFazendo)) return 'fazendo';
   if (r.length > 0) return 'interagido';
   return 'aberto';
 }
 
 // Os emojis que motivaram o "interagido" aparecem crus no card: sem lista fixa,
 // ver qual reacao foi usada e a unica forma de saber o que aconteceu ali.
-function emojisDoCard(reactions) {
-  return (reactions || []).filter((e) => !ehCheck(e));
+function emojisDoCard(reactions, emojiFazendo) {
+  const fazendo = normalizarEmoji(emojiFazendo);
+  return (reactions || []).filter(
+    (e) => !ehCheck(e) && (!fazendo || normalizarEmoji(e) !== fazendo),
+  );
 }
 
-const STATUS_VALIDOS = ['aberto', 'interagido', 'feito'];
+const STATUS_VALIDOS = ['aberto', 'fazendo', 'interagido', 'feito'];
 
 // ------------------------------------------------------------------ indice
 
@@ -132,6 +161,263 @@ function arquivoSnapshot(id) {
   return path.join(pastaDoMural(id), 'snapshot.json');
 }
 
+function arquivoSprints(id) {
+  return path.join(pastaDoMural(id), 'sprints.json');
+}
+
+// ------------------------------------------------------------------- sprints
+
+// A sprint aqui e so um ciclo com comeco e fim: o time nem precisa usar a
+// palavra. Ela existe para que "concluido" possa ser zerado de vez em quando —
+// um quadro que acumula seis meses de check nao serve para olhar.
+const DIAS_DE_SPRINT_PADRAO = 14;
+
+function lerSprints(muralId) {
+  const s = lerJson(arquivoSprints(muralId), { atual: null, encerradas: [] });
+  if (!Array.isArray(s.encerradas)) s.encerradas = [];
+  return s;
+}
+
+function gravarSprints(muralId, s) {
+  fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
+  gravarJsonAtomico(arquivoSprints(muralId), s);
+}
+
+// Dia LOCAL, nao UTC: a sprint comeca no dia que a pessoa marcou no calendario
+// dela, e comparar com o `createdDateTime` cru jogaria o fim da tarde para o dia
+// seguinte.
+function diaLocalDe(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+function hojeLocal() {
+  return diaLocalDe(new Date().toISOString());
+}
+
+function diaValido(valor, padrao) {
+  const t = String(valor || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : padrao;
+}
+
+function somarDias(dia, dias) {
+  const [a, m, d] = dia.split('-').map(Number);
+  const data = new Date(a, m - 1, d + dias);
+  return diaLocalDe(data.toISOString());
+}
+
+// "Sprint 42" vira "Sprint 43". Sem numero no fim, ganha um — encerrar uma
+// sprint tem de abrir a seguinte sozinho, senao o quadro fica sem ciclo e o
+// proximo encerramento nao tem onde arquivar.
+function proximoNomeDeSprint(nome) {
+  const m = String(nome || '').match(/^(.*?)(\d+)(\D*)$/);
+  if (m) return `${m[1]}${Number(m[2]) + 1}${m[3]}`;
+  return `${String(nome || 'Sprint').trim()} 2`;
+}
+
+function definirSprint(muralId, corpo) {
+  const s = lerSprints(muralId);
+  const nome = String(corpo.nome || '').trim() || 'Sprint 1';
+  const inicio = diaValido(corpo.inicio, s.atual?.inicio || hojeLocal());
+  const dias = Math.min(120, Math.max(1, Math.round(Number(corpo.dias) || DIAS_DE_SPRINT_PADRAO)));
+  s.atual = {
+    nome,
+    inicio,
+    dias,
+    fim: somarDias(inicio, dias - 1),
+    criadaEm: s.atual?.criadaEm || new Date().toISOString(),
+  };
+  gravarSprints(muralId, s);
+  return s.atual;
+}
+
+// A lista de sprints sem os cards arquivados dentro: a tela de cima so precisa
+// dos nomes e das datas, e mandar o arquivo inteiro em cada leitura do quadro
+// seria carregar meses de historico para desenhar um botao.
+function sprintsResumidas(s) {
+  return {
+    atual: s.atual || null,
+    encerradas: s.encerradas.map((e) => ({
+      nome: e.nome,
+      inicio: e.inicio,
+      fim: e.fim,
+      dias: e.dias,
+      encerradaEm: e.encerradaEm,
+      arquivadas: (e.tasks || []).length,
+    })),
+  };
+}
+
+// Encerrar a sprint tira do quadro o que ja terminou — Concluido e Feito por
+// mim — e guarda dentro da sprint encerrada. NADA e apagado: os dois paineis
+// leem dali, inclusive a anotacao da daily.
+//
+// O merge passa a ignorar essas mensagens para sempre (`db.arquivados`). Sem
+// isso, a mensagem que continua na janela das ~20 voltaria como task NOVA na
+// leitura seguinte, e a coluna que voce acabou de zerar se enche de novo.
+function encerrarSprint(muralId) {
+  const s = lerSprints(muralId);
+  if (!s.atual) throw new Error('Este mural nao tem sprint definida.');
+
+  const db = lerTasks(muralId);
+  if (!db.arquivados) db.arquivados = {};
+  const agora = new Date().toISOString();
+  const arquivadas = [];
+
+  for (const t of Object.values(db.tasks)) {
+    // Ignorada tambem sai do quadro no encerramento: ela ja foi decidida, e
+    // arrastar a mesma lista de descartes de sprint em sprint nao serve a nada.
+    if (t.status !== 'feito' && !t.meu && !t.ignorada) continue;
+    arquivadas.push({ ...t, sprint: s.atual.nome, arquivadaEm: agora });
+    // Task sua nunca esteve no Teams: nao ha mensagem para o merge ressuscitar,
+    // e marcar o id dela em `arquivados` so sujaria o arquivo.
+    if (t.origem !== 'manual') {
+      for (const m of mensagensDaTask(t)) db.arquivados[m.id] = s.atual.nome;
+      db.arquivados[t.id] = s.atual.nome;
+    }
+    delete db.tasks[t.id];
+  }
+
+  s.encerradas.unshift({ ...s.atual, encerradaEm: agora, tasks: arquivadas });
+  s.atual = {
+    nome: proximoNomeDeSprint(s.atual.nome),
+    inicio: hojeLocal(),
+    dias: s.atual.dias || DIAS_DE_SPRINT_PADRAO,
+    fim: somarDias(hojeLocal(), (s.atual.dias || DIAS_DE_SPRINT_PADRAO) - 1),
+    criadaEm: agora,
+  };
+
+  gravarTasks(muralId, db);
+  gravarSprints(muralId, s);
+  return { arquivadas: arquivadas.length, sprints: sprintsResumidas(s) };
+}
+
+// ------------------------------------------------------------------- paineis
+
+// Tudo que ja passou pelo mural: o que esta no quadro agora mais o que as
+// sprints encerradas guardaram. Os paineis precisam das duas metades — a conta de
+// "quantos chegaram na sprint 3" nao pode mudar porque a sprint 3 foi fechada.
+function historicoCompleto(muralId) {
+  const db = lerTasks(muralId);
+  const sprints = lerSprints(muralId);
+  const vivas = Object.values(db.tasks).map((t) => ({ ...t, arquivada: false, sprint: null }));
+  const arquivadas = sprints.encerradas.flatMap((e) =>
+    (e.tasks || []).map((t) => ({ ...t, arquivada: true, sprint: t.sprint || e.nome })),
+  );
+  return { db, sprints, tasks: [...vivas, ...arquivadas] };
+}
+
+function janelasDeSprint(sprints) {
+  const janelas = [];
+  if (sprints.atual) janelas.push({ ...sprints.atual, atual: true, encerradaEm: null, arquivadas: 0 });
+  for (const e of sprints.encerradas) {
+    janelas.push({ ...e, atual: false, arquivadas: (e.tasks || []).length, tasks: undefined });
+  }
+  return janelas;
+}
+
+function painelDoMural(muralId) {
+  const { sprints, tasks } = historicoCompleto(muralId);
+  const janelas = janelasDeSprint(sprints);
+
+  const dia = (t) => diaLocalDe(t.createdDateTime);
+  const dentroDe = (j) => tasks.filter((t) => dia(t) >= j.inicio && dia(t) <= j.fim);
+
+  const linhas = janelas.map((j) => {
+    const dentro = dentroDe(j);
+    return {
+      nome: j.nome,
+      inicio: j.inicio,
+      fim: j.fim,
+      atual: j.atual,
+      encerradaEm: j.encerradaEm || null,
+      arquivadas: j.arquivadas,
+      chegaram: dentro.length,
+      bugs: dentro.filter((t) => t.kind === 'bug').length,
+      sugestoes: dentro.filter((t) => t.kind !== 'bug').length,
+      concluidas: dentro.filter((t) => t.status === 'feito' || t.meu).length,
+      minhas: dentro.filter((t) => t.meu).length,
+      ignoradas: dentro.filter((t) => t.ignorada).length,
+      // Ignorada nao e "em aberto": ela foi decidida, so nao foi feita.
+      emAberto: dentro.filter((t) => !t.meu && !t.ignorada && t.status !== 'feito').length,
+      mensagens: dentro.reduce((s, t) => s + mensagensDaTask(t).length, 0),
+    };
+  });
+
+  // O que chegou antes de existir sprint neste mural nao pode desaparecer da
+  // conta: some numa linha propria em vez de sumir da soma.
+  const cobertas = new Set();
+  for (const j of janelas) for (const t of dentroDe(j)) cobertas.add(t.id);
+  const soltas = tasks.filter((t) => !cobertas.has(t.id));
+
+  // A daily le por dia da MARCA, nao da mensagem: o que importa na reuniao e o
+  // dia em que voce fez, nao o dia em que o pedido chegou.
+  const feitas = tasks
+    .filter((t) => t.meu && t.meu.em)
+    .sort((a, b) => String(b.meu.em).localeCompare(String(a.meu.em)));
+
+  const porDia = [];
+  for (const t of feitas) {
+    const chave = diaLocalDe(t.meu.em);
+    let grupo = porDia[porDia.length - 1];
+    if (!grupo || grupo.dia !== chave) {
+      grupo = { dia: chave, itens: [] };
+      porDia.push(grupo);
+    }
+    grupo.itens.push({
+      id: t.id,
+      summary: t.summary,
+      kind: t.kind === 'bug' ? 'bug' : 'sugestao',
+      solucao: t.meu.solucao || '',
+      em: t.meu.em,
+      via: t.meu.via,
+      status: t.status,
+      origem: t.origem === 'manual' ? 'manual' : 'teams',
+      autor: t.author,
+      arquivada: !!t.arquivada,
+      sprint: t.sprint || (sprints.atual ? sprints.atual.nome : null),
+      mensagens: mensagensDaTask(t).length,
+      webUrl: t.webUrl || '',
+    });
+  }
+
+  // As tags atravessam sprint: a pergunta "quanto de Financeiro chegou este mes"
+  // nao se responde olhando uma coluna do quadro.
+  const porTag = new Map();
+  for (const t of tasks) {
+    for (const tag of t.tags || []) {
+      const chave = tag.toLowerCase();
+      const atual = porTag.get(chave) || { tag, total: 0, concluidas: 0, abertas: 0 };
+      atual.total++;
+      if (t.status === 'feito' || t.meu) atual.concluidas++;
+      else if (!t.ignorada) atual.abertas++;
+      porTag.set(chave, atual);
+    }
+  }
+
+  return {
+    tags: [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag)),
+    sprints: linhas,
+    foraDeSprint: soltas.length
+      ? {
+          chegaram: soltas.length,
+          bugs: soltas.filter((t) => t.kind === 'bug').length,
+          concluidas: soltas.filter((t) => t.status === 'feito' || t.meu).length,
+        }
+      : null,
+    daily: {
+      porDia,
+      total: feitas.length,
+      bugs: feitas.filter((t) => t.kind === 'bug').length,
+      diasAtivos: porDia.length,
+      arquivadas: feitas.filter((t) => t.arquivada).length,
+    },
+  };
+}
+
 // ------------------------------------------------------------------ migracao
 
 // Versao antiga guardava um unico mural em data/config.json + data/tasks.json.
@@ -170,6 +456,22 @@ migrarFormatoAntigo();
 // que identifica quem esta gastando) e serve para estimar a proxima.
 const MAX_EXECUCOES_GUARDADAS = 200;
 
+// O agente escolhido e os ajustes dele. E configuracao, nao dado: `refazer
+// configuracao` limpa este arquivo junto com o resto do onboarding.
+function lerConfigAgentes() {
+  const c = lerJson(AGENTES_FILE, { escolhido: 'claude', porAgente: {} });
+  if (!c.porAgente || typeof c.porAgente !== 'object') c.porAgente = {};
+  return c;
+}
+
+function gravarConfigAgentes(config) {
+  gravarJsonAtomico(AGENTES_FILE, config);
+}
+
+function agenteEmUso() {
+  return adaptadorEscolhido(lerConfigAgentes());
+}
+
 function usuarioAtual() {
   const conta = lerJson(CONTA_FILE, {});
   return conta.mail || conta.displayName || 'desconhecido';
@@ -188,6 +490,7 @@ function lerPreferencias() {
 // O emoji de assinatura: a reacao que, na SUA mao, quer dizer "fui eu que fiz".
 // Nao pode ser o check — esse todo mundo usa, e o significado dele ja e outro.
 const EMOJI_MEU_PADRAO = '🟢';
+const EMOJI_FAZENDO_PADRAO = '⚪';
 
 function prefsDoUsuario(usuario) {
   const todas = lerPreferencias();
@@ -196,6 +499,7 @@ function prefsDoUsuario(usuario) {
   return {
     confirmarAntesDeAtualizar: true,
     emojiMeu: EMOJI_MEU_PADRAO,
+    emojiFazendo: EMOJI_FAZENDO_PADRAO,
     ...(todas.porUsuario[usuario] || {}),
   };
 }
@@ -214,22 +518,26 @@ function validarEmojiMeu(valor, atual) {
   return limpo;
 }
 
-// O evento `result` do stream-json traz o custo real da execucao. Sem ele nao
-// ha estimativa honesta — nao da para inferir preco a partir do numero de
-// mensagens, porque o cache muda tudo entre uma execucao e outra.
-function extrairConsumo(ev) {
-  const u = ev.usage || {};
-  const entrada = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-  return {
-    tokensEntrada: entrada,
-    tokensSaida: u.output_tokens || 0,
-    tokensCacheLido: u.cache_read_input_tokens || 0,
-    // Cache lido conta para o total gasto, ainda que muito mais barato.
-    tokensTotal: entrada + (u.output_tokens || 0) + (u.cache_read_input_tokens || 0),
-    custoUsd: typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : null,
-    duracaoMs: ev.duration_ms || null,
-  };
+// "Fazendo" e "fui eu" nao podem ser o mesmo emoji: um card cairia em duas
+// colunas e a contagem do quadro passaria a mentir.
+function validarEmojiFazendo(valor, atual, emojiMeu) {
+  if (valor === undefined) return atual;
+  const limpo = String(valor).trim().slice(0, 8);
+  if (limpo && ehCheck(limpo)) {
+    throw new Error('O check ja significa "concluido". Escolha outro emoji para "fazendo".');
+  }
+  if (limpo && normalizarEmoji(limpo) === normalizarEmoji(emojiMeu)) {
+    throw new Error(
+      'Este emoji ja e o da sua assinatura em "Feito por mim". ' +
+      'Um card nao pode estar em duas colunas.'
+    );
+  }
+  return limpo;
 }
+
+// Quem extrai o gasto de cada evento e o adaptador do agente, em agentes.js:
+// o formato do stream muda de CLI para CLI, e agente que nao informa custo
+// devolve `custoUsd: null` em vez de um numero inventado.
 
 // Toda ida ao Claude Code custa, nao so a atualizacao do quadro: verificar a
 // conta e listar os chats no onboarding tambem sao leituras cobradas. `operacao`
@@ -361,14 +669,18 @@ function gravarTasks(muralId, db) {
 // mensagens que a API devolve. Dali em diante o Teams nao conta mais nada sobre
 // ela, entao o quadro para de receber atualizacoes automaticas desse card.
 function foraDeAlcance(t, lastSync) {
-  // Task criada aqui dentro nunca esteve na janela do Teams, entao "saiu dela"
-  // nao quer dizer nada: ela e movivel por natureza, nao por ter se perdido.
+  // `manual` e task que uma versao anterior do Mural deixou gravada, quando dava
+  // para criar task a mao. Ela nunca esteve na janela do Teams, entao "saiu
+  // dela" nao quer dizer nada — e continua movivel, para nao virar um card
+  // preso no quadro de quem atualizou.
   if (t.origem === 'manual') return false;
   return !!lastSync && t.lastSeen !== lastSync;
 }
 
-// Quem pode trocar de coluna a mao: as que o Teams nao acompanha mais e as que
-// nasceram aqui. Nas demais a reacao manda, e o proximo sync desfaria o gesto.
+// Quem pode trocar de coluna arrastando: as que o Teams nao acompanha mais e as
+// `manual` do historico antigo. Nas demais a reacao de la manda, e o proximo sync
+// desfaria o gesto — um quadro que mente por dois minutos e pior que um quadro
+// que nao deixa voce fazer o gesto.
 function podeMover(t, lastSync) {
   return t.origem === 'manual' || foraDeAlcance(t, lastSync);
 }
@@ -383,11 +695,16 @@ function podeDesmarcar(t, lastSync) {
 
 function tasksParaTela(muralId) {
   const db = lerTasks(muralId);
+  const prefs = prefsDoUsuario(usuarioAtual());
   const lista = Object.values(db.tasks).map((t) => ({
     ...t,
     origem: t.origem === 'manual' ? 'manual' : 'teams',
     meu: t.meu || null,
-    emojis: emojisDoCard(t.reactions),
+    ignorada: t.ignorada || null,
+    tags: Array.isArray(t.tags) ? t.tags : [],
+    mensagens: mensagensDaTask(t),
+    agrupamento: t.agrupamento || null,
+    emojis: emojisDoCard(t.reactions, prefs.emojiFazendo),
     foraDeAlcance: foraDeAlcance(t, db.lastSync),
     podeMover: podeMover(t, db.lastSync),
     podeDesmarcar: podeDesmarcar(t, db.lastSync),
@@ -395,81 +712,85 @@ function tasksParaTela(muralId) {
   return { lastSync: db.lastSync, tasks: lista };
 }
 
-// ------------------------------------------------------------- tasks proprias
+// ---------------------------------------------------- ignorar, apagar e tags
 
-// Nem tudo que vira trabalho passa pelo canal: o que combinaram no corredor, o
-// bug que voce mesmo achou. Essas tasks nascem aqui, tem id proprio e o sync
-// nunca as toca — o merge so mexe em ids que vieram do snapshot.
-function nomeDoUsuario() {
-  const conta = lerJson(CONTA_FILE, {});
-  return conta.displayName || conta.mail || 'você';
-}
+// Tres marcas pessoais, e nenhuma delas e status do Teams: elas moram em campos
+// proprios justamente para o sync nao as apagar. A mesma escolha do "feito por
+// mim" — o que voce escreveu no quadro nao pode sumir porque alguem reagiu.
 
-function textoDeTask(valor, campo) {
-  const t = String(valor || '').trim();
-  if (!t) throw new Error(`Escreva ${campo}.`);
-  return t.slice(0, 1000);
-}
+const MAX_TAGS = 6;
+const MAX_LETRAS_DA_TAG = 24;
 
-function criarTaskManual(muralId, corpo) {
-  const summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
-  const status = STATUS_VALIDOS.includes(corpo.status) ? corpo.status : 'aberto';
-
+/** "Nao e pra mim" e uma decisao sua sobre uma mensagem do time: ela nao pode
+ *  virar reacao no Teams (ignorar em publico seria outra coisa) nem apagar o
+ *  historico. So tira o card das colunas de trabalho. */
+function ignorarTask(muralId, id, ignorar) {
   const db = lerTasks(muralId);
-  const agora = new Date().toISOString();
-  const id = 'manual-' + crypto.randomUUID();
-
-  db.tasks[id] = {
-    id,
-    origem: 'manual',
-    author: nomeDoUsuario(),
-    createdDateTime: agora,
-    summary,
-    kind: corpo.kind === 'bug' ? 'bug' : 'sugestao',
-    reactions: [],
-    webUrl: '',
-    status,
-    firstSeen: agora,
-    statusChangedAt: agora,
-    statusAnterior: null,
-    lastSeen: agora,
-    movidoAMao: false,
-    meu: null,
-  };
-  gravarTasks(muralId, db);
-  return id;
-}
-
-// So task manual pode ser editada ou apagada: mexer no texto de uma mensagem do
-// Teams criaria um quadro que discorda da conversa, e o proximo sync desfaria.
-function taskManual(db, id) {
-  const t = db.tasks[String(id || '')];
+  const t = db.tasks[String(id)];
   if (!t) throw new Error('Task desconhecida.');
-  if (t.origem !== 'manual') {
-    throw new Error('Esta task veio do Teams — edite a mensagem por lá e atualize.');
-  }
-  return t;
-}
-
-function editarTaskManual(muralId, corpo) {
-  const db = lerTasks(muralId);
-  const t = taskManual(db, corpo.id);
-
-  t.summary = textoDeTask(corpo.summary, 'o que precisa ser feito');
-  t.kind = corpo.kind === 'bug' ? 'bug' : 'sugestao';
-  if (STATUS_VALIDOS.includes(corpo.status) && corpo.status !== t.status) {
-    t.statusAnterior = t.status;
-    t.status = corpo.status;
-    t.statusChangedAt = new Date().toISOString();
-  }
+  t.ignorada = ignorar === false ? null : new Date().toISOString();
   gravarTasks(muralId, db);
 }
 
-function removerTaskManual(muralId, id) {
+/** Apagar de vez. Diferente de ignorar: o card sai do arquivo e a mensagem entra
+ *  na lista de arquivados, para a proxima leitura nao a ressuscitar. E o unico
+ *  gesto irreversivel do Mural, e por isso a interface confirma antes. */
+function apagarTask(muralId, id) {
   const db = lerTasks(muralId);
-  taskManual(db, id);
+  const t = db.tasks[String(id)];
+  if (!t) throw new Error('Task desconhecida.');
+  if (!db.arquivados) db.arquivados = {};
+  if (t.origem !== 'manual') {
+    for (const m of mensagensDaTask(t)) db.arquivados[m.id] = 'apagada';
+    db.arquivados[t.id] = 'apagada';
+  }
   delete db.tasks[String(id)];
   gravarTasks(muralId, db);
+}
+
+/** As tags sao suas, escritas aqui — o Teams nao tem esse campo. Normalizar na
+ *  entrada e o que impede "Financeiro", "financeiro" e "financeiro " de virarem
+ *  tres colunas diferentes na hora de filtrar. */
+function normalizarTags(valor) {
+  if (!Array.isArray(valor)) throw new Error('Mande uma lista de tags.');
+  const vistas = new Set();
+  const tags = [];
+  for (const bruta of valor) {
+    const tag = String(bruta || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LETRAS_DA_TAG);
+    if (!tag) continue;
+    const chave = tag.toLowerCase();
+    if (vistas.has(chave)) continue;
+    vistas.add(chave);
+    tags.push(tag);
+    if (tags.length >= MAX_TAGS) break;
+  }
+  return tags;
+}
+
+function definirTags(muralId, id, valor) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id)];
+  if (!t) throw new Error('Task desconhecida.');
+  t.tags = normalizarTags(valor);
+  gravarTasks(muralId, db);
+  return t.tags;
+}
+
+/** Todas as tags que existem neste mural, com quantas tasks cada uma tem. E o
+ *  que a barra de filtro mostra, e o que faz uma tag ser reaproveitada em vez de
+ *  redigitada com outra grafia. */
+function tagsDoMural(muralId) {
+  const db = lerTasks(muralId);
+  const por = new Map();
+  for (const t of Object.values(db.tasks)) {
+    for (const tag of t.tags || []) {
+      const chave = tag.toLowerCase();
+      const atual = por.get(chave) || { tag, quantas: 0 };
+      atual.quantas++;
+      por.set(chave, atual);
+    }
+  }
+  return [...por.values()].sort((a, b) => b.quantas - a.quantas || a.tag.localeCompare(b.tag));
 }
 
 // "Feito por mim" NAO e um status do Teams — e uma marca pessoal, e por isso
@@ -505,6 +826,335 @@ function desmarcarComoMeu(muralId, id) {
   gravarTasks(muralId, db);
 }
 
+// ---------------------------------------------------------------------- rajadas
+
+// Uma demanda quase nunca chega como uma mensagem so. O padrao real e a rajada:
+// dois prints e tres linhas de texto, do mesmo autor, em segundos — cinco
+// mensagens que sao UMA task. Sem agrupar, o quadro conta cinco cards e quatro
+// deles dizem apenas "(so print)".
+//
+// Quem decide o agrupamento e este codigo, nao o modelo. O JS acha as rajadas
+// candidatas (mesmo autor, consecutivas, dentro da janela) e o LLM so pode
+// DIVIDIR uma candidata, pelo campo `mesmaDemandaQueAnterior`. Ele nao consegue
+// juntar autores diferentes nem horarios distantes, porque isso nem chega a ele
+// como candidata. O pior erro possivel do modelo e deixar um card solto — que
+// voce junta com um clique — nunca fundir duas demandas num card so.
+const JANELA_RAJADA_MS = 3 * 60 * 1000;
+
+const SENTINELA_PRINT = '(só print — abrir para ver)';
+
+function ehSoPrint(m) {
+  if (typeof m.soPrint === 'boolean') return m.soPrint;
+  return String(m.summary || '').trim() === SENTINELA_PRINT;
+}
+
+function normalizarAutor(nome) {
+  return String(nome || '').trim().toLowerCase();
+}
+
+function mensagemDoSnapshot(m, agora) {
+  return {
+    id: String(m.id),
+    author: m.author || '?',
+    createdDateTime: m.createdDateTime || agora,
+    summary: m.summary || '(sem resumo)',
+    kind: m.kind === 'bug' ? 'bug' : 'sugestao',
+    reactions: Array.isArray(m.reactions) ? m.reactions : [],
+    webUrl: m.webUrl || '',
+    soPrint: ehSoPrint(m),
+  };
+}
+
+// Task gravada antes deste campo existir — e toda task sua — nao tem
+// `mensagens`: ela E uma mensagem. Ler assim evita migrar o arquivo: o campo
+// aparece sozinho na primeira atualizacao, e nada quebra enquanto nao aparece.
+function mensagensDaTask(t) {
+  if (Array.isArray(t.mensagens) && t.mensagens.length) return t.mensagens;
+  return [{
+    id: t.id,
+    author: t.author,
+    createdDateTime: t.createdDateTime,
+    summary: t.summary,
+    kind: t.kind,
+    reactions: t.reactions || [],
+    webUrl: t.webUrl || '',
+    soPrint: ehSoPrint(t),
+  }];
+}
+
+// Toda mensagem que ja virou card fica presa nele — sozinha ou dentro de um
+// grupo. E isso que impede o quadro de piscar: se o modelo mudar de ideia na
+// leitura seguinte, o agrupamento de antes continua valendo.
+//
+// A consequencia importante e que um card NUNCA e absorvido por outro: ele so
+// cresce, ganhando mensagens novas da mesma rajada que apareceram depois. Nada
+// que voce escreveu — anotacao da daily, movimento a mao — pode se perder num
+// reagrupamento, porque reagrupamento nao existe. Fundir dois cards que ja
+// existem so acontece se voce pedir, em /api/juntar.
+function mensagensJaConhecidas(db) {
+  const dono = new Map();
+  for (const t of Object.values(db.tasks)) {
+    if (t.origem === 'manual') continue;
+    for (const m of mensagensDaTask(t)) dono.set(m.id, t.id);
+    dono.set(t.id, t.id);
+  }
+  return dono;
+}
+
+function podeContinuarRajada(grupo, bruto, msg) {
+  const ultima = grupo.mensagens[grupo.mensagens.length - 1];
+  if (!ultima) return false;
+  // Grupo que voce mesmo montou ou separou nao aceita palpite: a mao mandou
+  // ali, e a leitura seguinte nao pode refazer o gesto por cima.
+  if (grupo.travado) return false;
+  if (normalizarAutor(ultima.author) !== normalizarAutor(msg.author)) return false;
+  // O default do prompt e dividir: so `true` explicito junta.
+  if (bruto.mesmaDemandaQueAnterior !== true) return false;
+  const dt = new Date(msg.createdDateTime).getTime() - new Date(ultima.createdDateTime).getTime();
+  return Number.isFinite(dt) && dt >= 0 && dt <= JANELA_RAJADA_MS;
+}
+
+function ordenarMensagens(mensagens) {
+  return mensagens.slice().sort(
+    (a, b) =>
+      String(a.createdDateTime).localeCompare(String(b.createdDateTime)) ||
+      String(a.id).localeCompare(String(b.id)),
+  );
+}
+
+// A mensagem do Teams pode ter sido editada depois; a versao nova ganha. Manter
+// as antigas que nao vieram na janela e o que permite um grupo sobreviver quando
+// so parte dele ainda esta nas ~20 mensagens.
+function fundirMensagens(antigas, novas) {
+  const por = new Map();
+  for (const m of antigas) por.set(m.id, m);
+  for (const m of novas) por.set(m.id, m);
+  return ordenarMensagens([...por.values()]);
+}
+
+function agruparRajadas(snapshot, db, agora) {
+  const dono = mensagensJaConhecidas(db);
+  const ordenado = snapshot
+    .filter((m) => m && m.id)
+    .slice()
+    .sort(
+      (a, b) =>
+        String(a.createdDateTime || '').localeCompare(String(b.createdDateTime || '')) ||
+        String(a.id).localeCompare(String(b.id)),
+    );
+
+  const grupos = [];
+  const porAncora = new Map();
+  let atual = null;
+
+  const noGrupo = (ancora, msg) => {
+    const existente = porAncora.get(ancora);
+    if (existente) {
+      existente.mensagens.push(msg);
+      return existente;
+    }
+    const g = { ancora, mensagens: [msg], travado: db.tasks[ancora]?.agrupamento === 'mao' };
+    grupos.push(g);
+    porAncora.set(ancora, g);
+    return g;
+  };
+
+  for (const bruto of ordenado) {
+    const msg = mensagemDoSnapshot(bruto, agora);
+    const conhecido = dono.get(msg.id);
+
+    // Ja tem dono: volta para ele, mesmo que a ancora tenha saido da janela.
+    if (conhecido) {
+      atual = noGrupo(conhecido, msg);
+      continue;
+    }
+    if (atual && podeContinuarRajada(atual, bruto, msg)) {
+      atual.mensagens.push(msg);
+      continue;
+    }
+    atual = noGrupo(msg.id, msg);
+  }
+
+  return grupos;
+}
+
+// O titulo do card sai da primeira mensagem com texto de verdade, nao da
+// primeira mensagem: a rajada costuma comecar pelos prints, e "so print" nao
+// diz o que a task e.
+function mensagemPrincipal(mensagens) {
+  return (
+    mensagens.find((m) => !m.soPrint && m.summary && m.summary !== '(sem resumo)') || mensagens[0]
+  );
+}
+
+function resumoDoGrupo(mensagens) {
+  const principal = mensagemPrincipal(mensagens);
+  if (principal && !principal.soPrint) return principal.summary;
+  const prints = mensagens.filter((m) => m.soPrint).length;
+  return prints > 1 ? `${prints} prints — abrir para ver` : SENTINELA_PRINT;
+}
+
+// A reacao pode estar em qualquer mensagem da rajada: as pessoas reagem na que
+// estao vendo, nao na "principal" — que so existe para o Mural. Por isso o
+// status do card sai da UNIAO das reacoes do grupo.
+function reacoesDoGrupo(mensagens) {
+  const vistas = new Set();
+  const uniao = [];
+  for (const m of mensagens) {
+    for (const e of m.reactions || []) {
+      const chave = normalizarEmoji(e);
+      if (vistas.has(chave)) continue;
+      vistas.add(chave);
+      uniao.push(e);
+    }
+  }
+  return uniao;
+}
+
+function kindDoGrupo(mensagens, padrao) {
+  if (mensagens.some((m) => m.kind === 'bug')) return 'bug';
+  return padrao || 'sugestao';
+}
+
+// Campos que saem inteiramente das mensagens do grupo. Recalcular tudo de uma
+// vez, aqui, e o que garante que juntar, separar e crescer produzam o mesmo card
+// que uma leitura limpa produziria.
+function aplicarMensagensNaTask(t, mensagens) {
+  const todas = ordenarMensagens(mensagens);
+  const primeira = todas[0];
+  t.mensagens = todas;
+  t.summary = resumoDoGrupo(todas);
+  t.reactions = reacoesDoGrupo(todas);
+  t.kind = kindDoGrupo(todas, t.kind);
+  t.author = primeira.author || t.author;
+  t.createdDateTime = primeira.createdDateTime || t.createdDateTime;
+  t.webUrl = primeira.webUrl || t.webUrl;
+  return t;
+}
+
+// ------------------------------------------------- juntar e separar a mao
+
+const ORDEM_DE_STATUS = { aberto: 0, interagido: 1, feito: 2 };
+
+function statusMaisAvancado(a, b) {
+  return (ORDEM_DE_STATUS[a] ?? 0) >= (ORDEM_DE_STATUS[b] ?? 0) ? a : b;
+}
+
+// A heuristica vai errar em alguns casos, e card errado que nao da para
+// consertar e pior que card errado. Estas duas rotas sao a saida — e o que elas
+// decidem vence a automatica: `agrupamento: 'mao'` nunca e desfeito por leitura
+// nenhuma, do mesmo jeito que `movidoAMao`.
+function juntarTasks(muralId, ids) {
+  const db = lerTasks(muralId);
+  const escolhidas = [...new Set(ids.map(String))].map((id) => {
+    const t = db.tasks[id];
+    if (!t) throw new Error('Uma das tasks escolhidas nao existe mais.');
+    if (t.origem === 'manual') {
+      throw new Error(
+        'Esta task foi criada a mao numa versao anterior e nao tem mensagem no Teams para juntar.'
+      );
+    }
+    return t;
+  });
+  if (escolhidas.length < 2) throw new Error('Escolha pelo menos duas tasks para juntar.');
+
+  escolhidas.sort((a, b) => String(a.createdDateTime).localeCompare(String(b.createdDateTime)));
+  const ancora = escolhidas[0];
+  const agora = new Date().toISOString();
+
+  let mensagens = [];
+  let status = ancora.status;
+  let meu = null;
+  let movidoAMao = false;
+  let firstSeen = ancora.firstSeen;
+  let lastSeen = ancora.lastSeen;
+
+  for (const t of escolhidas) {
+    mensagens = mensagens.concat(mensagensDaTask(t));
+    status = statusMaisAvancado(status, t.status);
+    movidoAMao = movidoAMao || !!t.movidoAMao;
+    if (String(t.firstSeen) < String(firstSeen)) firstSeen = t.firstSeen;
+    if (String(t.lastSeen) > String(lastSeen)) lastSeen = t.lastSeen;
+    // Anotacao da daily nao pode se perder num gesto de organizacao: as duas
+    // viram uma, na ordem em que foram escritas.
+    if (t.meu) {
+      if (!meu) meu = { ...t.meu };
+      else {
+        const primeiro = String(t.meu.em) < String(meu.em) ? t.meu : meu;
+        const segundo = primeiro === meu ? t.meu : meu;
+        meu = {
+          em: primeiro.em,
+          via: primeiro.via === 'emoji' && segundo.via === 'emoji' ? 'emoji' : 'mao',
+          solucao: [primeiro.solucao, segundo.solucao].filter(Boolean).join('\n'),
+        };
+      }
+    }
+  }
+
+  for (const t of escolhidas) if (t.id !== ancora.id) delete db.tasks[t.id];
+
+  const juntada = {
+    ...ancora,
+    status,
+    statusAnterior: ancora.status !== status ? ancora.status : ancora.statusAnterior,
+    statusChangedAt: ancora.status !== status ? agora : ancora.statusChangedAt,
+    firstSeen,
+    lastSeen,
+    movidoAMao,
+    meu,
+    agrupamento: 'mao',
+  };
+  aplicarMensagensNaTask(juntada, mensagens);
+  db.tasks[ancora.id] = juntada;
+  gravarTasks(muralId, db);
+  return ancora.id;
+}
+
+function separarTask(muralId, id) {
+  const db = lerTasks(muralId);
+  const emojiFazendo = prefsDoUsuario(usuarioAtual()).emojiFazendo;
+  const t = db.tasks[String(id)];
+  if (!t) throw new Error('Task desconhecida.');
+  const mensagens = mensagensDaTask(t);
+  if (mensagens.length < 2) throw new Error('Esta task e uma mensagem so — nao ha o que separar.');
+
+  const agora = new Date().toISOString();
+  const [primeira, ...resto] = ordenarMensagens(mensagens);
+
+  // A ancora fica com a primeira mensagem e com a anotacao: dividir texto que
+  // voce escreveu entre cards seria adivinhar a qual metade ele pertencia.
+  aplicarMensagensNaTask(t, [primeira]);
+  t.agrupamento = 'mao';
+
+  for (const m of resto) {
+    // Cada mensagem volta a ser um card com o id dela — e, por isso, com dono
+    // proprio no mapa da proxima leitura: o agrupamento automatico nao a
+    // reabsorve.
+    db.tasks[m.id] = aplicarMensagensNaTask(
+      {
+        id: m.id,
+        origem: 'teams',
+        status: statusDe(m.reactions, emojiFazendo),
+        firstSeen: t.firstSeen,
+        statusChangedAt: agora,
+        statusAnterior: null,
+        lastSeen: t.lastSeen,
+        movidoAMao: t.movidoAMao,
+        meu: null,
+        agrupamento: 'mao',
+        kind: m.kind,
+        author: m.author,
+        createdDateTime: m.createdDateTime,
+        webUrl: m.webUrl,
+      },
+      [m],
+    );
+  }
+
+  gravarTasks(muralId, db);
+  return resto.length + 1;
+}
+
 // ----------------------------------------------------------------------- merge
 
 // Mescla o snapshot (janela de ~20) sobre o historico acumulado. Tasks que
@@ -532,68 +1182,78 @@ function aplicarAssinatura(t, agora, assinatura, marcados) {
   }
 }
 
-function merge(db, snapshot, agora, assinatura) {
+function merge(db, snapshot, agora, assinatura, emojiFazendo) {
   const novos = [];
   const mudaram = [];
   const retomadas = [];
   const marcados = [];
+  const cresceram = [];
+  if (!db.arquivados) db.arquivados = {};
 
-  for (const m of snapshot) {
-    if (!m || !m.id) continue;
+  // O snapshot vem mensagem por mensagem; daqui para baixo o que existe e o
+  // card — que pode ser uma rajada de varias mensagens do mesmo autor.
+  for (const g of agruparRajadas(snapshot, db, agora)) {
+    // Mensagem arquivada no encerramento de uma sprint nao volta ao quadro. Sem
+    // isso a proxima leitura ressuscitaria como "nova" tudo que voce fechou.
+    if (db.arquivados[g.ancora]) continue;
+    const vindas = g.mensagens.filter((m) => !db.arquivados[m.id]);
+    if (!vindas.length) continue;
 
-    const status = statusDe(m.reactions);
-    const antigo = db.tasks[m.id];
+    const antigo = db.tasks[g.ancora];
 
     if (!antigo) {
-      db.tasks[m.id] = {
-        id: m.id,
-        author: m.author || '?',
-        createdDateTime: m.createdDateTime || agora,
-        summary: m.summary || '(sem resumo)',
-        kind: m.kind === 'bug' ? 'bug' : 'sugestao',
-        reactions: m.reactions || [],
-        webUrl: m.webUrl || '',
-        status,
-        firstSeen: agora,
-        statusChangedAt: agora,
-        statusAnterior: null,
-        lastSeen: agora,
-        movidoAMao: false,
-        meu: null,
-      };
-      novos.push(m.id);
-      aplicarAssinatura(db.tasks[m.id], agora, assinatura, marcados);
+      const t = aplicarMensagensNaTask(
+        {
+          id: g.ancora,
+          origem: 'teams',
+          agrupamento: vindas.length > 1 ? 'auto' : null,
+          firstSeen: agora,
+          statusChangedAt: agora,
+          statusAnterior: null,
+          lastSeen: agora,
+          movidoAMao: false,
+          meu: null,
+        },
+        vindas,
+      );
+      t.status = statusDe(t.reactions, emojiFazendo);
+      db.tasks[g.ancora] = t;
+      novos.push(g.ancora);
+      aplicarAssinatura(t, agora, assinatura, marcados);
       continue;
     }
 
-    // Campos que o Teams pode ter editado depois.
-    antigo.summary = m.summary || antigo.summary;
-    antigo.reactions = m.reactions || [];
-    antigo.author = m.author || antigo.author;
-    antigo.webUrl = m.webUrl || antigo.webUrl;
-    antigo.kind = m.kind === 'bug' ? 'bug' : antigo.kind;
+    // Cresceu: o autor mandou mais uma mensagem na mesma rajada depois da
+    // ultima leitura. O card e o mesmo — a ancora nao muda — mas o resumo e as
+    // reacoes podem ter mudado, e vale avisar no resumo da atualizacao.
+    const antes = mensagensDaTask(antigo).length;
+    aplicarMensagensNaTask(antigo, fundirMensagens(mensagensDaTask(antigo), vindas));
+    if (antigo.mensagens.length > antes) cresceram.push(g.ancora);
+    if (antigo.agrupamento !== 'mao' && antigo.mensagens.length > 1) antigo.agrupamento = 'auto';
     antigo.lastSeen = agora;
+
+    const status = statusDe(antigo.reactions, emojiFazendo);
 
     // A task voltou a aparecer na janela: o Teams volta a mandar. Se ela tinha
     // sido movida a mao enquanto estava fora de alcance, a reacao real vence —
     // a fonte da verdade e sempre o Teams.
     if (antigo.movidoAMao) {
       antigo.movidoAMao = false;
-      if (antigo.status !== status) retomadas.push(m.id);
+      if (antigo.status !== status) retomadas.push(g.ancora);
     }
 
     if (antigo.status !== status) {
       antigo.statusAnterior = antigo.status;
       antigo.status = status;
       antigo.statusChangedAt = agora;
-      mudaram.push(m.id);
+      mudaram.push(g.ancora);
     }
 
     aplicarAssinatura(antigo, agora, assinatura, marcados);
   }
 
   db.lastSync = agora;
-  return { novos, mudaram, retomadas, marcados, total: snapshot.length };
+  return { novos, mudaram, retomadas, marcados, cresceram, total: snapshot.length };
 }
 
 // ------------------------------------------------------------------ claude run
@@ -626,30 +1286,28 @@ function etapaVisivel(p) {
 // real da execucao.
 let consumoDaExecucao = null;
 
-function processarEvento(linha) {
-  if (!linha.trim()) return;
-  let ev;
-  try { ev = JSON.parse(linha); } catch { return; }
+// A etapa sai da ferramenta que o agente acabou de usar, e o nome dela vem da
+// configuracao — nao de uma constante: em outro agente a leitura do Teams se
+// chama outra coisa. Por isso a comparacao e com `ferramentas.leitura`, e o
+// fallback por sufixo cobre o MCP que prefixa o nome com o servidor.
+function processarEvento(linha, ad) {
+  const lido = interpretarLinha(ad, linha);
+  if (!lido) return;
 
-  if (ev.type === 'result') {
-    consumoDaExecucao = extrairConsumo(ev);
-    return;
-  }
+  if (lido.consumo) consumoDaExecucao = lido.consumo;
+  if (!progresso || !lido.usos) return;
 
-  if (!progresso) return;
-  if (ev.type !== 'assistant') return;
-  const partes = ev.message && ev.message.content;
-  if (!Array.isArray(partes)) return;
+  const f = ad.ferramentas;
+  const ehTool = (nome, alvo) => !!alvo && (nome === alvo || nome.endsWith(alvo));
 
-  for (const p of partes) {
-    if (p.type !== 'tool_use') continue;
+  for (const uso of lido.usos) {
     progresso.ultimaAtividade = Date.now();
-    const nome = p.name || '';
-    if (nome.includes('read_resource')) {
-      const uri = (p.input && p.input.uri) || '';
-      if (/\/messages\/?$/.test(uri)) progresso.etapa = 'listando as mensagens';
+    if (ehTool(uso.nome, f.leitura)) {
+      if (/\/messages\/?$/.test(uso.uri)) progresso.etapa = 'listando as mensagens';
       else { progresso.lidas++; progresso.etapa = 'lendo mensagens'; }
-    } else if (nome === 'Write') {
+    } else if (uso.nome === '__arquivo__' || ehTool(uso.nome, f.escrita)) {
+      // `__arquivo__` e o nome que o leitor do Codex da para uma mudanca de
+      // arquivo: gravar o snapshot nao aparece como tool call ali.
       progresso.etapa = 'gravando';
     }
   }
@@ -663,10 +1321,15 @@ function montarPrompt(nome, valores) {
   return txt;
 }
 
-// A URI que o Claude vai ler. Canal e chat tem formatos diferentes no Graph.
-function uriDasMensagens(f) {
-  if (f.tipo === 'chat') return `teams:///chats/${encodeURIComponent(f.chatId)}/messages`;
-  return `teams:///teams/${f.teamId}/channels/${encodeURIComponent(f.channelId)}/messages`;
+// A URI que o agente vai ler. Canal e chat tem formatos diferentes, e o molde
+// vem do adaptador: o endereco das mensagens e vocabulario do MCP que le o
+// Teams, nao do Mural. Outro MCP, outro molde — sem tocar em codigo.
+function uriDasMensagens(f, ad = agenteEmUso()) {
+  const molde = f.tipo === 'chat' ? ad.ferramentas.uriChat : ad.ferramentas.uriCanal;
+  return molde
+    .split('{chatId}').join(encodeURIComponent(f.chatId || ''))
+    .split('{teamId}').join(f.teamId || '')
+    .split('{channelId}').join(encodeURIComponent(f.channelId || ''));
 }
 
 // Mensagem de chat volta com webUrl null, entao o link precisa ser montado.
@@ -679,28 +1342,31 @@ function moldeDeWebUrl(f) {
     `/{id}?groupId=${f.teamId}&parentMessageId={id}`;
 }
 
-// Roda o Claude headless e espera que ele grave `arquivoSaida`. Usado pelos
+// Roda o agente headless e espera que ele grave `arquivoSaida`. Usado pelos
 // passos curtos do onboarding, que nao precisam de barra de progresso — mas
-// custam dinheiro igual, entao saem em stream-json so para o evento `result`
-// contar o gasto. Sem isso, listar chats (2 a 3 minutos de API) apareceria
-// como leitura gratuita no registro, e nao e.
-function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 * 1000) {
+// custam dinheiro igual, entao o stdout e lido de qualquer forma, para o gasto
+// entrar no registro. Sem isso, listar chats (2 a 3 minutos de API) apareceria
+// como leitura gratuita, e nao e.
+function rodarAgenteSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 * 1000) {
   return new Promise((resolve, reject) => {
     // A conta e lida antes porque o passo 'conta' apaga o proprio arquivo que
     // identifica o usuario: sem isso o gasto dele cairia sempre em "desconhecido".
     const usuarioAntes = usuarioAtual();
+    const ad = agenteEmUso();
     try { fs.unlinkSync(arquivoSaida); } catch {}
 
-    const proc = spawn('claude', [
-      '-p',
-      '--output-format', 'stream-json', '--verbose',
-      '--allowedTools', 'mcp__claude_ai_Microsoft_365__get_me,' +
-                        'mcp__claude_ai_Microsoft_365__teams_list_chats,Write',
-      '--permission-mode', 'acceptEdits',
-    ], { cwd: ROOT, shell: true });
+    let cmd;
+    try { cmd = comandoDe(ad, operacao, prompt); }
+    catch (e) { return reject(e); }
 
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+    const proc = spawn(cmd.binario, cmd.args, { cwd: ROOT, shell: true });
+
+    if (cmd.viaStdin) {
+      proc.stdin.write(prompt);
+      proc.stdin.end();
+    } else {
+      proc.stdin.end();
+    }
 
     let stderr = '', buffer = '', consumo = null;
     proc.stderr.on('data', (d) => (stderr += d));
@@ -711,17 +1377,14 @@ function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 *
       const linhas = buffer.split('\n');
       buffer = linhas.pop();
       for (const l of linhas) {
-        if (!l.trim()) continue;
-        try {
-          const ev = JSON.parse(l);
-          if (ev.type === 'result') consumo = extrairConsumo(ev);
-        } catch { /* linha parcial ou ruido: o que importa e o evento result */ }
+        const lido = interpretarLinha(ad, l);
+        if (lido && lido.consumo) consumo = lido.consumo;
       }
     });
 
     const timer = setTimeout(() => {
       proc.kill();
-      reject(new Error('O Claude demorou demais para responder.'));
+      reject(new Error(`O ${ad.nome} demorou demais para responder.`));
     }, timeoutMs);
 
     proc.on('close', (code) => {
@@ -739,16 +1402,18 @@ function rodarClaudeSimples(prompt, arquivoSaida, operacao, timeoutMs = 5 * 60 *
 
       if (code !== 0) {
         return reject(new Error(
-          'O Claude Code saiu com erro (codigo ' + code + '). ' + stderr.slice(0, 300)
+          `O ${ad.nome} saiu com erro (codigo ${code}). ` + stderr.slice(0, 300)
         ));
       }
       try { resolve(JSON.parse(fs.readFileSync(arquivoSaida, 'utf8'))); }
-      catch { reject(new Error('O Claude rodou mas nao gravou um resultado legivel.')); }
+      catch {
+        reject(new Error(`O ${ad.nome} rodou mas nao gravou um resultado legivel.`));
+      }
     });
 
     proc.on('error', (e) => {
       clearTimeout(timer);
-      reject(new Error('Nao consegui executar `claude`: ' + e.message));
+      reject(new Error(`Nao consegui executar \`${cmd.binario}\`: ` + e.message));
     });
   });
 }
@@ -768,12 +1433,19 @@ function rodarSync(muralId) {
     const snapshotFile = arquivoSnapshot(muralId);
     fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
 
+    // O agente escolhido dita tres coisas do prompt: como se chama a tool que
+    // le o Teams, como se chama a que grava arquivo e como se enderecam as
+    // mensagens. Sem isso o prompt falaria o dialeto de um conector so.
+    const ad = agenteEmUso();
+
     let prompt;
     try {
       prompt = montarPrompt('sincronizar.md', {
-        URI_MENSAGENS: uriDasMensagens(mural),
+        URI_MENSAGENS: uriDasMensagens(mural, ad),
         ARQUIVO_SNAPSHOT: snapshotFile,
         WEBURL_MOLDE: moldeDeWebUrl(mural),
+        FERRAMENTA_LEITURA: ad.ferramentas.leitura,
+        FERRAMENTA_ESCRITA: ad.ferramentas.escrita,
       });
     } catch {
       syncEmAndamento = null; progresso = null;
@@ -782,16 +1454,20 @@ function rodarSync(muralId) {
 
     try { fs.unlinkSync(snapshotFile); } catch {}
 
-    // O prompt vai por STDIN, nao como argumento: e multi-linha, e no Windows o
-    // shell mutila argumentos assim — o Claude recebia texto truncado.
-    const proc = spawn('claude', [
-      '-p',
-      '--output-format', 'stream-json', '--verbose',
-      '--allowedTools', 'mcp__claude_ai_Microsoft_365__read_resource,Write',
-      '--permission-mode', 'acceptEdits',
-    ], { cwd: ROOT, shell: true });
+    // No Claude o prompt vai por STDIN, nao como argumento: e multi-linha, e no
+    // Windows o shell mutila argumentos assim — o agente recebia texto truncado.
+    // Agente de entrada 'arg' recebe o prompt como um unico argv, sem passar por
+    // split de espaco, pelo mesmo motivo.
+    let cmd;
+    try { cmd = comandoDe(ad, 'sync', prompt); }
+    catch (e) {
+      syncEmAndamento = null; progresso = null;
+      return reject(e);
+    }
 
-    proc.stdin.write(prompt);
+    const proc = spawn(cmd.binario, cmd.args, { cwd: ROOT, shell: true });
+
+    if (cmd.viaStdin) proc.stdin.write(prompt);
     proc.stdin.end();
 
     let stdout = '', stderr = '', buffer = '';
@@ -800,7 +1476,7 @@ function rodarSync(muralId) {
       buffer += d;
       const linhas = buffer.split('\n');
       buffer = linhas.pop();
-      for (const l of linhas) processarEvento(l);
+      for (const l of linhas) processarEvento(l, ad);
     });
     proc.stderr.on('data', (d) => (stderr += d));
 
@@ -823,14 +1499,14 @@ function rodarSync(muralId) {
       }
 
       if (code !== 0) {
-        return reject(new Error(`O Claude saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
+        return reject(new Error(`O ${ad.nome} saiu com codigo ${code}. ${stderr.slice(0, 400)}`));
       }
 
       let snapshot;
       try { snapshot = JSON.parse(fs.readFileSync(snapshotFile, 'utf8')); }
       catch {
         return reject(new Error(
-          'O Claude rodou mas nao gravou um snapshot valido. ' + resumoDoResultado(stdout)
+          `O ${ad.nome} rodou mas nao gravou um snapshot valido. ` + resumoDoResultado(stdout)
         ));
       }
       if (!Array.isArray(snapshot)) return reject(new Error('O snapshot nao e um array.'));
@@ -840,6 +1516,7 @@ function rodarSync(muralId) {
         const r = merge(
           db, snapshot, new Date().toISOString(),
           prefsDoUsuario(usuario).emojiMeu,
+          prefsDoUsuario(usuario).emojiFazendo,
         );
         gravarTasks(muralId, db);
 
@@ -860,7 +1537,7 @@ function rodarSync(muralId) {
     proc.on('error', (e) => {
       clearTimeout(timer);
       syncEmAndamento = null; progresso = null;
-      reject(new Error('Nao consegui executar `claude`: ' + e.message));
+      reject(new Error(`Nao consegui executar \`${cmd.binario}\`: ` + e.message));
     });
   });
 }
@@ -1046,14 +1723,16 @@ async function rotear(req, res) {
   if (p === '/api/murais' && req.method === 'GET') {
     const indice = lerIndice();
     const murais = indice.murais.map((m) => {
-      let totais = { aberto: 0, interagido: 0, feito: 0, meu: 0 };
+      let totais = { aberto: 0, fazendo: 0, interagido: 0, feito: 0, meu: 0, ignorada: 0 };
       let foraDeAlcance = 0;
       try {
         const db = lerTasks(m.id);
         for (const t of Object.values(db.tasks)) {
           // Card marcado como seu sai da coluna do Teams e conta so na sua —
-          // e a mesma regra do quadro, senao a home diria outro numero.
-          if (t.meu) totais.meu++;
+          // e a mesma regra do quadro, senao a home diria outro numero. Ignorada
+          // vence tudo: ela nao esta em nenhuma coluna de trabalho.
+          if (t.ignorada) totais.ignorada++;
+          else if (t.meu) totais.meu++;
           else if (totais[t.status] !== undefined) totais[t.status]++;
           if (foraDeAlcance_(t, db.lastSync)) foraDeAlcance++;
         }
@@ -1113,11 +1792,15 @@ async function rotear(req, res) {
   if (p === '/api/consumo') {
     const muralId = url.searchParams.get('mural') || '';
     const usuario = usuarioAtual();
+    const ad = agenteEmUso();
     return json(res, 200, {
       usuario,
       estimativa: estimarProximaAtualizacao(usuario, muralId),
       totais: totaisDoUsuario(usuario),
       preferencias: prefsDoUsuario(usuario),
+      // Agente que nao informa custo nao pode ter preco na tela: a interface
+      // esconde o total e a confirmacao de gasto em vez de mostrar zero.
+      agente: { id: ad.id, nome: ad.nome, reportaCusto: ad.reportaCusto },
     });
   }
 
@@ -1135,6 +1818,11 @@ async function rotear(req, res) {
           ? atuais.confirmarAntesDeAtualizar
           : corpo.confirmarAntesDeAtualizar !== false,
         emojiMeu: validarEmojiMeu(corpo.emojiMeu, atuais.emojiMeu),
+        emojiFazendo: validarEmojiFazendo(
+          corpo.emojiFazendo,
+          atuais.emojiFazendo,
+          validarEmojiMeu(corpo.emojiMeu, atuais.emojiMeu),
+        ),
       };
       gravarJsonAtomico(PREFS_FILE, todas);
       return json(res, 200, { ok: true, preferencias: todas.porUsuario[usuario] });
@@ -1153,9 +1841,9 @@ async function rotear(req, res) {
     }
   }
 
-  // Mover a mao so vale para task fora de alcance. Se ela ainda esta na janela,
-  // o proximo sync desfaria a mudanca — deixar mover ali criaria um quadro que
-  // mente por 2 minutos e depois se corrige sozinho.
+  // Mover a mao so vale para task fora de alcance. Se ela ainda aparece no Teams,
+  // a reacao de la manda e o proximo sync desfaria a mudanca — deixar mover ali
+  // criaria um quadro que mente por 2 minutos e depois se corrige sozinho.
   if (p === '/api/mover' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
@@ -1165,6 +1853,14 @@ async function rotear(req, res) {
       const tarefaId = String(corpo.id || '');
       const novo = String(corpo.status || '');
       if (!STATUS_VALIDOS.includes(novo)) throw new Error('Status invalido.');
+      // "Interagido" nunca foi um estado que se escolhe, com ou sem escrita: e o
+      // que sobra quando alguem reage com outra coisa.
+      if (novo === 'interagido') {
+        throw new Error(
+          '"Interagido" nao e um estado que se escolhe: e o que sobra quando alguem reage ' +
+          'com outra coisa. Arraste para Ninguem pegou, Fazendo ou Concluido.'
+        );
+      }
 
       const db = lerTasks(muralId);
       const t = db.tasks[tarefaId];
@@ -1172,7 +1868,7 @@ async function rotear(req, res) {
       if (!podeMover(t, db.lastSync)) {
         throw new Error(
           'Esta task ainda aparece no Teams — reaja na mensagem de la e atualize. ' +
-          'Mover a mao so vale para as que sairam do alcance e para as suas proprias.'
+          'Mover a mao so vale para as que sairam do alcance.'
         );
       }
 
@@ -1189,38 +1885,47 @@ async function rotear(req, res) {
     }
   }
 
-  // ---- tasks proprias ----
-
-  // Task que voce escreve aqui dentro: o que nao passou pelo canal mas e
-  // trabalho igual. Nasce com id proprio, entao nenhum sync a alcanca.
-  if (p === '/api/task' && req.method === 'POST') {
+  // Nao e pra mim: tira o card das colunas de trabalho sem tocar no Teams e sem
+  // apagar nada. E marca sua, entao nenhum sync a desfaz.
+  if (p === '/api/ignorar' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      const id = criarTaskManual(muralId, await lerCorpoJson(req));
-      return json(res, 200, { ok: true, id, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/task' && req.method === 'PUT') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      editarTaskManual(muralId, await lerCorpoJson(req));
+      const corpo = await lerCorpoJson(req);
+      ignorarTask(muralId, corpo.id, corpo.ignorar);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }
   }
 
-  if (p === '/api/task' && req.method === 'DELETE') {
+  // O unico gesto irreversivel do Mural: o card sai do arquivo e a mensagem
+  // entra na lista de arquivados, para nao voltar na proxima leitura.
+  if (p === '/api/apagar' && req.method === 'POST') {
     try {
       const muralId = url.searchParams.get('mural') || '';
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      removerTaskManual(muralId, url.searchParams.get('id') || '');
+      const corpo = await lerCorpoJson(req);
+      apagarTask(muralId, corpo.id);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/tags' && req.method === 'GET') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    return json(res, 200, { ok: true, tags: tagsDoMural(muralId) });
+  }
+
+  if (p === '/api/tags' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      definirTags(muralId, corpo.id, corpo.tags);
+      return json(res, 200, { ok: true, tags: tagsDoMural(muralId), ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }
@@ -1268,6 +1973,79 @@ async function rotear(req, res) {
     });
   }
 
+  // ---- rajadas: juntar e separar a mao ----
+
+  // O agrupamento automatico erra em alguns casos — e card errado que nao da
+  // para consertar e pior que card errado. Estas duas rotas sao a saida, e o que
+  // elas decidem nao e desfeito por leitura nenhuma.
+  if (p === '/api/juntar' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      if (!Array.isArray(corpo.ids)) throw new Error('Mande os ids das tasks a juntar.');
+      const id = juntarTasks(muralId, corpo.ids);
+      return json(res, 200, { ok: true, id, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/separar' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      const quantas = separarTask(muralId, corpo.id);
+      return json(res, 200, { ok: true, quantas, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // ---- sprint ----
+
+  if (p === '/api/sprint' && req.method === 'GET') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    return json(res, 200, { ok: true, ...sprintsResumidas(lerSprints(muralId)) });
+  }
+
+  if (p === '/api/sprint' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      definirSprint(muralId, await lerCorpoJson(req));
+      return json(res, 200, { ok: true, ...sprintsResumidas(lerSprints(muralId)) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // Encerrar arquiva o que terminou e abre a sprint seguinte. E irreversivel
+  // pela interface, mas nao destrutivo: os cards continuam no sprints.json,
+  // e e de la que os dois paineis leem.
+  if (p === '/api/sprint/encerrar' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const r = encerrarSprint(muralId);
+      return json(res, 200, { ok: true, ...r, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/painel') {
+    const muralId = url.searchParams.get('mural') || '';
+    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
+    try {
+      return json(res, 200, { ok: true, ...painelDoMural(muralId) });
+    } catch (e) {
+      return json(res, 500, { ok: false, erro: e.message });
+    }
+  }
+
   // ---- onboarding ----
 
   // Refazer a configuracao do zero: some com o cache do onboarding (conta,
@@ -1277,7 +2055,7 @@ async function rotear(req, res) {
   // trabalho acumulado por tabela.
   if (p === '/api/setup/reset' && req.method === 'POST') {
     const apagados = [];
-    for (const arquivo of [CONTA_FILE, CHATS_FILE, PREFS_FILE]) {
+    for (const arquivo of [CONTA_FILE, CHATS_FILE, PREFS_FILE, AGENTES_FILE]) {
       try {
         fs.unlinkSync(arquivo);
         apagados.push(path.basename(arquivo));
@@ -1288,26 +2066,51 @@ async function rotear(req, res) {
     return json(res, 200, { ok: true, apagados });
   }
 
-  if (p === '/api/setup/claude') {
-    return new Promise((resolve) => {
-      execFile('claude', ['--version'], { shell: true }, (erro, stdout) => {
-        if (erro) {
-          json(res, 200, {
-            ok: false,
-            erro: 'Claude Code nao encontrado no PATH. Instale em claude.com/claude-code.',
-          });
-        } else {
-          json(res, 200, { ok: true, versao: String(stdout).trim() });
-        }
-        resolve();
-      });
+  // Escolher o agente, nao verificar UM agente. A pergunta do primeiro passo do
+  // onboarding e "com qual CLI de IA eu leio o Teams?" — e a resposta nao pode
+  // ser um binario cravado no codigo.
+  if (p === '/api/setup/agentes') {
+    const config = lerConfigAgentes();
+    const lista = adaptadores(config);
+    const detectados = await Promise.all(lista.map((ad) => detectarVersao(ad)));
+    return json(res, 200, {
+      ok: true,
+      escolhido: idEscolhido(config),
+      agentes: lista.map((ad, i) => paraTela(ad, detectados[i])),
     });
+  }
+
+  if (p === '/api/setup/agente' && req.method === 'POST') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      const id = String(corpo.id || '');
+      if (!IDS_DE_AGENTE.includes(id)) throw new Error('Agente desconhecido.');
+
+      const config = lerConfigAgentes();
+      config.escolhido = id;
+      // Os ajustes ficam guardados por agente, nao no escolhido: trocar de
+      // agente e voltar nao pode apagar as flags que voce corrigiu no outro.
+      if (corpo.ajustes && typeof corpo.ajustes === 'object') {
+        config.porAgente[id] = { ...(config.porAgente[id] || {}), ...corpo.ajustes };
+      }
+      gravarConfigAgentes(config);
+
+      const ad = adaptadorEscolhido(config);
+      const deteccao = await detectarVersao(ad);
+      return json(res, 200, { ok: true, agente: paraTela(ad, deteccao) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
   }
 
   if (p === '/api/setup/conta' && req.method === 'POST') {
     try {
-      const conta = await rodarClaudeSimples(
-        montarPrompt('verificar-conta.md', { ARQUIVO_SAIDA: CONTA_FILE }),
+      const conta = await rodarAgenteSimples(
+        montarPrompt('verificar-conta.md', {
+          ARQUIVO_SAIDA: CONTA_FILE,
+          FERRAMENTA_CONTA: agenteEmUso().ferramentas.conta,
+          FERRAMENTA_ESCRITA: agenteEmUso().ferramentas.escrita,
+        }),
         CONTA_FILE,
         'conta'
       );
@@ -1321,10 +2124,12 @@ async function rotear(req, res) {
   if (p === '/api/setup/chats' && req.method === 'POST') {
     try {
       const conta = lerJson(CONTA_FILE, {});
-      const chats = await rodarClaudeSimples(
+      const chats = await rodarAgenteSimples(
         montarPrompt('listar-chats.md', {
           ARQUIVO_SAIDA: CHATS_FILE,
           USUARIO_ATUAL: conta.displayName || 'a pessoa logada',
+          FERRAMENTA_CHATS: agenteEmUso().ferramentas.chats,
+          FERRAMENTA_ESCRITA: agenteEmUso().ferramentas.escrita,
         }),
         CHATS_FILE,
         'chats'

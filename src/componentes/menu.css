@@ -1,0 +1,83 @@
+/* O menu de "…" do card. Flutua sobre o quadro, então precisa de superfície
+   própria e sombra: sem elas ele se mistura com o card de baixo. */
+
+.menu-flutuante {
+  position: relative;
+  display: inline-flex;
+}
+
+.menu-flutuante .gatilho {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: none;
+  border-color: transparent;
+}
+.menu-flutuante .gatilho:hover,
+.menu-flutuante .gatilho.aberto {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  background: var(--bg-surface);
+}
+
+.menu-flutuante .menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 30;
+  min-width: 178px;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-arrastando);
+}
+
+.menu-flutuante .item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.menu-flutuante .item:hover {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.menu-flutuante .item .icone {
+  display: inline-flex;
+  color: var(--text-muted);
+  flex: none;
+}
+.menu-flutuante .item:hover .icone {
+  color: var(--text-primary);
+}
+
+/* Apagar e o unico gesto irreversivel do quadro: ele nao pode parecer com os
+   outros nem no repouso. */
+.menu-flutuante .item.perigo {
+  color: var(--text-danger);
+}
+.menu-flutuante .item.perigo .icone {
+  color: var(--text-danger);
+}
+.menu-flutuante .item.perigo:hover {
+  background: var(--bg-danger);
+  color: var(--text-danger);
+}

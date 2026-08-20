@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { IconeFechar } from '../componentes/icones';
 import { COLUNAS, CORES_DE_STATUS, rotuloDaColuna, rotuloDoTipo, tempoRelativo } from '../rotulos';
 import type { MuralNaLista } from '../tipos';
 import './home.css';
@@ -30,8 +31,8 @@ export function Home() {
   async function resetarOnboarding() {
     const confirmado = window.confirm(
       'Refazer a configuração?\n\n' +
-        'Apaga o cache do onboarding: a conta Microsoft verificada, a lista de chats e ' +
-        'a preferência de confirmar antes de atualizar.\n\n' +
+        'Apaga o cache do onboarding: o agente de IA escolhido, a conta Microsoft ' +
+        'verificada, a lista de chats e a preferência de confirmar antes de atualizar.\n\n' +
         'Seus murais, o histórico de tasks e o registro de gastos NÃO são tocados.',
     );
     if (!confirmado) return;
@@ -112,7 +113,7 @@ export function Home() {
                 void remover(m);
               }}
             >
-              ✕
+              <IconeFechar />
             </button>
           </Link>
         ))}

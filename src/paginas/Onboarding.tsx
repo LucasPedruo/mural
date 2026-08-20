@@ -2,8 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { IconeFeito } from '../componentes/icones';
 import { mmss } from '../rotulos';
-import type { ChatDisponivel, FonteEscolhida } from '../tipos';
+import type {
+  AgenteDisponivel,
+  AjustesDoAgente,
+  ChatDisponivel,
+  FonteEscolhida,
+} from '../tipos';
 import './onboarding.css';
 
 type EstadoPasso = 'espera' | 'carregando' | 'ok' | 'erro';
@@ -19,6 +25,13 @@ function useCronometro(ativo: boolean) {
     return () => clearInterval(id);
   }, [ativo]);
   return segundos;
+}
+
+function hojeLocal(): string {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
 /** O link copiado pela UI do Teams carrega tudo que precisamos, inclusive os
@@ -51,7 +64,20 @@ export function Onboarding() {
   const navegar = useNavigate();
 
   const [passo1, setPasso1] = useState<EstadoPasso>('carregando');
-  const [detalhe1, setDetalhe1] = useState('verificando…');
+  const [detalhe1, setDetalhe1] = useState('procurando agentes instalados…');
+
+  // O agente é a primeira pergunta do onboarding, e é uma escolha: quem lê o
+  // Teams pode ser o Claude Code, o Codex, o Gemini CLI ou qualquer CLI que você
+  // configure. Antes este passo só testava se o Claude existia — o que não é
+  // pergunta nenhuma, é um veredito.
+  const [agentes, setAgentes] = useState<AgenteDisponivel[] | null>(null);
+  const [agenteId, setAgenteId] = useState<string>('claude');
+  const [ajustes, setAjustes] = useState<AjustesDoAgente>({});
+  const [mostrarAjustes, setMostrarAjustes] = useState(false);
+  const [salvandoAgente, setSalvandoAgente] = useState(false);
+  const [erro1, setErro1] = useState<string | null>(null);
+
+  const agente = agentes?.find((a) => a.id === agenteId) ?? null;
 
   const [passo2, setPasso2] = useState<EstadoPasso>('espera');
   const [detalhe2, setDetalhe2] = useState('aguardando o passo 1');
@@ -68,6 +94,13 @@ export function Onboarding() {
   const [erro3, setErro3] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  // A sprint nasce com o mural. Ela não precisa existir no seu time: é o ciclo
+  // que você fecha, e é o que permite zerar "Concluído" de vez em quando em vez
+  // de olhar seis meses de check acumulado.
+  const [nomeSprint, setNomeSprint] = useState('Sprint 1');
+  const [inicioSprint, setInicioSprint] = useState(hojeLocal());
+  const [diasSprint, setDiasSprint] = useState(14);
+
   const jaVerificou = useRef(false);
 
   useEffect(() => {
@@ -75,19 +108,80 @@ export function Onboarding() {
     if (jaVerificou.current) return; // StrictMode monta duas vezes em dev
     jaVerificou.current = true;
 
-    void (async () => {
-      const d = await api.verificarClaude();
-      if (!d.ok) {
-        setPasso1('erro');
-        setDetalhe1(d.erro ?? 'não encontrado');
-        return;
-      }
+    void carregarAgentes();
+  }, []);
+
+  async function carregarAgentes() {
+    setPasso1('carregando');
+    setErro1(null);
+    try {
+      const d = await api.agentes();
+      if (!d.ok || !d.agentes) throw new Error(d.erro ?? 'não consegui listar os agentes');
+      setAgentes(d.agentes);
+      setAgenteId(d.escolhido);
+      const atual = d.agentes.find((a) => a.id === d.escolhido);
+      liberarPasso2(atual);
+    } catch (e) {
+      setPasso1('erro');
+      setDetalhe1((e as Error).message);
+    }
+  }
+
+  /** Um agente que responde `--version` libera o passo 2. Isso não prova que o
+   *  MCP do Teams está configurado nele — quem descobre isso é o próprio passo 2,
+   *  e é lá que a falha aparece com o motivo certo. */
+  function liberarPasso2(a?: AgenteDisponivel | null) {
+    if (!a) {
+      setPasso1('erro');
+      setDetalhe1('nenhum agente escolhido');
+      return;
+    }
+    if (a.instalado) {
       setPasso1('ok');
-      setDetalhe1(d.versao ?? '');
+      setDetalhe1(`${a.nome}${a.versao ? ' · ' + a.versao : ''}`);
       setPasso2('espera');
       setDetalhe2('pronto para verificar');
-    })();
-  }, []);
+    } else {
+      setPasso1('erro');
+      setDetalhe1(a.erro || `${a.nome} não respondeu`);
+      setPasso2('espera');
+      setDetalhe2('aguardando o passo 1');
+    }
+  }
+
+  async function usarAgente() {
+    setSalvandoAgente(true);
+    setErro1(null);
+    try {
+      const d = await api.escolherAgente(agenteId, ajustes);
+      setAgentes((lista) =>
+        (lista ?? []).map((a) => (a.id === d.agente.id ? d.agente : a)),
+      );
+      setAjustes({});
+      liberarPasso2(d.agente);
+    } catch (e) {
+      setErro1((e as Error).message);
+    } finally {
+      setSalvandoAgente(false);
+    }
+  }
+
+  /** Um campo de ajuste. Vazio = fica o padrão do adaptador, para que limpar uma
+   *  flag por engano não deixe o agente sem como rodar. */
+  function campoDoAgente(
+    rotulo: string,
+    valor: string,
+    aoMudar: (v: string) => void,
+    dica?: string,
+  ) {
+    return (
+      <label className="rotulo" key={rotulo}>
+        {rotulo}
+        <input type="text" value={valor} spellCheck={false} onChange={(e) => aoMudar(e.target.value)} />
+        {dica && <span className="dica-campo">{dica}</span>}
+      </label>
+    );
+  }
 
   async function verificarConta() {
     setPasso2('carregando');
@@ -129,6 +223,15 @@ export function Onboarding() {
       // Mapear a mesma conversa de novo reabre o mural existente, com o
       // histórico dela intacto, em vez de criar um quadro duplicado e vazio.
       const d = await api.criarMural(escolha);
+      // Mural que já existia tem sprint própria em curso; sobrescrever com o
+      // formulário desta tela apagaria o ciclo que está rodando lá.
+      if (!d.jaExistia) {
+        await api.definirSprint(d.id, {
+          nome: nomeSprint.trim() || 'Sprint 1',
+          inicio: inicioSprint,
+          dias: diasSprint,
+        });
+      }
       navegar(`/m/${d.id}`);
     } catch (e) {
       setErro3((e as Error).message);
@@ -145,25 +248,165 @@ export function Onboarding() {
         <h1>Mural</h1>
       </div>
       <p className="sub">
-        Um kanban montado a partir das reações de uma conversa do Teams. Três passos e o quadro
+        Um kanban montado a partir das reações de uma conversa do Teams. Quatro passos e o quadro
         está de pé.
       </p>
 
       {/* 1 */}
       <section className="passo" data-estado={passo1}>
         <div className="passo-topo">
-          <span className="num">{passo1 === 'ok' ? '✓' : '1'}</span>
-          <h2>Claude Code instalado</h2>
+          <span className="num">{passo1 === 'ok' ? <IconeFeito tamanho={13} /> : '1'}</span>
+          <h2>Agente de IA</h2>
         </div>
         <p className={'detalhe ' + (passo1 === 'ok' ? 'bom' : passo1 === 'erro' ? 'ruim' : '')}>
           {detalhe1}
         </p>
-        {passo1 === 'erro' && (
+
+        {agentes && (
           <div className="corpo">
-            <p className="aviso erro">
-              O Mural usa o Claude Code para ler o Teams — ele é obrigatório. Instale em{' '}
-              <code>claude.com/claude-code</code>, feche e abra este servidor de novo.
+            <p className="dica">
+              O Mural não fala com o Teams: ele pede a um agente de IA já autenticado que leia a
+              conversa e grave o resultado. Escolha o seu.
             </p>
+
+            <div className="lista-agentes">
+              {agentes.map((a) => (
+                <button
+                  key={a.id}
+                  className="item-agente"
+                  aria-selected={agenteId === a.id}
+                  onClick={() => {
+                    setAgenteId(a.id);
+                    setAjustes({});
+                    setMostrarAjustes(a.id === 'personalizado');
+                  }}
+                >
+                  <span className="nome">
+                    {a.nome}
+                    {!a.verificado && !a.ajustado && (
+                      <span className="badge warning" title="Adaptador escrito a partir da documentação do CLI, não testado aqui. Se uma flag estiver errada, corrija nos ajustes abaixo.">
+                        não verificado
+                      </span>
+                    )}
+                    {a.id === agentes.find((x) => x.id === agenteId)?.id && a.ajustado && (
+                      <span className="badge marca">ajustado</span>
+                    )}
+                  </span>
+                  <span className="meta">
+                    {a.instalado === null
+                      ? 'não detectado'
+                      : a.instalado
+                        ? a.versao || 'instalado'
+                        : a.id === 'personalizado'
+                          ? 'preencha o binário'
+                          : 'não encontrado no PATH'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {agente && (
+              <>
+                <p className={'aviso ' + (agente.instalado ? 'info' : 'erro')}>
+                  {agente.requisitos}
+                </p>
+
+                <button className="alternar" onClick={() => setMostrarAjustes((v) => !v)}>
+                  {mostrarAjustes ? 'esconder ajustes' : 'ajustes avançados'}
+                </button>
+
+                {mostrarAjustes && (
+                  <div className="ajustes-agente">
+                    <p className="dica">
+                      Como o agente é chamado e como as tools do Teams se chamam nele. Deixar em
+                      branco mantém o padrão. <code>{'{{FERRAMENTAS}}'}</code> vira a lista de tools
+                      permitidas; <code>{'{{PROMPT}}'}</code> vira o prompt, quando ele entra por
+                      argumento em vez de stdin.
+                    </p>
+
+                    <div className="campos-agente">
+                      {campoDoAgente('binário', ajustes.binario ?? agente.binario, (v) =>
+                        setAjustes((a) => ({ ...a, binario: v })),
+                      )}
+                      {campoDoAgente(
+                        'argumentos',
+                        ajustes.argumentos ?? agente.argumentos,
+                        (v) => setAjustes((a) => ({ ...a, argumentos: v })),
+                      )}
+
+                      <label className="rotulo">
+                        prompt entra por
+                        <select
+                          value={ajustes.entrada ?? agente.entrada}
+                          onChange={(e) =>
+                            setAjustes((a) => ({ ...a, entrada: e.target.value as 'stdin' | 'arg' }))
+                          }
+                        >
+                          <option value="stdin">stdin</option>
+                          <option value="arg">argumento</option>
+                        </select>
+                      </label>
+
+                      <label className="rotulo">
+                        formato do stdout
+                        <select
+                          value={ajustes.eventos ?? agente.eventos}
+                          onChange={(e) =>
+                            setAjustes((a) => ({
+                              ...a,
+                              eventos: e.target.value as 'claude' | 'codex' | 'nenhum',
+                            }))
+                          }
+                        >
+                          <option value="claude">stream-json do Claude</option>
+                          <option value="codex">JSONL do Codex</option>
+                          <option value="nenhum">texto (sem progresso)</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <p className="dica">
+                      As tools que leem o Teams. Elas vêm do MCP instalado no agente — o conector da
+                      claude.ai usa estes nomes; outro MCP usa os dele.
+                    </p>
+
+                    <div className="campos-agente">
+                      {(
+                        [
+                          ['tool da conta', 'conta'],
+                          ['tool dos chats', 'chats'],
+                          ['tool de leitura', 'leitura'],
+                          ['tool de escrita', 'escrita'],
+                          ['molde de URI · canal', 'uriCanal'],
+                          ['molde de URI · chat', 'uriChat'],
+                        ] as const
+                      ).map(([rotulo, chave]) =>
+                        campoDoAgente(
+                          rotulo,
+                          ajustes.ferramentas?.[chave] ?? agente.ferramentas[chave],
+                          (v) =>
+                            setAjustes((a) => ({
+                              ...a,
+                              ferramentas: { ...a.ferramentas, [chave]: v },
+                            })),
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {erro1 && <p className="aviso erro">{erro1}</p>}
+
+                <div className="acao-agente">
+                  <button className="primario" onClick={usarAgente} disabled={salvandoAgente}>
+                    {salvandoAgente ? 'Salvando…' : 'Usar este agente'}
+                  </button>
+                  <button onClick={() => void carregarAgentes()} disabled={salvandoAgente}>
+                    Procurar de novo
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
@@ -171,7 +414,7 @@ export function Onboarding() {
       {/* 2 */}
       <section className="passo" data-estado={passo1 === 'ok' ? passo2 : 'espera'}>
         <div className="passo-topo">
-          <span className="num">{passo2 === 'ok' ? '✓' : '2'}</span>
+          <span className="num">{passo2 === 'ok' ? <IconeFeito tamanho={13} /> : '2'}</span>
           <h2>Conta Microsoft conectada</h2>
         </div>
         <p className={'detalhe ' + (passo2 === 'ok' ? 'bom' : passo2 === 'erro' ? 'ruim' : '')}>
@@ -308,6 +551,73 @@ export function Onboarding() {
                 )}
               </div>
             )}
+
+            {erro3 && <p className="aviso erro">{erro3}</p>}
+          </div>
+        )}
+      </section>
+
+      {/* 4 */}
+      <section className="passo" data-estado={escolha ? 'espera' : 'espera'}>
+        <div className="passo-topo">
+          <span className="num">4</span>
+          <h2>A sprint</h2>
+        </div>
+        <p className="detalhe">
+          {escolha ? 'o ciclo que você fecha de vez em quando' : 'aguardando o passo 3'}
+        </p>
+
+        {escolha && (
+          <div className="corpo">
+            <p className="dica">
+              Não precisa existir sprint no seu time. Isto é só um período com começo e fim: quando
+              você encerra, o que está em <strong>Concluído</strong> e em{' '}
+              <strong>Feito por mim</strong> sai do quadro e vai para o arquivo da sprint — de onde
+              os painéis leem. Sem isso, "concluído" acumula para sempre e a coluna deixa de dizer
+              alguma coisa.
+            </p>
+
+            <div className="campos-sprint">
+              <label className="rotulo" htmlFor="nome-sprint">
+                Nome
+                <input
+                  id="nome-sprint"
+                  type="text"
+                  maxLength={60}
+                  value={nomeSprint}
+                  onChange={(e) => setNomeSprint(e.target.value)}
+                />
+              </label>
+
+              <label className="rotulo" htmlFor="inicio-sprint">
+                Começou em
+                <input
+                  id="inicio-sprint"
+                  type="date"
+                  value={inicioSprint}
+                  onChange={(e) => setInicioSprint(e.target.value)}
+                />
+              </label>
+
+              <label className="rotulo" htmlFor="dias-sprint">
+                Duração
+                <select
+                  id="dias-sprint"
+                  value={diasSprint}
+                  onChange={(e) => setDiasSprint(Number(e.target.value))}
+                >
+                  <option value={7}>7 dias</option>
+                  <option value={14}>14 dias</option>
+                  <option value={21}>21 dias</option>
+                  <option value={28}>28 dias</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="dica">
+              Dá para mudar tudo isso depois, no cabeçalho do quadro. Encerrar continua sendo um
+              gesto seu: a data só serve para o painel contar o que chegou dentro do período.
+            </p>
 
             {erro3 && <p className="aviso erro">{erro3}</p>}
 

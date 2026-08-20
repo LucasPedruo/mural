@@ -1,9 +1,13 @@
-export type Status = 'aberto' | 'interagido' | 'feito';
+/** `fazendo` sai de um emoji configurável (⚪ por padrão) na mensagem: é o
+ *  único status além do check que tem símbolo próprio, porque é o único que
+ *  alguém precisa ANUNCIAR — "peguei essa". `interagido` continua sendo o que
+ *  sobra: reagiram com outra coisa. */
+export type Status = 'aberto' | 'fazendo' | 'interagido' | 'feito';
 
-/** As colunas do quadro. `meu` não é um status do Teams: é a marca pessoal
- *  "eu fiz isso", que vive num campo separado justamente para o sync não a
- *  apagar. Ver `MeuFeito`. */
-export type ColunaId = Status | 'meu';
+/** As colunas do quadro. `meu` e `ignorada` não são status do Teams: são marcas
+ *  pessoais, guardadas em campos separados justamente para o sync não as apagar.
+ *  Ver `MeuFeito` e `Task.ignorada`. */
+export type ColunaId = Status | 'meu' | 'ignorada';
 
 export type TipoFonte = 'canal' | 'chat';
 export type SubtipoFonte = 'canal' | 'oneOnOne' | 'group' | 'meeting';
@@ -35,9 +39,26 @@ export interface MeuFeito {
   via: 'emoji' | 'mao';
 }
 
+/** Uma mensagem do Teams dentro de um card. Uma demanda raramente chega como
+ *  uma mensagem só: o padrão é a rajada — dois prints e três linhas de texto do
+ *  mesmo autor, em segundos, que são UMA task. Card solto tem um item aqui. */
+export interface MensagemDaTask {
+  id: string;
+  author: string;
+  createdDateTime: string;
+  summary: string;
+  kind: 'bug' | 'sugestao';
+  reactions: string[];
+  webUrl: string;
+  /** Mensagem sem texto útil, só imagem — o print do erro. */
+  soPrint: boolean;
+}
+
 export interface Task {
   id: string;
-  /** `manual` = você escreveu aqui dentro; nenhum sync alcança essa task. */
+  /** `manual` = task que uma versão anterior do Mural deixou gravada, quando
+   *  dava para criar task à mão. Nenhum sync alcança essas, então elas
+   *  continuam móveis — o quadro não pode prender o que já está no histórico. */
   origem: 'teams' | 'manual';
   author: string;
   createdDateTime: string;
@@ -60,13 +81,18 @@ export interface Task {
   podeDesmarcar: boolean;
   movidoAMao: boolean;
   meu: MeuFeito | null;
-}
-
-/** O que o formulário de task própria manda para o servidor. */
-export interface NovaTask {
-  summary: string;
-  kind: 'bug' | 'sugestao';
-  status: Status;
+  /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
+   *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
+   *  sobre a mensagem, não um recado para o time. */
+  ignorada: string | null;
+  /** Suas etiquetas. O Teams não tem esse campo: quem escreve é você, aqui. */
+  tags: string[];
+  /** As mensagens que formam este card, da mais antiga para a mais nova. A
+   *  primeira é a âncora: o id do card é o dela, e é ela que o clique abre. */
+  mensagens: MensagemDaTask[];
+  /** 'auto' = o Mural juntou a rajada; 'mao' = você juntou ou separou, e nenhuma
+   *  leitura desfaz isso. null = mensagem solta. */
+  agrupamento: 'auto' | 'mao' | null;
 }
 
 export interface RespostaTasks {
@@ -113,6 +139,10 @@ export interface Preferencias {
    *  detecção e deixa só o botão "fiz" — o Graph não diz quem reagiu, então
    *  isso é uma convenção sua, não um dado da API. */
   emojiMeu: string;
+  /** A reação que quer dizer "alguém pegou esta": a coluna *Fazendo*. Diferente
+   *  do emojiMeu, esta é uma convenção do TIME — qualquer um que reagir com ela
+   *  move o card. Vazio desliga a coluna. */
+  emojiFazendo: string;
 }
 
 export interface RespostaConsumo {
@@ -120,6 +150,9 @@ export interface RespostaConsumo {
   estimativa: Estimativa | null;
   totais: TotaisDeConsumo;
   preferencias: Preferencias;
+  /** Quem lê o Teams nesta instalação. `reportaCusto` falso esconde preço da
+   *  tela: agente que não informa gasto não pode aparecer com zero dólar. */
+  agente: AgenteEmUso;
 }
 
 export interface ResultadoSync extends RespostaTasks {
@@ -129,6 +162,9 @@ export interface ResultadoSync extends RespostaTasks {
   retomadas: string[];
   /** Ganharam a marca "feito por mim" pela sua reação nesta leitura. */
   marcados: string[];
+  /** Cards que ganharam mensagens novas da mesma rajada — o autor continuou
+   *  escrevendo depois da última leitura. */
+  cresceram: string[];
   total: number;
   consumo: Consumo | null;
   totaisDoUsuario: TotaisDeConsumo;
@@ -162,3 +198,170 @@ export interface FonteEscolhida {
   channelId?: string;
   chatId?: string;
 }
+
+// ------------------------------------------------------------------- sprints
+
+/** Um ciclo com começo e fim. Existe para que "concluído" possa ser zerado de
+ *  vez em quando: um quadro que acumula seis meses de check não serve para
+ *  olhar. Quem não trabalha em sprint usa isso como o período que fecha. */
+export interface Sprint {
+  nome: string;
+  /** Dia local, no formato ano-mês-dia. */
+  inicio: string;
+  fim: string;
+  dias: number;
+  criadaEm: string;
+}
+
+export interface SprintEncerrada extends Sprint {
+  encerradaEm: string;
+  /** Quantos cards foram para o arquivo desta sprint. */
+  arquivadas: number;
+}
+
+export interface RespostaSprint {
+  atual: Sprint | null;
+  encerradas: SprintEncerrada[];
+}
+
+export interface ResultadoEncerramento extends RespostaTasks {
+  arquivadas: number;
+  sprints: RespostaSprint;
+}
+
+// ------------------------------------------------------------------- painéis
+
+export interface TagComContagem {
+  tag: string;
+  quantas: number;
+}
+
+export interface LinhaDeSprint {
+  nome: string;
+  inicio: string;
+  fim: string;
+  atual: boolean;
+  encerradaEm: string | null;
+  arquivadas: number;
+  chegaram: number;
+  bugs: number;
+  sugestoes: number;
+  concluidas: number;
+  minhas: number;
+  ignoradas: number;
+  emAberto: number;
+  /** Quantas mensagens do Teams os cards desta sprint somam. A distância entre
+   *  isso e 'chegaram' é o tamanho do ruído que o agrupamento absorveu. */
+  mensagens: number;
+}
+
+export interface ItemDaDaily {
+  id: string;
+  summary: string;
+  kind: 'bug' | 'sugestao';
+  solucao: string;
+  em: string;
+  via: 'emoji' | 'mao';
+  status: Status;
+  origem: 'teams' | 'manual';
+  autor: string;
+  arquivada: boolean;
+  sprint: string | null;
+  mensagens: number;
+  webUrl: string;
+}
+
+export interface DiaDaDaily {
+  /** Dia local, no formato ano-mês-dia. */
+  dia: string;
+  itens: ItemDaDaily[];
+}
+
+export interface LinhaDeTag {
+  tag: string;
+  total: number;
+  concluidas: number;
+  abertas: number;
+}
+
+export interface RespostaPainel {
+  /** As tags atravessam sprint: a pergunta "quanto de Financeiro chegou" não se
+   *  responde olhando uma coluna do quadro. */
+  tags: LinhaDeTag[];
+  sprints: LinhaDeSprint[];
+  /** O que chegou fora de qualquer sprint — histórico anterior ao ciclo. */
+  foraDeSprint: { chegaram: number; bugs: number; concluidas: number } | null;
+  daily: {
+    porDia: DiaDaDaily[];
+    total: number;
+    bugs: number;
+    diasAtivos: number;
+    arquivadas: number;
+  };
+}
+
+// ------------------------------------------------------------------- agentes
+
+/** O Mural não fala com o Teams: ele pede a um agente de IA já autenticado que
+ *  leia a conversa e grave um snapshot. Qual agente é isso — Claude Code,
+ *  Codex, Gemini CLI ou outro — é escolha de quem instala. */
+export type IdDeAgente = 'claude' | 'codex' | 'gemini' | 'personalizado';
+
+export type FormatoDeEventos = 'claude' | 'codex' | 'nenhum';
+
+/** Os nomes das tools que o agente usa para ler o Teams, e o molde do endereço
+ *  das mensagens. Isto é vocabulário do MCP instalado no agente, não do Mural:
+ *  o conector da claude.ai chama a leitura de uma coisa, outro MCP chama de
+ *  outra — e é por isso que estes campos são editáveis. */
+export interface FerramentasDoAgente {
+  conta: string;
+  chats: string;
+  leitura: string;
+  escrita: string;
+  uriCanal: string;
+  uriChat: string;
+}
+
+export interface AgenteDisponivel {
+  id: IdDeAgente;
+  nome: string;
+  /** Só o adaptador do Claude Code foi verificado de verdade; os outros vão com
+   *  as flags que a documentação deles descreve. A tela precisa dizer isso. */
+  verificado: boolean;
+  /** Você já corrigiu algum campo deste agente à mão. */
+  ajustado: boolean;
+  reportaCusto: boolean;
+  requisitos: string;
+  binario: string;
+  argumentos: string;
+  entrada: 'stdin' | 'arg';
+  eventos: FormatoDeEventos;
+  ferramentas: FerramentasDoAgente;
+  /** null = ainda não detectado. Responder `--version` não prova que o MCP do
+   *  Teams está configurado ali: isso só o passo da conta descobre. */
+  instalado: boolean | null;
+  versao: string;
+  erro: string;
+}
+
+export interface RespostaAgentes {
+  ok: boolean;
+  escolhido: IdDeAgente;
+  agentes: AgenteDisponivel[];
+  erro?: string;
+}
+
+export interface AjustesDoAgente {
+  binario?: string;
+  argumentos?: string;
+  entrada?: 'stdin' | 'arg';
+  eventos?: FormatoDeEventos;
+  ferramentas?: Partial<FerramentasDoAgente>;
+}
+
+export interface AgenteEmUso {
+  id: IdDeAgente;
+  nome: string;
+  reportaCusto: boolean;
+}
+

@@ -1,10 +1,11 @@
 Liste os chats do Teams desta conta.
 
-Chame `mcp__claude_ai_Microsoft_365__teams_list_chats` com limit 25. Se a resposta
+Chame `{{FERRAMENTA_CHATS}}` com limit 25. Se a resposta
 trouxer `nextCursor`, chame de novo passando esse valor em `cursor`, até no máximo
 4 páginas no total.
 
-Grave o arquivo `{{ARQUIVO_SAIDA}}` com um array JSON (sem markdown, sem cercas):
+Com `{{FERRAMENTA_ESCRITA}}`, grave o arquivo `{{ARQUIVO_SAIDA}}` com um array JSON
+(sem markdown, sem cercas):
 
 [
   { "id": "19:...@thread.v2", "nome": "(Des)envolvedores", "tipo": "group", "membros": 8 }

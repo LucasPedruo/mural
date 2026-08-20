@@ -1,18 +1,38 @@
 import type {
+  AgenteDisponivel,
+  AjustesDoAgente,
   ChatDisponivel,
   EstadoSync,
   FonteEscolhida,
   Mural,
   MuralNaLista,
-  NovaTask,
   Preferencias,
+  RespostaAgentes,
   RespostaConsumo,
+  RespostaPainel,
+  RespostaSprint,
   RespostaTasks,
+  TagComContagem,
+  ResultadoEncerramento,
   ResultadoSync,
   SomaDeConsumo,
   Status,
   TotaisDeConsumo,
 } from './tipos';
+
+// Corpo que não é JSON quase nunca vem do Mural: vem de quem está NA FRENTE
+// dele. Em desenvolvimento é o proxy do Vite respondendo erro em HTML porque a
+// API não está de pé na 4317 — e dizer só "resposta ilegível" esconde o único
+// fato que resolve o problema.
+function erroDeCorpoIlegivel(status: number): string {
+  if (status === 0 || status >= 500) {
+    return (
+      `A API do Mural não respondeu (HTTP ${status}). ` +
+      "Ela roda em outro processo: confira se `node server.js` está de pé na porta 4317."
+    );
+  }
+  return `Resposta ilegível do servidor (HTTP ${status}).`;
+}
 
 // O servidor devolve { ok:false, erro } com status 4xx/5xx em falha esperada.
 // Trazer essa mensagem para o throw evita o generico "Failed to fetch" na tela.
@@ -22,7 +42,7 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     corpo = await resposta.json();
   } catch {
-    throw new Error(`Resposta ilegível do servidor (HTTP ${resposta.status}).`);
+    throw new Error(erroDeCorpoIlegivel(resposta.status));
   }
   const dados = corpo as { ok?: boolean; erro?: string };
   if (!resposta.ok || dados.ok === false) {
@@ -75,25 +95,53 @@ export const api = {
     return { ...r, totaisDoUsuario: comQuebraPorOperacao(r.totaisDoUsuario) };
   },
 
+  // --- rajadas ---
+  // O agrupamento automático erra em alguns casos, e card errado que não dá
+  // para consertar é pior que card errado. O que estes dois gestos decidem
+  // nenhuma leitura desfaz.
+
+  juntar: (muralId: string, ids: string[]) =>
+    pedir<RespostaTasks & { id: string }>(`/api/juntar?mural=${muralId}`, json({ ids })),
+
+  separar: (muralId: string, id: string) =>
+    pedir<RespostaTasks & { quantas: number }>(`/api/separar?mural=${muralId}`, json({ id })),
+
+  // --- marcas pessoais: ignorar, apagar, etiquetar ---
+  // Nenhuma delas toca no Teams: são opiniões suas sobre a mensagem, guardadas
+  // em campo próprio para o sync não as apagar.
+
+  ignorar: (muralId: string, id: string, ignorar = true) =>
+    pedir<RespostaTasks>(`/api/ignorar?mural=${muralId}`, json({ id, ignorar })),
+
+  // Irreversível: o card sai do arquivo e a mensagem entra na lista de
+  // arquivados, para a próxima leitura não a trazer de volta.
+  apagar: (muralId: string, id: string) =>
+    pedir<RespostaTasks>(`/api/apagar?mural=${muralId}`, json({ id })),
+
+  tags: (muralId: string) => pedir<{ tags: TagComContagem[] }>(`/api/tags?mural=${muralId}`),
+
+  salvarTags: (muralId: string, id: string, tags: string[]) =>
+    pedir<RespostaTasks & { tags: TagComContagem[] }>(
+      `/api/tags?mural=${muralId}`,
+      json({ id, tags }),
+    ),
+
+  // --- sprint ---
+
+  sprint: (muralId: string) => pedir<RespostaSprint>(`/api/sprint?mural=${muralId}`),
+
+  definirSprint: (muralId: string, sprint: { nome: string; inicio: string; dias: number }) =>
+    pedir<RespostaSprint>(`/api/sprint?mural=${muralId}`, json(sprint)),
+
+  // Arquiva o que terminou e abre a sprint seguinte. Não é destrutivo: os cards
+  // continuam no disco, e é deles que os painéis vivem.
+  encerrarSprint: (muralId: string) =>
+    pedir<ResultadoEncerramento>(`/api/sprint/encerrar?mural=${muralId}`, { method: 'POST' }),
+
+  painel: (muralId: string) => pedir<RespostaPainel>(`/api/painel?mural=${muralId}`),
+
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
-
-  // --- tasks próprias ---
-
-  criarTask: (muralId: string, task: NovaTask) =>
-    pedir<RespostaTasks & { id: string }>(`/api/task?mural=${muralId}`, json(task)),
-
-  editarTask: (muralId: string, task: NovaTask & { id: string }) =>
-    pedir<RespostaTasks>(`/api/task?mural=${muralId}`, {
-      ...json(task),
-      method: 'PUT',
-    }),
-
-  removerTask: (muralId: string, id: string) =>
-    pedir<RespostaTasks>(
-      `/api/task?mural=${muralId}&id=${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    ),
 
   // A marca pessoal vale para qualquer card, inclusive os que o Teams ainda
   // acompanha: ela não mexe no status, então não há o que o sync desfazer.
@@ -113,7 +161,11 @@ export const api = {
 
   consumo: async (muralId: string): Promise<RespostaConsumo> => {
     const r = await pedir<RespostaConsumo>(`/api/consumo?mural=${muralId}`);
-    return { ...r, totais: comQuebraPorOperacao(r.totais) };
+    return {
+      ...r,
+      totais: comQuebraPorOperacao(r.totais),
+      agente: r.agente ?? { id: 'claude', nome: 'Claude Code', reportaCusto: true },
+    };
   },
 
   // Parcial de proposito: o servidor so mexe no que veio, entao salvar o emoji
@@ -125,8 +177,12 @@ export const api = {
   // Estas rotas respondem HTTP 200 com { ok:false, erro } de proposito: "o
   // Claude nao esta instalado" e uma resposta valida do diagnostico, nao uma
   // falha do servidor. Por isso passam por `pedirBruto`, sem o throw.
-  verificarClaude: () =>
-    pedirBruto<{ ok: boolean; versao?: string; erro?: string }>('/api/setup/claude'),
+  // Escolher o agente, não verificar um agente: a pergunta do primeiro passo é
+  // "com qual CLI de IA eu leio o Teams?".
+  agentes: () => pedirBruto<RespostaAgentes>('/api/setup/agentes'),
+
+  escolherAgente: (id: string, ajustes?: AjustesDoAgente) =>
+    pedir<{ agente: AgenteDisponivel }>('/api/setup/agente', json({ id, ajustes })),
 
   verificarConta: () =>
     pedirBruto<{ ok: boolean; conta?: { displayName: string; mail: string }; erro?: string }>(
@@ -149,6 +205,6 @@ async function pedirBruto<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     return (await resposta.json()) as T;
   } catch {
-    throw new Error(`Resposta ilegível do servidor (HTTP ${resposta.status}).`);
+    throw new Error(erroDeCorpoIlegivel(resposta.status));
   }
 }
