@@ -163,9 +163,10 @@ node server.js
 ```
 
 Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuração
-que verifica o Claude Code, mostra com qual conta Microsoft você está logado,
-pede a conversa que vira o quadro e a sprint — o ciclo que você fecha de vez em
-quando, que existe mesmo que seu time não use a palavra.
+com cinco passos: qual agente de IA lê o Teams, com qual conta Microsoft você está
+logado, a conversa que vira o quadro, **as reações** — qual emoji significa o quê
+no seu canal — e a sprint, o ciclo que você fecha de vez em quando, que existe
+mesmo que seu time não use a palavra.
 
 No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
 servidor e abre o navegador. Para trocar a porta:
@@ -447,6 +448,16 @@ certo.
 O ⚪ de *Em andamento* é diferente do 🟢 de *Concluído por mim*: aquele é uma convenção do
 time, este é sua. O Mural recusa configurar os dois com o mesmo emoji, senão um
 card cairia em duas colunas e a contagem passaria a mentir.
+
+As duas se escolhem **no passo 4 do onboarding**, com sugestões e a explicação do
+que cada uma faz, e depois no mesmo diálogo — aberto por qualquer um dos dois
+cabeçalhos de coluna. Ficam lado a lado de propósito: escolher uma sem ver a
+outra é o que fazia a regra de "não podem ser iguais" chegar como erro em vez de
+contexto. Vale qualquer coisa que o Teams aceite como reação, inclusive as
+personalizadas do seu tenant.
+
+O check não entra nessa escolha, e o diálogo diz por quê: ele já significa
+"concluído" para o canal inteiro, sem ninguém combinar nada.
 </details>
 
 <details>

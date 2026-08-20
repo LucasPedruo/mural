@@ -2186,6 +2186,19 @@ async function rotear(req, res) {
     });
   }
 
+  // As tres reacoes que o quadro entende. O onboarding precisa lelas antes de
+  // existir mural: a pergunta "qual emoji significa o que" e do usuario, nao do
+  // quadro, e por isso a rota nao pede `mural`.
+  if (p === '/api/preferencias' && req.method === 'GET') {
+    return json(res, 200, {
+      ok: true,
+      preferencias: prefsDoUsuario(usuarioAtual()),
+      // O check nao e configuravel, e a tela precisa poder dizer POR QUE: sao
+      // varias formas do mesmo simbolo, e o Teams devolve a que a pessoa usou.
+      checks: CHECKS,
+    });
+  }
+
   if (p === '/api/preferencias' && req.method === 'POST') {
     try {
       const corpo = await lerCorpoJson(req);

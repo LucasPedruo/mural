@@ -11,6 +11,7 @@ import {
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
 import { DialogoDeColuna } from '../componentes/DialogoDeColuna';
+import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
@@ -121,6 +122,12 @@ export function Quadro() {
   const [editandoColuna, setEditandoColuna] = useState<ColunaPersonalizada | null>(null);
   const [criandoColuna, setCriandoColuna] = useState(false);
 
+  // As reações que decidem a coluna. As duas se editam no mesmo diálogo, aberto
+  // por qualquer um dos dois cabeçalhos: escolher uma sem ver a outra é o que
+  // fazia a regra de "não podem ser iguais" chegar como erro em vez de contexto.
+  const [editandoEmojis, setEditandoEmojis] = useState(false);
+  const [checks, setChecks] = useState<string[]>([]);
+
 
   // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
   // está sendo etiquetada e o filtro ligado.
@@ -192,14 +199,16 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, etiquetas, suas] = await Promise.all([
+      const [tarefas, info, custo, ciclo, etiquetas, suas, prefs] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
         api.tags(muralId),
         api.colunas(muralId),
+        api.preferencias(),
       ]);
+      setChecks(prefs.checks);
       setColunasSuas(suas.colunas);
       setTags(etiquetas.tags);
       setMural(info.mural);
@@ -484,52 +493,30 @@ export function Quadro() {
     }
   }
 
-  // O Graph não diz quem reagiu — `reactions[].users` vem com tudo nulo. Então
-  // "fui eu" é uma convenção sua: um emoji que só você usa naquele canal.
-  async function trocarEmojiMeu() {
-    const atual = consumo?.preferencias.emojiMeu ?? '';
-    const escolhido = window.prompt(
-      'Qual reação você usa no Teams para dizer "fui eu que fiz"?\n\n' +
-        'Toda mensagem com ela cai em "Concluído por mim" na próxima atualização. ' +
-        'Escolha algo que só você use — o check não serve, ele já significa ' +
-        '"concluído" para o canal inteiro.\n\n' +
-        'Deixe em branco para desligar e usar só o botão "fiz".',
-      atual,
-    );
-    if (escolhido === null) return;
+  // As duas reações que o quadro entende. Eram dois `window.prompt`, um em cada
+  // cabeçalho de coluna: sem sugestão, sem ver a outra, e com a regra de que não
+  // podem ser iguais aparecendo só depois, como erro. Agora as duas moram no
+  // mesmo diálogo — que é como a escolha realmente se faz.
+  //
+  // Devolve a mensagem de recusa em vez de lançar: quem valida é o servidor, e a
+  // regra ("não pode ser o check, não pode ser a outra") é dele porque é ela que
+  // decide a coluna de cada card.
+  async function salvarEmojis(quais: {
+    emojiFazendo?: string;
+    emojiMeu?: string;
+  }): Promise<string | null> {
     try {
-      const r = await api.salvarPreferencias({ emojiMeu: escolhido.trim() });
+      const r = await api.salvarPreferencias(quais);
       setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
-      setErro(null);
+      // A regra de status mudou: o quadro relê para os cards caírem na coluna
+      // certa sem esperar a próxima leitura do Teams.
+      if (quais.emojiFazendo !== undefined) await carregar();
+      return null;
     } catch (e) {
-      setErro((e as Error).message);
+      return (e as Error).message;
     }
   }
 
-  // A coluna Em andamento sai de uma convenção do TIME, não sua: qualquer um que
-  // reagir com esse emoji move o card. Por isso ela mora no cabeçalho da coluna
-  // e não nas suas preferências de daily.
-  async function trocarEmojiFazendo() {
-    const atual = consumo?.preferencias.emojiFazendo ?? '';
-    const escolhido = window.prompt(
-      'Qual reação o time usa no Teams para dizer "peguei esta"?\n\n' +
-        'Toda mensagem com ela cai na coluna Em andamento. Diferente do emoji de "fui eu", ' +
-        'esta vale para qualquer pessoa que reagir.\n\n' +
-        'Deixe em branco para desligar a coluna.',
-      atual,
-    );
-    if (escolhido === null) return;
-    try {
-      const r = await api.salvarPreferencias({ emojiFazendo: escolhido.trim() });
-      setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
-      setErro(null);
-      // A regra de status mudou: o quadro precisa reler para os cards caírem na
-      // coluna certa sem esperar a próxima atualização do Teams.
-      await carregar();
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
 
   async function desmarcar(task: Task) {
     setErro(null);
@@ -1079,6 +1066,16 @@ export function Quadro() {
         />
       )}
 
+      {editandoEmojis && (
+        <DialogoDeEmojis
+          emojiFazendo={emojiFazendo}
+          emojiMeu={emojiMeu}
+          checks={checks}
+          aoSalvar={salvarEmojis}
+          aoFechar={() => setEditandoEmojis(false)}
+        />
+      )}
+
       {(criandoColuna || editandoColuna) && (
         <DialogoDeColuna
           coluna={editandoColuna}
@@ -1165,7 +1162,7 @@ export function Quadro() {
                     coluna === 'fazendo' ? (
                       <button
                         className="assinatura"
-                        onClick={() => void trocarEmojiFazendo()}
+                        onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiFazendo
                             ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
@@ -1177,7 +1174,7 @@ export function Quadro() {
                     ) : coluna === 'meu' ? (
                       <button
                         className="assinatura"
-                        onClick={() => void trocarEmojiMeu()}
+                        onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiMeu
                             ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`

@@ -211,6 +211,12 @@ export const api = {
     };
   },
 
+  // As três reações que o quadro entende. Rota sem `mural` de propósito: a
+  // pergunta "qual emoji significa o quê" é do usuário, e o onboarding precisa
+  // respondê-la antes de existir quadro nenhum.
+  preferencias: () =>
+    pedir<{ preferencias: Preferencias; checks: string[] }>('/api/preferencias'),
+
   // Parcial de proposito: o servidor so mexe no que veio, entao salvar o emoji
   // nao religa a confirmação que você desmarcou.
   salvarPreferencias: (prefs: Partial<Preferencias>) =>

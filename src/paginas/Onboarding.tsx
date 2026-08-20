@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { EscolherEmoji } from '../componentes/EscolherEmoji';
 import { IconeFeito } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
@@ -101,6 +102,15 @@ export function Onboarding() {
   const [inicioSprint, setInicioSprint] = useState(hojeLocal());
   const [diasSprint, setDiasSprint] = useState(14);
 
+  // As reações que o quadro entende. Só duas se escolhem — a terceira é o check,
+  // que já significa "concluído" para o canal inteiro. Elas são preferência do
+  // USUÁRIO, não do mural: valem para todos os quadros e por isso são salvas na
+  // hora, sem esperar o "Criar o mural".
+  const [emojiFazendo, setEmojiFazendo] = useState('');
+  const [emojiMeu, setEmojiMeu] = useState('');
+  const [checks, setChecks] = useState<string[]>([]);
+  const [erroEmoji, setErroEmoji] = useState<string | null>(null);
+
   const jaVerificou = useRef(false);
 
   useEffect(() => {
@@ -109,7 +119,37 @@ export function Onboarding() {
     jaVerificou.current = true;
 
     void carregarAgentes();
+    void api
+      .preferencias()
+      .then((r) => {
+        setEmojiFazendo(r.preferencias.emojiFazendo);
+        setEmojiMeu(r.preferencias.emojiMeu);
+        setChecks(r.checks);
+      })
+      .catch(() => {
+        /* sem preferências a tela ainda funciona: os campos nascem vazios */
+      });
   }, []);
+
+  /** Salva na hora, e é o servidor que valida: as duas reações não podem ser
+   *  iguais nem ser o check, e essa regra mora lá porque é ela que decide a
+   *  coluna de cada card. Recusado, o campo volta ao valor anterior — deixá-lo
+   *  mostrando algo que não foi gravado seria pior que o erro. */
+  async function salvarEmoji(quais: { emojiFazendo?: string; emojiMeu?: string }) {
+    const antes = { emojiFazendo, emojiMeu };
+    if (quais.emojiFazendo !== undefined) setEmojiFazendo(quais.emojiFazendo);
+    if (quais.emojiMeu !== undefined) setEmojiMeu(quais.emojiMeu);
+    setErroEmoji(null);
+    try {
+      const r = await api.salvarPreferencias(quais);
+      setEmojiFazendo(r.preferencias.emojiFazendo);
+      setEmojiMeu(r.preferencias.emojiMeu);
+    } catch (e) {
+      setEmojiFazendo(antes.emojiFazendo);
+      setEmojiMeu(antes.emojiMeu);
+      setErroEmoji((e as Error).message);
+    }
+  }
 
   async function carregarAgentes() {
     setPasso1('carregando');
@@ -248,7 +288,7 @@ export function Onboarding() {
         <h1>Mural</h1>
       </div>
       <p className="sub">
-        Um kanban montado a partir das reações de uma conversa do Teams. Quatro passos e o quadro
+        Um kanban montado a partir das reações de uma conversa do Teams. Cinco passos e o quadro
         está de pé.
       </p>
 
@@ -558,9 +598,73 @@ export function Onboarding() {
       </section>
 
       {/* 4 */}
-      <section className="passo" data-estado={escolha ? 'espera' : 'espera'}>
+      <section className="passo" data-estado="espera">
         <div className="passo-topo">
           <span className="num">4</span>
+          <h2>As reações</h2>
+        </div>
+        <p className="detalhe">qual emoji significa o quê no seu canal</p>
+
+        <div className="corpo">
+          <p className="dica">
+            O quadro inteiro sai daqui: o Mural lê as reações das mensagens e é isso que decide a
+            coluna de cada card. Duas você escolhe; a terceira já está decidida.
+          </p>
+
+          <EscolherEmoji
+            id="emoji-fazendo"
+            titulo="peguei esta"
+            dono="time"
+            explicacao={
+              'Enche a coluna Em andamento. Vale para QUALQUER pessoa que reagir: é o jeito de ' +
+              'alguém anunciar que já está mexendo, para dois não pegarem a mesma demanda.'
+            }
+            valor={emojiFazendo}
+            sugestoes={['⚪', '⏱️', '👀', '🔨', '🚧']}
+            rotuloDeDesligar="não usamos isso — desligar a coluna"
+            aoMudar={(e) => void salvarEmoji({ emojiFazendo: e })}
+          />
+
+          <EscolherEmoji
+            id="emoji-meu"
+            titulo="fui eu que fiz"
+            dono="você"
+            explicacao={
+              'Manda o card para Concluído por mim, com a anotação da daily. Precisa ser um emoji ' +
+              'que SÓ VOCÊ usa nesse canal: o Teams não conta quem reagiu, então esta é a única ' +
+              'forma de o quadro saber que o trabalho foi seu.'
+            }
+            valor={emojiMeu}
+            sugestoes={['🟢', '💚', '🙌', '🦄', '🎯']}
+            rotuloDeDesligar="prefiro marcar à mão no card"
+            aoMudar={(e) => void salvarEmoji({ emojiMeu: e })}
+          />
+
+          {checks.length > 0 && (
+            <div className="check-fixo">
+              <span className="emojis">{checks.slice(0, 3).join(' ')}</span>
+              <p>
+                <strong>Concluído</strong> não se configura. O check já quer dizer "feito" para o
+                canal inteiro, e é a única reação com significado que não depende de combinar nada
+                — todas as formas acima contam como a mesma coisa. Por isso ele também não pode ser
+                nenhuma das duas de cima.
+              </p>
+            </div>
+          )}
+
+          {erroEmoji && <p className="aviso erro">{erroEmoji}</p>}
+
+          <p className="dica">
+            Dá para mudar depois, no cabeçalho das colunas do quadro. Trocar a reação não reescreve
+            o histórico: os cards se reorganizam na próxima leitura, pela regra nova.
+          </p>
+        </div>
+      </section>
+
+      {/* 5 */}
+      <section className="passo" data-estado="espera">
+        <div className="passo-topo">
+          <span className="num">5</span>
           <h2>A sprint</h2>
         </div>
         <p className="detalhe">
