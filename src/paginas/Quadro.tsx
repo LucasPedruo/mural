@@ -13,9 +13,9 @@ import {
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
+import { Notificacoes } from '../componentes/Notificacoes';
 import {
   IconeEtiqueta,
-  IconeFechar,
   IconePessoa,
   IconeVoltar,
 } from '../componentes/icones';
@@ -23,6 +23,7 @@ import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '..
 import type {
   ColunaId,
   Mural,
+  Notificacao,
   Progresso,
   RespostaConsumo,
   RespostaSprint,
@@ -51,7 +52,24 @@ export function Quadro() {
   const [mural, setMural] = useState<Mural | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [resumo, setResumo] = useState<string>('');
+  // O que cada leitura deixou para contar. Antes isto era uma string que vivia
+  // na linha de "última leitura" e sumia na ação seguinte — e o que some sozinho
+  // não dá para reler depois de "espera, quanto custou mesmo?". Agora acumula,
+  // por mural, no navegador: é relato da sua sessão, não dado do quadro.
+  const chaveNotificacoes = `mural:notificacoes:${muralId}`;
+  const chaveLidas = `mural:notificacoes-lidas:${muralId}`;
+
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>(() => {
+    try {
+      const salvas = JSON.parse(localStorage.getItem(chaveNotificacoes) || '[]');
+      return Array.isArray(salvas) ? (salvas as Notificacao[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [lidasEm, setLidasEm] = useState<string>(
+    () => localStorage.getItem(chaveLidas) || '',
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
@@ -178,6 +196,44 @@ export function Quadro() {
     };
   }, [chaveVisto]);
 
+  // ---- notificações ----------------------------------------------------
+
+  // O teto existe para o histórico não virar um arquivo: trinta leituras é bem
+  // mais do que alguém rola, e o navegador não é onde se guarda registro.
+  const MAX_NOTIFICACOES = 30;
+
+  const avisar = useCallback(
+    (texto: string, tom: Notificacao['tom'] = 'info') => {
+      setNotificacoes((atuais) => {
+        const nova: Notificacao = {
+          // O instante já identifica: duas leituras não terminam no mesmo
+          // milissegundo, e o sufixo cobre o empate improvável sem inventar uuid.
+          id: `${Date.now()}-${atuais.length}`,
+          em: new Date().toISOString(),
+          tom,
+          texto,
+        };
+        const proximas = [nova, ...atuais].slice(0, MAX_NOTIFICACOES);
+        localStorage.setItem(chaveNotificacoes, JSON.stringify(proximas));
+        return proximas;
+      });
+    },
+    [chaveNotificacoes],
+  );
+
+  function marcarNotificacoesLidas() {
+    const agora = new Date().toISOString();
+    localStorage.setItem(chaveLidas, agora);
+    setLidasEm(agora);
+  }
+
+  function limparNotificacoes() {
+    localStorage.removeItem(chaveNotificacoes);
+    setNotificacoes([]);
+  }
+
+  const naoLidas = notificacoes.filter((n) => n.em > lidasEm).length;
+
   // ---- progresso ao vivo -----------------------------------------------
 
   const timer = useRef<number | null>(null);
@@ -259,7 +315,6 @@ export function Quadro() {
   async function atualizar() {
     setSincronizando(true);
     setErro(null);
-    setResumo('');
     setProgresso({ etapa: 'iniciando o Claude', lidas: 0, total: 20, segundos: 0 });
     acompanhar();
     try {
@@ -299,10 +354,16 @@ export function Quadro() {
             : `custou ${formatarUsd(r.consumo.custoUsd)} · ${formatarTokens(r.consumo.tokensTotal)} tokens`,
         );
       }
-      setResumo(partes.length ? partes.join(', ') : 'nada mudou');
+      avisar(partes.length ? partes.join(', ') : 'nada mudou');
       void api.consumo(muralId).then(setConsumo).catch(() => {});
     } catch (e) {
-      setErro((e as Error).message);
+      // Duas vezes de propósito, e não é redundância: a faixa vermelha explica a
+      // ação que você acabou de tentar, e some quando você tenta outra coisa. A
+      // notificação é o registro — "por que o quadro não atualizou hoje de
+      // manhã" é uma pergunta que se faz horas depois.
+      const motivo = (e as Error).message;
+      setErro(motivo);
+      avisar(`a leitura do Teams falhou: ${motivo}`, 'erro');
     } finally {
       pararDeAcompanhar();
       setSincronizando(false);
@@ -726,7 +787,6 @@ export function Quadro() {
           {lastSync
             ? 'última leitura: ' + new Date(lastSync).toLocaleString('pt-BR')
             : 'nunca sincronizado — clique em Atualizar'}
-          {resumo && `  —  ${resumo}`}
         </span>
         <span className="espaco" />
         {consumo && !consumo.agente.reportaCusto && (
@@ -771,6 +831,30 @@ export function Quadro() {
             {sprint.atual.nome} · até {dataDoDiaISO(sprint.atual.fim)}
           </span>
         )}
+        {/* O sino fica ao lado de Atualizar porque é dela que quase tudo aqui
+            dentro vem: o resumo de uma leitura se lê logo depois de pedir uma. */}
+        <Notificacoes
+          itens={notificacoes}
+          naoLidas={naoLidas}
+          fixado={
+            foraDeAlcance > foraCiente
+              ? {
+                  texto: (
+                    <>
+                      {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das
+                      mensagens que a API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não
+                      recebe{foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os
+                      cards <strong>sem fundo, de borda tracejada</strong>: os únicos que você
+                      move arrastando.
+                    </>
+                  ),
+                  aoDispensar: () => fecharAvisoFora(foraDeAlcance),
+                }
+              : null
+          }
+          aoAbrir={marcarNotificacoesLidas}
+          aoLimpar={limparNotificacoes}
+        />
         {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
             Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
         <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
@@ -831,25 +915,6 @@ export function Quadro() {
             Juntar em um card
           </button>
           <button onClick={() => setSelecionados(new Set())}>Cancelar</button>
-        </p>
-      )}
-
-      {foraDeAlcance > foraCiente && (
-        <p className="aviso faixa atencao centrada">
-          <span>
-            {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
-            API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
-            {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
-            <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
-          </span>
-          <button
-            className="fechar"
-            onClick={() => fecharAvisoFora(foraDeAlcance)}
-            title="Fechar — volta a aparecer se outra task sair da janela"
-            aria-label="Fechar o aviso"
-          >
-            <IconeFechar tamanho={14} />
-          </button>
         </p>
       )}
 

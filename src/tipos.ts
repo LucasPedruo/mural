@@ -320,6 +320,24 @@ export interface RespostaPainel {
   };
 }
 
+// ------------------------------------------------------------- notificações
+
+/** O que uma leitura do Teams deixou para contar. Vive só no navegador, por
+ *  mural: é relato do que aconteceu na SUA sessão, não dado do quadro — o
+ *  servidor não tem o que fazer com isso, e sincronizar entre máquinas seria
+ *  inventar um problema.
+ *
+ *  Só entram **eventos**: coisas que aconteceram num instante e viram
+ *  histórico. O que é **condição** — "25 cards estão fora de alcance", que é
+ *  verdade enquanto for verdade — não vira item de lista, senão a cada leitura
+ *  a mesma frase entraria de novo e o sino viraria um carimbo de repetição. */
+export interface Notificacao {
+  id: string;
+  em: string;
+  tom: 'info' | 'erro';
+  texto: string;
+}
+
 // ----------------------------------------------------------------- dashboard
 
 /** Um dia da série de 30. Os dias vazios vêm no meio: um gráfico que pula o fim

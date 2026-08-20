@@ -48,8 +48,6 @@
   cursor: default;
 }
 
-/* A sprint no cabecalho. Pilula, e nao botao comum, porque ela e um estado do
-   mural que por acaso da para editar — o mesmo vocabulario do "gasto". */
 /* A sprint e um selo, nao um botao: definir e encerrar mudaram para a listagem,
    e aqui ela so diz ate quando vale o que esta na tela. Como deixou de ser
    <button>, a borda passa a ser escrita — antes vinha do estilo global. */
@@ -197,38 +195,3 @@
   font-weight: 600;
 }
 
-/* Filtro ligado esconde cards, e um quadro que esconde precisa dizer que esconde
-   — senao a contagem da coluna parece errada. */
-/* Faixa centrada, com o fechar no canto. O texto no meio porque este aviso fala
-   do quadro inteiro, nao de uma coluna — e o botao absoluto para o texto ficar
-   centrado na tela, e nao no espaco que sobra ao lado dele. */
-.faixa.centrada {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding-right: 52px;
-  padding-left: 52px;
-}
-
-.faixa.centrada .fechar {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px;
-  border-radius: 7px;
-  color: inherit;
-  background: none;
-  border-color: transparent;
-  opacity: 0.75;
-}
-.faixa.centrada .fechar:hover {
-  opacity: 1;
-  background: var(--bg-surface);
-  border-color: var(--border-default);
-}

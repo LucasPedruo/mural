@@ -1,0 +1,153 @@
+/* O sino do cabeçalho e o painel que ele abre. Mesma família visual do menu de
+   "…" do card — superfície própria e sombra, porque também flutua sobre o
+   quadro e sem elas se misturaria com a coluna de baixo. */
+
+.notificacoes {
+  position: relative;
+  display: inline-flex;
+}
+
+.notificacoes .gatilho-sino {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+.notificacoes .gatilho-sino:hover,
+.notificacoes .gatilho-sino.aberto {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* O contador é a única parte colorida do cabeçalho. Pode ser: ele aparece só
+   quando existe algo a ler, e sumir é o estado normal. */
+.notificacoes .contador {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--bg-brand);
+  color: var(--text-on-brand);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid var(--bg-app);
+  box-sizing: content-box;
+}
+
+.notificacoes .painel-notificacoes {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 7px);
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-arrastando);
+}
+
+.notificacoes .painel-notificacoes > header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+}
+.notificacoes .painel-notificacoes > header .limpar {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.notificacoes .painel-notificacoes > header .limpar:hover {
+  color: var(--text-primary);
+}
+
+.notificacoes .notificacao {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.notificacoes .notificacao:last-child {
+  border-bottom: 0;
+}
+
+.notificacoes .notificacao .corpo {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A hora fica embaixo do texto, não ao lado: um resumo de leitura tem duas
+   linhas com facilidade, e uma coluna de data à direita espremeria as duas. */
+.notificacoes .notificacao .quando {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Uma faixa de cor à esquerda em vez de fundo inteiro: o painel é uma lista, e
+   quatro fundos coloridos empilhados viram um semáforo. */
+.notificacoes .notificacao {
+  border-left: 3px solid transparent;
+}
+.notificacoes .notificacao.erro {
+  border-left-color: var(--marca-aberto);
+  color: var(--text-danger);
+}
+.notificacoes .notificacao.fixada {
+  border-left-color: var(--marca-fazendo);
+  background: var(--bg-warning);
+  color: var(--text-primary);
+}
+
+.notificacoes .notificacao .dispensar {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 2px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  line-height: 0;
+}
+.notificacoes .notificacao .dispensar:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+}
+
+.notificacoes .vazio {
+  margin: 0;
+  padding: 16px 14px 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

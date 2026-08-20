@@ -53,6 +53,22 @@ espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
 recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
 por mural e ficam no navegador.
 
+**O sino, ao lado de Atualizar**, guarda o que o quadro tem a contar: o resumo de
+cada leitura — o que mudou, quanto custou — e o aviso de quantos cards saíram do
+alcance do Teams. Antes essas duas mensagens moravam na própria tela: o resumo
+espremido na linha de "última leitura", o aviso numa faixa que empurrava as
+colunas para baixo da dobra. As duas sumiam sozinhas, e o que some sozinho não dá
+para reler depois de *"espera, quanto custou mesmo?"*.
+
+A distinção que o sino faz: o resumo de uma leitura é **evento** — aconteceu num
+instante e vira histórico, com as trinta últimas guardadas. Já "25 cards estão
+fora de alcance" é **condição**: vale enquanto for verdade, então fica fixada no
+topo do painel em vez de entrar na lista. Empilhar a mesma frase a cada leitura
+transformaria o sino num carimbo de repetição.
+
+O histórico é do navegador, por mural. É relato da sua sessão, não dado do
+quadro — o servidor não teria o que fazer com ele.
+
 **Tudo o que se faz num card mora no menu ⋯** dele. Eram sete botões disputando o
 canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação tem
 ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de
@@ -398,10 +414,10 @@ superfície no hover, onde a mão manda.
 Cor aqui já significa status, na faixa lateral. Um fundo colorido competia com
 ela em vez de somar — foi o que uma primeira tentativa em âmbar mostrou.
 
-O quadro avisa quantas são numa faixa amarela no topo, e a faixa **fecha**. O que
-fica guardado não é "fechei", é **quantas havia quando você fechou**: as mesmas 23
-não voltam a incomodar, e a 24ª traz o aviso de volta — que é a única hora em que
-ele tem algo novo a dizer. Nos demais o
+O quadro avisa quantas são no **sino** do cabeçalho, e o aviso **dispensa**. O
+que fica guardado não é "dispensei", é **quantas havia quando você dispensou**: as
+mesmas 23 não voltam a incomodar, e a 24ª traz o aviso de volta — que é a única
+hora em que ele tem algo novo a dizer. Nos demais o
 arraste nem começa: a próxima atualização desfaria a mudança, e um quadro que
 mente por dois minutos é pior que um quadro que não deixa você fazer o gesto. O
 servidor recusa esse caso mesmo que a interface deixasse passar.
