@@ -1,7 +1,5 @@
 import { Draggable } from '@hello-pangea/dnd';
-import { useRef, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
-
-import { useAlturaAnimada } from '../animacao';
+import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 
 import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
 import type { Task } from '../tipos';
@@ -83,11 +81,6 @@ export function CartaoDeTask({
   aoIgnorar,
   aoApagar,
 }: Props) {
-  // A altura do card é animada no recolher, pela mesma razão da coluna: um card
-  // que encolhe de uma vez empurra os de baixo sem avisar para onde.
-  const caixa = useRef<HTMLElement | null>(null);
-  useAlturaAnimada(caixa, colapsado);
-
   const ehNovo = !!ultimaVisita && task.firstSeen > ultimaVisita;
   const mudou = !!ultimaVisita && task.statusChangedAt > ultimaVisita && !ehNovo;
   const dias = diasDesde(task.createdDateTime);
@@ -278,10 +271,7 @@ export function CartaoDeTask({
         };
         return (
           <article
-            ref={(no) => {
-              fornecido.innerRef(no);
-              caixa.current = no;
-            }}
+            ref={fornecido.innerRef}
             {...fornecido.draggableProps}
             {...fornecido.dragHandleProps}
             style={estilo}

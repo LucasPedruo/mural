@@ -74,9 +74,7 @@ seu processo, não terminado — nem que o time já tenha dado o check no Teams.
 **Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
 fina com o rótulo de pé e a contagem. **Cada card também**, sem exceção: recolhido,
 ele mostra uma linha do texto e o rodapé, sem os prints, sem a continuação da
-rajada e sem a anotação da daily. As duas transições são animadas (GSAP): sem
-elas o quadro salta de lugar e quem estava lendo precisa se reencontrar. Quem
-configurou `prefers-reduced-motion` recebe a mudança sem percurso. Quem trabalha por sprint não olha *Em atendimento* toda hora, e o
+rajada e sem a anotação da daily. Quem trabalha por sprint não olha *Em atendimento* toda hora, e o
 espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
 recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
 por mural e ficam no navegador.
@@ -475,8 +473,12 @@ superfície e a sombra, então afundam na coluna em vez de flutuar sobre ela —
 tracejada, a alça de arraste no canto e o selo *sem sinal do Teams*, e voltam à
 superfície no hover, onde a mão manda.
 
-Cor aqui já significa status, na faixa lateral. Um fundo colorido competia com
-ela em vez de somar — foi o que uma primeira tentativa em âmbar mostrou.
+O contorno é **âmbar**, e é a mesma cor do aviso no sino e do selo *sem sinal do
+Teams* — os três falam da mesma coisa, e reconhecê-los juntos é o que faz parar
+de reaprender o que cada um significa. Um **fundo** colorido continua fora de
+questão: era ele que competia com a faixa lateral, onde cor significa status. O
+contorno não compete, porque fala de outra coisa — não do estado da demanda, mas
+da ausência de fonte.
 
 O quadro avisa quantas são no **sino** do cabeçalho, e o aviso **dispensa**. O
 que fica guardado não é "dispensei", é **quantas havia quando você dispensou**: as

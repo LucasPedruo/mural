@@ -104,6 +104,12 @@
   /* Ignorada nao tem cor: e a ausencia de trabalho. Cinza e o ponto. */
   --marca-ignorada: var(--color-neutral-300);
 
+  /* Sem sinal do Teams: o legado do quadro — cards que sairam da janela das ~20
+     e nao recebem mais atualizacao nenhuma. Nao e status, e a AUSENCIA de fonte:
+     por isso tem cor propria em vez de emprestar uma da paleta de status, e por
+     isso e a mesma cor do aviso que fala deles no sino. */
+  --marca-sem-sinal: var(--color-warning-500);
+
   /* As colunas que voce cria. Nomeadas e nao hex porque o disco guarda o NOME:
      um valor cravado ficaria ilegivel num dos dois temas. */
   --coluna-roxo: #7c5cd6;
@@ -152,6 +158,7 @@
   --marca-feito: var(--color-success-500);
   --marca-meu: var(--color-brand-400);
   --marca-ignorada: var(--color-neutral-650);
+  --marca-sem-sinal: var(--color-warning-300);
 
   /* No escuro os mesmos seis tons, clareados: o fundo mudou, a leitura tem de
      continuar a mesma. */
@@ -267,10 +274,13 @@ button.perigo:hover:not(:disabled) {
 /* Fora de alcance nao e erro nem aviso passageiro: e um estado permanente do
    card, e o card ja se distingue pelo relevo. O badge so nomeia o estado — sem
    cor propria, que aqui significaria status. */
+/* O selo "sem sinal do Teams". Mesma cor do contorno do card e do aviso no
+   sino: os tres falam da mesma coisa, e reconhece-los juntos e o que faz a
+   pessoa parar de reaprender o que cada um significa. */
 .badge.alerta {
-  background: var(--bg-surface-3);
-  color: var(--text-secondary);
-  border: 1px dashed var(--border-strong);
+  background: var(--bg-warning);
+  color: var(--text-warning);
+  border: 1px dashed var(--marca-sem-sinal);
 }
 
 /* ---- avisos ---- */

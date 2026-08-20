@@ -1,7 +1,5 @@
 import { Draggable, Droppable } from '@hello-pangea/dnd';
-import { useRef, type ReactNode } from 'react';
-
-import { useLarguraAnimada } from '../animacao';
+import type { ReactNode } from 'react';
 
 import type { Task } from '../tipos';
 import { CartaoDeTask } from './CartaoDeTask';
@@ -99,11 +97,6 @@ export function Coluna({
   aoColapsarCartao,
 }: Props) {
   const total = grupos.reduce((s, g) => s + g.tasks.length, 0);
-
-  // A largura da coluna é animada no colapso: sem transição o quadro inteiro
-  // salta de lugar, e quem estava lendo precisa se reencontrar.
-  const caixa = useRef<HTMLElement | null>(null);
-  useLarguraAnimada(caixa, colapsada);
   const agrupada = grupos.length > 1 || (grupos[0] && grupos[0].rotulo !== '');
 
   // O índice do Draggable é posicional dentro do Droppable inteiro, não dentro
@@ -131,10 +124,7 @@ export function Coluna({
           return (
             <section
               className={classe}
-              ref={(no) => {
-                colunaFornecida.innerRef(no);
-                caixa.current = no;
-              }}
+              ref={colunaFornecida.innerRef}
               {...colunaFornecida.draggableProps}
             >
               <button
@@ -167,10 +157,7 @@ export function Coluna({
         return (
           <section
             className={classe}
-            ref={(no) => {
-              colunaFornecida.innerRef(no);
-              caixa.current = no;
-            }}
+            ref={colunaFornecida.innerRef}
             {...colunaFornecida.draggableProps}
           >
             <header {...colunaFornecida.dragHandleProps} title="Arraste para mudar a ordem">
