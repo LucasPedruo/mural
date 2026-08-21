@@ -60,6 +60,7 @@ interface Props {
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
   aoEtiquetar: (task: Task) => void;
+  aoAnotar: (task: Task) => void;
   aoIgnorar: (task: Task, ignorar: boolean) => void;
   aoApagar: (task: Task) => void;
   /** Todos os cards desta coluna recolhidos, ou todos expandidos. É escolha da
@@ -93,6 +94,7 @@ export function Coluna({
   aoSelecionar,
   aoSeparar,
   aoEtiquetar,
+  aoAnotar,
   aoIgnorar,
   aoApagar,
   cardsRecolhidos,
@@ -232,6 +234,7 @@ export function Coluna({
                           aoSelecionar={aoSelecionar}
                           aoSeparar={aoSeparar}
                           aoEtiquetar={aoEtiquetar}
+                          aoAnotar={aoAnotar}
                           aoIgnorar={aoIgnorar}
                           aoApagar={aoApagar}
                         />

@@ -17,6 +17,7 @@ import {
 } from '../componentes/DialogoDeConfirmacao';
 import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
+import { DialogoDeNota } from '../componentes/DialogoDeNota';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
@@ -135,6 +136,7 @@ export function Quadro() {
   // está sendo etiquetada e o filtro ligado.
   const [tags, setTags] = useState<TagComContagem[]>([]);
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
+  const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
 
   // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
@@ -546,6 +548,22 @@ export function Quadro() {
       const r = await api.salvarTags(muralId, task.id, novas);
       setTasks(r.tasks);
       setTags(r.tags);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // A nota livre do card: o que você quer lembrar enquanto a demanda está
+  // aberta. As outras duas anotações do quadro exigem que o trabalho tenha
+  // acabado; esta não conclui nada.
+  async function salvarNota(nota: string) {
+    const task = anotandoNota;
+    setAnotandoNota(null);
+    if (!task) return;
+    setErro(null);
+    try {
+      const r = await api.anotar(muralId, task.id, nota);
+      setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -1090,6 +1108,14 @@ export function Quadro() {
         />
       )}
 
+      {anotandoNota && (
+        <DialogoDeNota
+          task={anotandoNota}
+          aoSalvar={(nota) => void salvarNota(nota)}
+          aoCancelar={() => setAnotandoNota(null)}
+        />
+      )}
+
       {etiquetando && (
         <DialogoDeTags
           task={etiquetando}
@@ -1239,6 +1265,7 @@ export function Quadro() {
                   aoSelecionar={alternarSelecao}
                   aoSeparar={(t) => void separar(t)}
                   aoEtiquetar={setEtiquetando}
+                  aoAnotar={setAnotandoNota}
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
                   aoApagar={apagar}
                   aoSoltarDaColuna={(t) => void soltarDaColuna(t)}

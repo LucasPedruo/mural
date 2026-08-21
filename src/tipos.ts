@@ -108,6 +108,11 @@ export interface Task {
    *  `status` continua sendo atualizado por baixo — é o que faz soltar o card
    *  devolvê-lo na hora à coluna que o canal manda, sem nova leitura. */
   coluna: string | null;
+  /** A sua nota livre sobre esta demanda. Diferente das outras duas anotações —
+   *  a do "fiz esta" e a do crédito — que só existem depois de alguém ter
+   *  terminado o trabalho. Aqui cabe "o cliente vai testar sexta", que não é
+   *  conclusão de nada. Campo próprio: nenhuma leitura a apaga. */
+  nota: string | null;
   /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */

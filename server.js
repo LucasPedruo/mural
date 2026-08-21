@@ -1005,6 +1005,7 @@ function tasksParaTela(muralId) {
     meu: t.meu || null,
     feitoPor: t.feitoPor || null,
     coluna: t.coluna || null,
+    nota: t.nota || null,
     ignorada: t.ignorada || null,
     tags: Array.isArray(t.tags) ? t.tags : [],
     mensagens: mensagensDaTask(t),
@@ -1155,6 +1156,22 @@ function marcarFeitoPorOutro(muralId, id, quem, solucao) {
   // O credito e de uma pessoa so. Se estava marcada como sua, deixa de estar —
   // senao o card apareceria em duas colunas e contaria duas vezes no dashboard.
   t.meu = null;
+  gravarTasks(muralId, db);
+}
+
+// A nota livre do card: o que VOCE quer lembrar sobre esta demanda, sem que ela
+// precise estar concluida. Diferente das outras duas anotacoes — a do "fiz esta"
+// e a do credito — que so existem depois de alguem ter terminado o trabalho. Aqui
+// cabe "o cliente vai testar sexta", que nao e conclusao de nada.
+//
+// Marca pessoal como as outras: campo proprio, nada escrito no Teams, e nenhuma
+// leitura a apaga.
+function anotarTask(muralId, id, nota) {
+  const db = lerTasks(muralId);
+  const t = db.tasks[String(id || '')];
+  if (!t) throw new Error('Task desconhecida.');
+  const limpa = String(nota || '').trim().slice(0, 2000);
+  t.nota = limpa || null;
   gravarTasks(muralId, db);
 }
 
@@ -1413,6 +1430,7 @@ function juntarTasks(muralId, ids) {
   let status = ancora.status;
   let meu = null;
   let feitoPor = null;
+  let nota = null;
   let movidoAMao = false;
   let firstSeen = ancora.firstSeen;
   let lastSeen = ancora.lastSeen;
@@ -1456,6 +1474,13 @@ function juntarTasks(muralId, ids) {
     }
   }
 
+  // Juntar e gesto de organizacao: nao pode apagar o que voce escreveu. As notas
+  // dos dois cards viram uma, na ordem em que estavam.
+  for (const t of escolhidas) {
+    if (t.nota) nota = nota ? `${nota}
+${t.nota}` : t.nota;
+  }
+
   // O credito e de uma pessoa so — a mesma regra de marcarFeitoPorOutro.
   if (meu) feitoPor = null;
 
@@ -1471,6 +1496,7 @@ function juntarTasks(muralId, ids) {
     movidoAMao,
     meu,
     feitoPor,
+    nota,
     agrupamento: 'mao',
   };
   aplicarMensagensNaTask(juntada, mensagens);
@@ -2399,6 +2425,20 @@ async function rotear(req, res) {
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
       const corpo = await lerCorpoJson(req);
       prenderNaColuna(muralId, corpo.id, corpo.coluna || null);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // A nota livre do card. Nota vazia apaga em vez de gravar string vazia: o
+  // historico nao precisa registrar que voce desistiu de escrever.
+  if (p === '/api/nota' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      anotarTask(muralId, corpo.id, corpo.nota);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });

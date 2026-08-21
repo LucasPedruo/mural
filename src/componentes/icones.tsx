@@ -247,3 +247,13 @@ export function IconeFiltro(p: Props) {
     </Icone>
   );
 }
+
+/** lucide `sticky-note` — a nota livre de um card. */
+export function IconeNota(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 0-2-2Z" />
+      <path d="M21 14h-5a2 2 0 0 0-2 2v5" />
+    </Icone>
+  );
+}

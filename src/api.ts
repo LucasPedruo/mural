@@ -130,6 +130,10 @@ export const api = {
       json({ id, tags }),
     ),
 
+  // A nota livre de um card. Nota vazia apaga.
+  anotar: (muralId: string, id: string, nota: string) =>
+    pedir<RespostaTasks>(`/api/nota?mural=${muralId}`, json({ id, nota })),
+
   // --- colunas suas ---
   // Elas não têm regra: quem põe card ali é você, arrastando. Por isso a coluna
   // mora no servidor (é do quadro, não da sua tela) e o card guarda em qual

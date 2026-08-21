@@ -400,6 +400,19 @@ de dias entre o pedido e a conclusão (mediana, não média: uma task esquecida 
 seis meses puxaria a média para um número que não descreve nenhuma semana real)
 e há quantos dias está parada a mais velha em aberto.
 
+## A nota de um card
+
+**Anotar**, no menu ⋯, guarda o que você quer lembrar sobre a demanda — "o cliente
+vai testar sexta", "depende do deploy do financeiro".
+
+O quadro já tinha duas anotações, e as duas exigem que o trabalho tenha acabado:
+a do *Fiz esta* e a do crédito a outra pessoa. Faltava a que não conclui nada, que
+é justamente a que se quer escrever **enquanto** a demanda está aberta.
+
+Como as outras marcas suas, mora em campo próprio: nada é escrito no Teams e
+nenhuma leitura a apaga. Juntar dois cards junta as duas notas em vez de escolher
+uma. Nota vazia apaga em vez de gravar vazio.
+
 ## Ignorar, apagar e etiquetar
 
 Três marcas suas, e nenhuma delas é status do Teams. Como o *feito por mim*, elas
@@ -691,7 +704,7 @@ Tudo em `data/`, que está no `.gitignore`:
 | arquivo | o que é |
 | --- | --- |
 | `murais.json` | índice dos murais e suas conversas |
-| `murais/<id>/tasks.json` | o histórico daquele mural, com as anotações da daily — o insubstituível |
+| `murais/<id>/tasks.json` | o histórico daquele mural, com as notas e as anotações da daily — o insubstituível |
 | `murais/<id>/tasks.json.bak` | cópia da atualização anterior |
 | `murais/<id>/sprints.json` | as sprints e os cards arquivados em cada uma — o dashboard e os painéis vivem daqui |
 | `murais/<id>/colunas.json` | as colunas que você criou: nome e cor |

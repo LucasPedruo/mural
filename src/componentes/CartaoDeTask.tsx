@@ -13,6 +13,7 @@ import {
   IconeIgnorar,
   IconeImagem,
   IconeJuntar,
+  IconeNota,
   IconePessoa,
   IconeSeparar,
 } from './icones';
@@ -56,6 +57,7 @@ interface Props {
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
   aoEtiquetar: (task: Task) => void;
+  aoAnotar: (task: Task) => void;
   aoIgnorar: (task: Task, ignorar: boolean) => void;
   aoApagar: (task: Task) => void;
 }
@@ -78,6 +80,7 @@ export function CartaoDeTask({
   aoSelecionar,
   aoSeparar,
   aoEtiquetar,
+  aoAnotar,
   aoIgnorar,
   aoApagar,
 }: Props) {
@@ -180,6 +183,13 @@ export function CartaoDeTask({
       });
     }
   }
+
+  acoes.push({
+    rotulo: task.nota ? 'Editar a nota' : 'Anotar',
+    icone: <IconeNota />,
+    aoEscolher: () => aoAnotar(task),
+    dica: task.nota ? undefined : 'Algo que você queira lembrar',
+  });
 
   acoes.push({
     rotulo: 'Etiquetas',
@@ -326,6 +336,11 @@ export function CartaoDeTask({
                     rodapé, com os outros selos; aqui vai só o texto — repetir
                     "Fulano" duas vezes no mesmo card não conta nada a mais. */}
                 {task.feitoPor?.solucao && <p className="solucao">{task.feitoPor.solucao}</p>}
+
+                {/* A sua nota. Recuada e com filete próprio, para não se
+                    confundir com a continuação da rajada, que é texto de
+                    outra pessoa. */}
+                {task.nota && <p className="nota-do-card">{task.nota}</p>}
               </>
             )}
 

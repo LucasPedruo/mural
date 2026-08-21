@@ -277,3 +277,17 @@
 .cartao.colapsado .rodape {
   margin-top: 6px;
 }
+
+/* A sua nota no card. Filete próprio e cor da marca: ela não pode se confundir
+   com a continuação da rajada, que é texto de outra pessoa, nem com a anotação
+   da daily, que só existe depois de o trabalho acabar. */
+.cartao .nota-do-card {
+  margin: 6px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--marca-meu);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
