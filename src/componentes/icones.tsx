@@ -228,3 +228,32 @@ export function IconePegar(p: Props) {
     </Icone>
   );
 }
+
+/** lucide `bell` */
+export function IconeSino(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+      <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
+    </Icone>
+  );
+}
+
+/** lucide `funnel` — o filtro do quadro. */
+export function IconeFiltro(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="M10 20a1 1 0 0 0 1.447.894l2-1A1 1 0 0 0 14 19v-4.586a1 1 0 0 1 .293-.707l5.414-5.414A1 1 0 0 0 20 7.586V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2.586a1 1 0 0 0 .293.707l5.414 5.414a1 1 0 0 1 .293.707z" />
+    </Icone>
+  );
+}
+
+/** lucide `sticky-note` — a nota livre de um card. */
+export function IconeNota(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 0-2-2Z" />
+      <path d="M21 14h-5a2 2 0 0 0-2 2v5" />
+    </Icone>
+  );
+}

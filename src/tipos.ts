@@ -25,8 +25,13 @@ export interface Mural {
 }
 
 export interface MuralNaLista extends Mural {
-  totais: Record<ColunaId, number>;
+  /** As seis do Teams, mais `suas` — os cards presos em colunas que você criou.
+   *  Sem essa chave a soma da linha não fecharia com o quadro. */
+  totais: Record<ColunaId, number> & { suas: number };
   foraDeAlcance: number;
+  /** A sprint corrente. Vem na listagem porque é daqui que ela passa a ser
+   *  definida e encerrada — o quadro só a mostra. */
+  sprint: Sprint | null;
 }
 
 /** O que você anotou ao marcar a task como feita por você. `em` é a data da
@@ -37,6 +42,20 @@ export interface MeuFeito {
   solucao: string;
   /** `emoji` = veio da sua reação no Teams; `mao` = você marcou aqui. */
   via: 'emoji' | 'mao';
+}
+
+/** O espelho do `MeuFeito` para quando quem resolveu não foi você. O Teams
+ *  conta que ALGUÉM reagiu com o check, nunca quem — o Graph devolve
+ *  `reactions[].users` vazio. Então o nome de quem fez é uma anotação sua, do
+ *  mesmo naipe da etiqueta, e mora em campo próprio para o sync não a apagar.
+ *
+ *  Não é status: o card muda de coluna na tela, e o que o canal diz continua em
+ *  `status`. Escrever 'feito' ali seria inventar uma reação que ninguém deu. */
+export interface FeitoPorOutro {
+  /** A data da marcação — é ela que ordena, não a da última edição do texto. */
+  em: string;
+  quem: string;
+  solucao: string;
 }
 
 /** Uma mensagem do Teams dentro de um card. Uma demanda raramente chega como
@@ -76,11 +95,24 @@ export interface Task {
   foraDeAlcance: boolean;
   /** Pode trocar de coluna à mão: fora de alcance ou criada por você. */
   podeMover: boolean;
-  /** Pode sair de "Feito por mim" pelo quadro. Falso quando é a sua reação que
+  /** Pode sair de "Done by me" pelo quadro. Falso quando é a sua reação que
    *  põe o card lá: nesse caso quem manda é o Teams. */
   podeDesmarcar: boolean;
   movidoAMao: boolean;
   meu: MeuFeito | null;
+  /** Quem resolveu, quando não foi você. Exclusivo com `meu`: o crédito é de uma
+   *  pessoa só, senão o mesmo card apareceria em duas colunas. */
+  feitoPor: FeitoPorOutro | null;
+  /** A coluna SUA em que você prendeu este card, se prendeu. Vence a regra do
+   *  Teams: foi um gesto explícito, e mais recente que qualquer reação. O
+   *  `status` continua sendo atualizado por baixo — é o que faz soltar o card
+   *  devolvê-lo na hora à coluna que o canal manda, sem nova leitura. */
+  coluna: string | null;
+  /** A sua nota livre sobre esta demanda. Diferente das outras duas anotações —
+   *  a do "fiz esta" e a do crédito — que só existem depois de alguém ter
+   *  terminado o trabalho. Aqui cabe "o cliente vai testar sexta", que não é
+   *  conclusão de nada. Campo próprio: nenhuma leitura a apaga. */
+  nota: string | null;
   /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */
@@ -139,7 +171,7 @@ export interface Preferencias {
    *  detecção e deixa só o botão "fiz" — o Graph não diz quem reagiu, então
    *  isso é uma convenção sua, não um dado da API. */
   emojiMeu: string;
-  /** A reação que quer dizer "alguém pegou esta": a coluna *Fazendo*. Diferente
+  /** A reação que quer dizer "alguém pegou esta": a coluna *In progress*. Diferente
    *  do emojiMeu, esta é uma convenção do TIME — qualquer um que reagir com ela
    *  move o card. Vazio desliga a coluna. */
   emojiFazendo: string;
@@ -298,6 +330,119 @@ export interface RespostaPainel {
     diasAtivos: number;
     arquivadas: number;
   };
+}
+
+// ------------------------------------------------------------- colunas suas
+
+/** Uma coluna que você criou.
+ *
+ *  As seis do quadro não são listas, são **regras**: `statusDe` calcula a coluna
+ *  a partir da reação no Teams. Por isso elas não se criam nem se apagam —
+ *  apagar "Backlog" seria apagar a pergunta "o que ninguém pegou".
+ *
+ *  Estas são o contrário: **não têm regra**. São lugares, e o único jeito de um
+ *  card entrar é você arrastar. É a única parte do quadro que não responde ao
+ *  Teams, e é de propósito: serve para o passo do SEU processo que o canal não
+ *  conhece. */
+export interface ColunaPersonalizada {
+  id: string;
+  nome: string;
+  /** Cor nomeada, não hex: o quadro tem tema claro e escuro, e um valor cravado
+   *  ficaria ilegível num dos dois. O nome vira variável de CSS na tela. */
+  cor: CorDeColuna;
+  criadaEm: string;
+}
+
+export type CorDeColuna = 'roxo' | 'ciano' | 'rosa' | 'lima' | 'ambar' | 'cinza';
+
+export const CORES_DE_COLUNA: CorDeColuna[] = ['roxo', 'ciano', 'rosa', 'lima', 'ambar', 'cinza'];
+
+export interface RespostaColunas {
+  colunas: ColunaPersonalizada[];
+}
+
+export interface ResultadoExclusaoDeColuna extends RespostaColunas, RespostaTasks {
+  /** Quantos cards foram apagados junto — a coluna não é um esconderijo. */
+  apagadas: number;
+  nome: string;
+}
+
+// ------------------------------------------------------------- notificações
+
+/** O que uma leitura do Teams deixou para contar. Vive só no navegador, por
+ *  mural: é relato do que aconteceu na SUA sessão, não dado do quadro — o
+ *  servidor não tem o que fazer com isso, e sincronizar entre máquinas seria
+ *  inventar um problema.
+ *
+ *  Só entram **eventos**: coisas que aconteceram num instante e viram
+ *  histórico. O que é **condição** — "25 cards estão fora de alcance", que é
+ *  verdade enquanto for verdade — não vira item de lista, senão a cada leitura
+ *  a mesma frase entraria de novo e o sino viraria um carimbo de repetição. */
+export interface Notificacao {
+  id: string;
+  em: string;
+  tom: 'info' | 'erro';
+  texto: string;
+  /** O que VOCÊ escreveu sobre esta leitura. O texto acima é o que o Mural
+   *  contou; a nota é o que aquilo significou — "esse custo foi a releitura do
+   *  canal inteiro", "falhou porque o token venceu". Sem ela o histórico só
+   *  responde o que aconteceu, nunca por quê.
+   *
+   *  É trabalho seu, e por isso "Limpar" não a leva junto. */
+  nota?: string;
+}
+
+// ----------------------------------------------------------------- dashboard
+
+/** Um dia da série de 30. Os dias vazios vêm no meio: um gráfico que pula o fim
+ *  de semana mente sobre o ritmo — o vale de sábado faz parte da resposta. */
+export interface DiaDoDashboard {
+  /** Dia local, ano-mês-dia. */
+  dia: string;
+  chegaram: number;
+  bugs: number;
+  concluidas: number;
+}
+
+export interface CreditoDePessoa {
+  pessoa: string;
+  total: number;
+  /** Você — o card veio do "Fiz esta", não do crédito a outra pessoa. */
+  ehVoce: boolean;
+}
+
+export interface LinhaDeAutor {
+  autor: string;
+  total: number;
+  bugs: number;
+  concluidas: number;
+}
+
+export interface RespostaDashboard {
+  totais: {
+    tasks: number;
+    bugs: number;
+    sugestoes: number;
+    concluidas: number;
+    emAberto: number;
+    ignoradas: number;
+    minhas: number;
+    porOutros: number;
+    /** Concluídas sem dono conhecido: o check está lá, mas ninguém foi
+     *  creditado. É o número que mede o quanto os gráficos de pessoa NÃO
+     *  cobrem — escondê-lo faria o painel parecer mais completo do que é. */
+    semCredito: number;
+    /** Mediana, não média: uma task esquecida há seis meses puxaria a média
+     *  para um número que não descreve nenhuma semana real. */
+    medianaDeDias: number | null;
+    maisAntigaEmAbertoDias: number | null;
+  };
+  porColuna: Record<ColunaId, number>;
+  porDia: DiaDoDashboard[];
+  sprints: LinhaDeSprint[];
+  tags: LinhaDeTag[];
+  porPessoa: CreditoDePessoa[];
+  porAutor: LinhaDeAutor[];
 }
 
 // ------------------------------------------------------------------- agentes

@@ -8,7 +8,11 @@ import type {
   MuralNaLista,
   Preferencias,
   RespostaAgentes,
+  ColunaPersonalizada,
+  ResultadoExclusaoDeColuna,
+  RespostaColunas,
   RespostaConsumo,
+  RespostaDashboard,
   RespostaPainel,
   RespostaSprint,
   RespostaTasks,
@@ -126,6 +130,35 @@ export const api = {
       json({ id, tags }),
     ),
 
+  // A nota livre de um card. Nota vazia apaga.
+  anotar: (muralId: string, id: string, nota: string) =>
+    pedir<RespostaTasks>(`/api/nota?mural=${muralId}`, json({ id, nota })),
+
+  // --- colunas suas ---
+  // Elas não têm regra: quem põe card ali é você, arrastando. Por isso a coluna
+  // mora no servidor (é do quadro, não da sua tela) e o card guarda em qual
+  // delas está preso.
+
+  colunas: (muralId: string) => pedir<RespostaColunas>(`/api/colunas?mural=${muralId}`),
+
+  salvarColuna: (muralId: string, dados: { id?: string; nome: string; cor?: string }) =>
+    pedir<RespostaColunas & { coluna: ColunaPersonalizada }>(
+      `/api/colunas?mural=${muralId}`,
+      json(dados),
+    ),
+
+  // Irreversível: leva os cards da coluna junto. Quem confirma é a interface,
+  // com o número na frente.
+  excluirColuna: (muralId: string, id: string) =>
+    pedir<ResultadoExclusaoDeColuna>(`/api/colunas?mural=${muralId}&id=${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Prender e soltar. Rota própria, e não `mover`: mover recusa card que o Teams
+  // acompanha, e prender existe justamente para tirar um desses do fluxo.
+  prenderNaColuna: (muralId: string, id: string, coluna: string | null) =>
+    pedir<RespostaTasks>(`/api/coluna?mural=${muralId}`, json({ id, coluna })),
+
   // --- sprint ---
 
   sprint: (muralId: string) => pedir<RespostaSprint>(`/api/sprint?mural=${muralId}`),
@@ -140,6 +173,11 @@ export const api = {
 
   painel: (muralId: string) => pedir<RespostaPainel>(`/api/painel?mural=${muralId}`),
 
+  // Séries já agregadas, prontas para virar gráfico. Rota própria porque a
+  // pergunta é outra: o painel quer a lista de itens da daily para copiar no
+  // chat, o dashboard quer a forma. Nenhum dos dois deve pagar o peso do outro.
+  dashboard: (muralId: string) => pedir<RespostaDashboard>(`/api/dashboard?mural=${muralId}`),
+
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
 
@@ -150,6 +188,15 @@ export const api = {
 
   desmarcarComoMeu: (muralId: string, id: string) =>
     pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, marcar: false })),
+
+  // O espelho do de cima. O Graph conta que alguém reagiu com o check, nunca
+  // QUEM — `reactions[].users` vem vazio. Então o nome de quem resolveu é uma
+  // anotação sua, guardada em campo próprio, que nenhuma leitura sobrescreve.
+  marcarFeitoPorOutro: (muralId: string, id: string, quem: string, solucao: string) =>
+    pedir<RespostaTasks>(`/api/feito-por?mural=${muralId}`, json({ id, quem, solucao })),
+
+  desmarcarFeitoPorOutro: (muralId: string, id: string) =>
+    pedir<RespostaTasks>(`/api/feito-por?mural=${muralId}`, json({ id, marcar: false })),
 
   abrirNoTeams: (muralId: string, id: string) =>
     pedir<{ via: string }>(
@@ -167,6 +214,12 @@ export const api = {
       agente: r.agente ?? { id: 'claude', nome: 'Claude Code', reportaCusto: true },
     };
   },
+
+  // As três reações que o quadro entende. Rota sem `mural` de propósito: a
+  // pergunta "qual emoji significa o quê" é do usuário, e o onboarding precisa
+  // respondê-la antes de existir quadro nenhum.
+  preferencias: () =>
+    pedir<{ preferencias: Preferencias; checks: string[] }>('/api/preferencias'),
 
   // Parcial de proposito: o servidor so mexe no que veio, entao salvar o emoji
   // nao religa a confirmação que você desmarcou.

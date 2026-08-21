@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { EscolherEmoji } from '../componentes/EscolherEmoji';
 import { IconeFeito } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
@@ -101,6 +102,15 @@ export function Onboarding() {
   const [inicioSprint, setInicioSprint] = useState(hojeLocal());
   const [diasSprint, setDiasSprint] = useState(14);
 
+  // As reações que o quadro entende. Só duas se escolhem — a terceira é o check,
+  // que já significa "concluído" para o canal inteiro. Elas são preferência do
+  // USUÁRIO, não do mural: valem para todos os quadros e por isso são salvas na
+  // hora, sem esperar o "Criar o mural".
+  const [emojiFazendo, setEmojiFazendo] = useState('');
+  const [emojiMeu, setEmojiMeu] = useState('');
+  const [checks, setChecks] = useState<string[]>([]);
+  const [erroEmoji, setErroEmoji] = useState<string | null>(null);
+
   const jaVerificou = useRef(false);
 
   useEffect(() => {
@@ -109,7 +119,37 @@ export function Onboarding() {
     jaVerificou.current = true;
 
     void carregarAgentes();
+    void api
+      .preferencias()
+      .then((r) => {
+        setEmojiFazendo(r.preferencias.emojiFazendo);
+        setEmojiMeu(r.preferencias.emojiMeu);
+        setChecks(r.checks);
+      })
+      .catch(() => {
+        /* sem preferências a tela ainda funciona: os campos nascem vazios */
+      });
   }, []);
+
+  /** Salva na hora, e é o servidor que valida: as duas reações não podem ser
+   *  iguais nem ser o check, e essa regra mora lá porque é ela que decide a
+   *  coluna de cada card. Recusado, o campo volta ao valor anterior — deixá-lo
+   *  mostrando algo que não foi gravado seria pior que o erro. */
+  async function salvarEmoji(quais: { emojiFazendo?: string; emojiMeu?: string }) {
+    const antes = { emojiFazendo, emojiMeu };
+    if (quais.emojiFazendo !== undefined) setEmojiFazendo(quais.emojiFazendo);
+    if (quais.emojiMeu !== undefined) setEmojiMeu(quais.emojiMeu);
+    setErroEmoji(null);
+    try {
+      const r = await api.salvarPreferencias(quais);
+      setEmojiFazendo(r.preferencias.emojiFazendo);
+      setEmojiMeu(r.preferencias.emojiMeu);
+    } catch (e) {
+      setEmojiFazendo(antes.emojiFazendo);
+      setEmojiMeu(antes.emojiMeu);
+      setErroEmoji((e as Error).message);
+    }
+  }
 
   async function carregarAgentes() {
     setPasso1('carregando');
@@ -247,10 +287,7 @@ export function Onboarding() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
       </div>
-      <p className="sub">
-        Um kanban montado a partir das reações de uma conversa do Teams. Quatro passos e o quadro
-        está de pé.
-      </p>
+      <p className="sub">Cinco passos e o quadro está de pé.</p>
 
       {/* 1 */}
       <section className="passo" data-estado={passo1}>
@@ -265,8 +302,7 @@ export function Onboarding() {
         {agentes && (
           <div className="corpo">
             <p className="dica">
-              O Mural não fala com o Teams: ele pede a um agente de IA já autenticado que leia a
-              conversa e grave o resultado. Escolha o seu.
+              Quem lê o Teams é um agente de IA já autenticado. Escolha o seu.
             </p>
 
             <div className="lista-agentes">
@@ -284,7 +320,7 @@ export function Onboarding() {
                   <span className="nome">
                     {a.nome}
                     {!a.verificado && !a.ajustado && (
-                      <span className="badge warning" title="Adaptador escrito a partir da documentação do CLI, não testado aqui. Se uma flag estiver errada, corrija nos ajustes abaixo.">
+                      <span className="badge warning" title="Escrito a partir da documentação, não testado aqui">
                         não verificado
                       </span>
                     )}
@@ -426,8 +462,7 @@ export function Onboarding() {
               {passo2 === 'erro' ? 'Tentar de novo' : 'Verificar conexão'}
             </button>
             <p className="dica">
-              O Mural não pede nem guarda sua senha. Quem autentica é o conector Microsoft 365 do
-              Claude Code — aqui só perguntamos quem já está logado. Leva cerca de 20 segundos.
+              Nenhuma senha é pedida aqui — só perguntamos quem já está logado no agente.
             </p>
           </div>
         )}
@@ -558,9 +593,58 @@ export function Onboarding() {
       </section>
 
       {/* 4 */}
-      <section className="passo" data-estado={escolha ? 'espera' : 'espera'}>
+      <section className="passo" data-estado="espera">
         <div className="passo-topo">
           <span className="num">4</span>
+          <h2>As reações</h2>
+        </div>
+        <p className="detalhe">qual emoji significa o quê</p>
+
+        <div className="corpo">
+          <p className="dica">A reação no Teams é o que decide a coluna de cada card.</p>
+
+          <EscolherEmoji
+            id="emoji-fazendo"
+            titulo="peguei esta"
+            dono="time"
+            explicacao="Enche a coluna In progress. Vale para qualquer pessoa que reagir."
+            valor={emojiFazendo}
+            sugestoes={['⚪', '⏱️', '👀', '🔨', '🚧']}
+            rotuloDeDesligar="desligar a coluna"
+            aoMudar={(e) => void salvarEmoji({ emojiFazendo: e })}
+          />
+
+          <EscolherEmoji
+            id="emoji-meu"
+            titulo="fui eu que fiz"
+            dono="você"
+            explicacao="Manda o card para Done by me. Escolha um emoji que só você usa."
+            valor={emojiMeu}
+            sugestoes={['🟢', '💚', '🙌', '🦄', '🎯']}
+            rotuloDeDesligar="marcar à mão no card"
+            aoMudar={(e) => void salvarEmoji({ emojiMeu: e })}
+          />
+
+          {checks.length > 0 && (
+            <div className="check-fixo">
+              <span className="emojis">{checks.slice(0, 3).join(' ')}</span>
+              <p>
+                <strong>Done</strong> não se configura — o check já quer dizer "feito" para o
+                canal inteiro.
+              </p>
+            </div>
+          )}
+
+          {erroEmoji && <p className="aviso erro">{erroEmoji}</p>}
+
+          <p className="dica">Dá para mudar depois, no cabeçalho das colunas.</p>
+        </div>
+      </section>
+
+      {/* 5 */}
+      <section className="passo" data-estado="espera">
+        <div className="passo-topo">
+          <span className="num">5</span>
           <h2>A sprint</h2>
         </div>
         <p className="detalhe">
@@ -570,11 +654,8 @@ export function Onboarding() {
         {escolha && (
           <div className="corpo">
             <p className="dica">
-              Não precisa existir sprint no seu time. Isto é só um período com começo e fim: quando
-              você encerra, o que está em <strong>Concluído</strong> e em{' '}
-              <strong>Feito por mim</strong> sai do quadro e vai para o arquivo da sprint — de onde
-              os painéis leem. Sem isso, "concluído" acumula para sempre e a coluna deixa de dizer
-              alguma coisa.
+              Um período com começo e fim. Ao encerrar, o que está concluído sai do quadro e vai
+              para o arquivo.
             </p>
 
             <div className="campos-sprint">
@@ -614,10 +695,7 @@ export function Onboarding() {
               </label>
             </div>
 
-            <p className="dica">
-              Dá para mudar tudo isso depois, no cabeçalho do quadro. Encerrar continua sendo um
-              gesto seu: a data só serve para o painel contar o que chegou dentro do período.
-            </p>
+            <p className="dica">Dá para mudar depois. Encerrar continua sendo um gesto seu.</p>
 
             {erro3 && <p className="aviso erro">{erro3}</p>}
 

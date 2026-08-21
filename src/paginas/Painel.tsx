@@ -102,10 +102,7 @@ export function Painel() {
           </p>
 
           {sprints.length === 0 ? (
-            <p className="vazio">
-              Nenhuma sprint definida ainda. Volte ao quadro e clique em{' '}
-              <strong>definir sprint</strong>.
-            </p>
+            <p className="vazio">Nenhuma sprint definida.</p>
           ) : (
             <div className="tabela" role="table">
               <div className="linha cabecalho" role="row">
@@ -124,10 +121,10 @@ export function Painel() {
                   Em aberto
                 </span>
                 <span role="columnheader" className="num">
-                  Feitas por mim
+                  Por mim
                 </span>
                 <span role="columnheader" className="num">
-                  Ignoradas
+                  Out of scope
                 </span>
               </div>
 
@@ -164,7 +161,7 @@ export function Painel() {
                     {s.mensagens > s.chegaram && (
                       <span
                         className="sub"
-                        title="Mensagens do Teams que esses cards somam: a diferença é o ruído que o agrupamento de rajadas absorveu"
+                        title="Mensagens do Teams que esses cards somam"
                       >
                         {s.mensagens} msgs
                       </span>
@@ -290,10 +287,7 @@ export function Painel() {
           </p>
 
           {daily.porDia.length === 0 ? (
-            <p className="vazio">
-              Nada marcado ainda. No quadro, use <strong>fiz</strong> num card ou reaja no Teams com
-              seu emoji de assinatura.
-            </p>
+            <p className="vazio">Nada marcado ainda.</p>
           ) : (
             daily.porDia.map((dia) => (
               <section className="dia-daily" key={dia.dia}>

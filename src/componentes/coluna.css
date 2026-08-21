@@ -111,7 +111,7 @@
   gap: 8px;
 }
 
-/* Cabeçalho de dia dentro da coluna "Feito por mim": na daily você conta o de
+/* Cabeçalho de dia dentro da coluna "Concluído por mim": na daily você conta o de
    ontem e o de hoje, e a separação precisa ser visível sem virar outro card. */
 .coluna .dia {
   display: flex;
@@ -177,8 +177,14 @@
   background: none;
   color: var(--text-secondary);
 }
-.coluna.colapsada .expandir:hover {
+/* O hover é da COLUNA, não do botão. Antes ele vivia no `.expandir`, que ocupa
+   só o topo da faixa: o resto da coluna — o alvo de soltar, que é a maior parte
+   dela — ficava sem realce, e o realce parava no meio de um retângulo que a
+   pessoa está apontando inteiro. */
+.coluna.colapsada:hover {
   background: var(--bg-surface);
+}
+.coluna.colapsada:hover .expandir {
   color: var(--text-primary);
 }
 
@@ -218,4 +224,15 @@
 }
 .coluna.colapsada .faixa.recebendo {
   background: var(--bg-brand-subtle);
+}
+
+/* O menu de "…" no cabeçalho de uma coluna sua. O gatilho é o mesmo do card,
+   mas aqui ele mora dentro de uma alça de arraste: sem parar a propagação, o
+   clique começaria a arrastar a coluna em vez de abrir o menu. */
+.coluna header .menu-flutuante {
+  flex: none;
+  margin-left: -2px;
+}
+.coluna header .menu-flutuante .gatilho {
+  height: 20px;
 }

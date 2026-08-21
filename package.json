@@ -13,7 +13,13 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["teams", "kanban", "claude-code", "mcp", "microsoft-365"],
+  "keywords": [
+    "teams",
+    "kanban",
+    "claude-code",
+    "mcp",
+    "microsoft-365"
+  ],
   "license": "MIT",
   "private": false,
   "dependencies": {

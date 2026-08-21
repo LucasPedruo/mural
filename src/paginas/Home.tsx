@@ -2,8 +2,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import {
+  DialogoDeConfirmacao,
+  type PedidoDeConfirmacao,
+} from '../componentes/DialogoDeConfirmacao';
+import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
 import { IconeFechar } from '../componentes/icones';
-import { COLUNAS, CORES_DE_STATUS, rotuloDaColuna, rotuloDoTipo, tempoRelativo } from '../rotulos';
+import {
+  COLUNAS,
+  CORES_DE_STATUS,
+  dataDoDiaISO,
+  rotuloDaColuna,
+  rotuloDoTipo,
+  tempoRelativo,
+} from '../rotulos';
 import type { MuralNaLista } from '../tipos';
 import './home.css';
 
@@ -11,6 +23,14 @@ export function Home() {
   const navegar = useNavigate();
   const [murais, setMurais] = useState<MuralNaLista[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // A sprint se define e se encerra daqui, não de dentro do quadro: no quadro
+  // ela é contexto do que está na tela, e mexer no ciclo é organizar o mural —
+  // o mesmo assunto de criar e remover, que já mora nesta página.
+  const [editandoSprint, setEditandoSprint] = useState<MuralNaLista | null>(null);
+  // O que se pergunta antes de um gesto que não volta. Um estado só para os
+  // três: eles nunca acontecem ao mesmo tempo, e um diálogo por gesto seria três
+  // cópias da mesma caixa.
+  const [pedido, setPedido] = useState<PedidoDeConfirmacao | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -28,14 +48,23 @@ export function Home() {
     document.title = 'Mural';
   }, [carregar]);
 
-  async function resetarOnboarding() {
-    const confirmado = window.confirm(
-      'Refazer a configuração?\n\n' +
-        'Apaga o cache do onboarding: o agente de IA escolhido, a conta Microsoft ' +
-        'verificada, a lista de chats e a preferência de confirmar antes de atualizar.\n\n' +
-        'Seus murais, o histórico de tasks e o registro de gastos NÃO são tocados.',
-    );
-    if (!confirmado) return;
+  function resetarOnboarding() {
+    setPedido({
+      titulo: 'Refazer a configuração?',
+      rotulo: 'Refazer a configuração',
+      corpo: (
+        <>
+          <p>Apaga o agente escolhido, a conta verificada e a lista de chats.</p>
+          <p>
+            Seus murais e o histórico <strong>não</strong> são tocados.
+          </p>
+        </>
+      ),
+      aoConfirmar: () => void refazerConfiguracao(),
+    });
+  }
+
+  async function refazerConfiguracao() {
     try {
       await api.resetarOnboarding();
       navegar('/onboarding');
@@ -44,15 +73,73 @@ export function Home() {
     }
   }
 
-  async function remover(m: MuralNaLista) {
-    const confirmado = window.confirm(
-      `Remover "${m.nome}"?\n\n` +
-        'O histórico acumulado deste mural é apagado. A conversa no Teams não é tocada.',
-    );
-    if (!confirmado) return;
+  function remover(m: MuralNaLista) {
+    setPedido({
+      titulo: `Remover "${m.nome}"?`,
+      rotulo: 'Remover o mural',
+      perigo: true,
+      corpo: (
+        <p>
+          O histórico deste mural é apagado — anotações, etiquetas e sprints arquivadas. A conversa
+          no Teams não é tocada.
+        </p>
+      ),
+      aoConfirmar: () => void removerMesmo(m),
+    });
+  }
+
+  async function removerMesmo(m: MuralNaLista) {
     try {
       await api.removerMural(m.id);
       await carregar();
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function salvarSprint(dados: { nome: string; inicio: string; dias: number }) {
+    const mural = editandoSprint;
+    setEditandoSprint(null);
+    if (!mural) return;
+    setErro(null);
+    try {
+      await api.definirSprint(mural.id, dados);
+      await carregar();
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // Encerrar tira do quadro o que já terminou e guarda no arquivo da sprint.
+  // Nada é apagado — é de lá que o dashboard e os painéis leem o histórico.
+  function encerrarSprint(m: MuralNaLista) {
+    if (!m.sprint) return;
+    const terminadas = m.totais.feito + m.totais.meu;
+    setPedido({
+      titulo: `Encerrar a ${m.sprint.nome} em "${m.nome}"?`,
+      rotulo: 'Encerrar a sprint',
+      corpo: (
+        <>
+          <p>
+            <strong>{terminadas}</strong> card(s) de <em>Done</em> e de <em>Done by me</em> saem
+            do quadro e vão para o arquivo desta sprint.
+          </p>
+          <p>Nada é apagado. A sprint seguinte começa hoje.</p>
+        </>
+      ),
+      aoConfirmar: () => void encerrarMesmo(m),
+    });
+  }
+
+  async function encerrarMesmo(m: MuralNaLista) {
+    if (!m.sprint) return;
+    setErro(null);
+    try {
+      const r = await api.encerrarSprint(m.id);
+      await carregar();
+      if (r.arquivadas === 0) {
+        setErro(`${m.sprint.nome} encerrada — não havia nada concluído para arquivar.`);
+      }
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -64,14 +151,14 @@ export function Home() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
         <span className="espaco" />
-        <button onClick={resetarOnboarding} title="Limpa o cache do onboarding e recomeça">
+        <button onClick={resetarOnboarding} title="Recomeçar a configuração">
           Refazer configuração
         </button>
         <button className="primario" onClick={() => navegar('/onboarding')}>
           Novo mural
         </button>
       </div>
-      <p className="sub">Seus quadros. Cada um acompanha uma conversa do Teams.</p>
+      <p className="sub">Cada quadro acompanha uma conversa do Teams.</p>
 
       {erro && <p className="aviso erro">{erro}</p>}
 
@@ -90,18 +177,81 @@ export function Home() {
                     <span className="badge warning">{m.foraDeAlcance} fora de alcance</span>
                   </>
                 )}
+                {' · '}
+                {/* O ciclo do mural. Fica na linha de baixo, em texto, porque é
+                    ajuste raro — mexer nele não pode competir com abrir o
+                    quadro, que é o que se vem fazer aqui. */}
+                <button
+                  className="ligacao"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setEditandoSprint(m);
+                  }}
+                  title={
+                    m.sprint
+                      ? `${m.sprint.nome}: ${dataDoDiaISO(m.sprint.inicio)} a ${dataDoDiaISO(m.sprint.fim)}. Clique para corrigir.`
+                      : 'Definir o ciclo que você fecha de vez em quando'
+                  }
+                >
+                  {m.sprint
+                    ? `${m.sprint.nome} · até ${dataDoDiaISO(m.sprint.fim)}`
+                    : 'definir sprint'}
+                </button>
+                {m.sprint && (
+                  <>
+                    {' · '}
+                    <button
+                      className="ligacao"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void encerrarSprint(m);
+                      }}
+                      title="Arquiva o que está concluído e abre a sprint seguinte"
+                    >
+                      encerrar
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="numeros">
-              {/* Inclui "Feito por mim": um card marcado sai da coluna do
+              {/* Inclui "Done by me": um card marcado sai da coluna do
                   Teams, então sem essa pílula a soma da linha não fecharia. */}
               {COLUNAS.map((s) => (
-                <span className="pilula" key={s} title={rotuloDaColuna(s, m)}>
+                <span className="pilula" key={s} title={rotuloDaColuna(s)}>
                   <span className="ponto" style={{ background: CORES_DE_STATUS[s] }} />
                   {m.totais[s]}
                 </span>
               ))}
+            </div>
+
+            {/* As duas leituras do histórico. Saíram do quadro: lá elas
+                disputavam o cabeçalho com Atualizar, e nenhuma das duas é algo
+                que se faz no meio de mexer nos cards. */}
+            <div className="acessos">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navegar(`/m/${m.id}/dashboard`);
+                }}
+                title="Ritmo e distribuição, em gráficos"
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navegar(`/m/${m.id}/painel`);
+                }}
+                title="Sprints e daily, item a item"
+              >
+                Painéis
+              </button>
             </div>
 
             <button
@@ -118,6 +268,17 @@ export function Home() {
           </Link>
         ))}
       </div>
+
+      <DialogoDeConfirmacao pedido={pedido} aoCancelar={() => setPedido(null)} />
+
+      {editandoSprint && (
+        <DialogoDeSprint
+          sprint={editandoSprint.sprint}
+          primeiraVez={!editandoSprint.sprint}
+          aoSalvar={(d) => void salvarSprint(d)}
+          aoCancelar={() => setEditandoSprint(null)}
+        />
+      )}
     </div>
   );
 }

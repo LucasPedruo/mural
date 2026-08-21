@@ -99,10 +99,25 @@
   --marca-fazendo: var(--color-warning-500);
   --marca-interagido: var(--color-info-500);
   --marca-feito: var(--color-success-600);
-  /* Feito por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
+  /* Concluido por mim nao e status do Teams: usa a cor da marca, nao a paleta de status. */
   --marca-meu: var(--color-brand-700);
   /* Ignorada nao tem cor: e a ausencia de trabalho. Cinza e o ponto. */
   --marca-ignorada: var(--color-neutral-300);
+
+  /* Sem sinal do Teams: o legado do quadro — cards que sairam da janela das ~20
+     e nao recebem mais atualizacao nenhuma. Nao e status, e a AUSENCIA de fonte:
+     por isso tem cor propria em vez de emprestar uma da paleta de status, e por
+     isso e a mesma cor do aviso que fala deles no sino. */
+  --marca-sem-sinal: var(--color-warning-500);
+
+  /* As colunas que voce cria. Nomeadas e nao hex porque o disco guarda o NOME:
+     um valor cravado ficaria ilegivel num dos dois temas. */
+  --coluna-roxo: #7c5cd6;
+  --coluna-ciano: #0ea5b7;
+  --coluna-rosa: #d6568f;
+  --coluna-lima: #6a9e2f;
+  --coluna-ambar: #c4820e;
+  --coluna-cinza: #7d8a82;
 
   --shadow-card: 0 1px 2px rgba(23, 32, 25, 0.04), 0 1px 3px rgba(23, 32, 25, 0.03);
   --shadow-card-hover: 0 2px 6px rgba(23, 32, 25, 0.07), 0 1px 3px rgba(23, 32, 25, 0.05);
@@ -143,6 +158,16 @@
   --marca-feito: var(--color-success-500);
   --marca-meu: var(--color-brand-400);
   --marca-ignorada: var(--color-neutral-650);
+  --marca-sem-sinal: var(--color-warning-300);
+
+  /* No escuro os mesmos seis tons, clareados: o fundo mudou, a leitura tem de
+     continuar a mesma. */
+  --coluna-roxo: #a78bfa;
+  --coluna-ciano: #22d3ee;
+  --coluna-rosa: #f472b6;
+  --coluna-lima: #a3e635;
+  --coluna-ambar: #fbbf24;
+  --coluna-cinza: #9aa8a0;
 
   /* No dark a hierarquia vem da diferenca de superficie, nao de sombra. */
   --shadow-card: 0 0 rgba(0, 0, 0, 0);
@@ -228,6 +253,20 @@ button.perigo:hover:not(:disabled) {
   border-color: var(--text-danger);
 }
 
+/* O botao que confirma um gesto irreversivel. Cheio, como o primario — ele E a
+   acao principal do dialogo — mas vermelho, porque o que ele faz nao volta. */
+button.perigoso {
+  background: var(--color-danger-500);
+  border-color: var(--color-danger-500);
+  color: var(--color-neutral-0);
+  font-weight: 600;
+}
+button.perigoso:hover:not(:disabled) {
+  background: var(--color-danger-600);
+  border-color: var(--color-danger-600);
+  color: var(--color-neutral-0);
+}
+
 /* ---- badges (rounded-full, semibold, 10px — igual ao design system) ---- */
 .badge {
   display: inline-flex;
@@ -249,10 +288,13 @@ button.perigo:hover:not(:disabled) {
 /* Fora de alcance nao e erro nem aviso passageiro: e um estado permanente do
    card, e o card ja se distingue pelo relevo. O badge so nomeia o estado — sem
    cor propria, que aqui significaria status. */
+/* O selo "sem sinal do Teams". Mesma cor do contorno do card e do aviso no
+   sino: os tres falam da mesma coisa, e reconhece-los juntos e o que faz a
+   pessoa parar de reaprender o que cada um significa. */
 .badge.alerta {
-  background: var(--bg-surface-3);
-  color: var(--text-secondary);
-  border: 1px dashed var(--border-strong);
+  background: var(--bg-warning);
+  color: var(--text-warning);
+  border: 1px dashed var(--marca-sem-sinal);
 }
 
 /* ---- avisos ---- */

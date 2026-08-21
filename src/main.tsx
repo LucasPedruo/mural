@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import './estilos.css';
+import { Dashboard } from './paginas/Dashboard';
 import { Home } from './paginas/Home';
 import { Onboarding } from './paginas/Onboarding';
 import { Painel } from './paginas/Painel';
@@ -25,6 +26,7 @@ const rotas = createBrowserRouter([
   { path: '/onboarding', element: <Onboarding /> },
   { path: '/m/:muralId', element: <Quadro /> },
   { path: '/m/:muralId/painel', element: <Painel /> },
+  { path: '/m/:muralId/dashboard', element: <Dashboard /> },
 ]);
 
 createRoot(document.getElementById('raiz')!).render(

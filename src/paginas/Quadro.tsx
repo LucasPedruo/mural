@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api';
 import { BarraDeSync } from '../componentes/BarraDeSync';
@@ -10,19 +10,34 @@ import {
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
-import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
-import { DialogoDeSprint } from '../componentes/DialogoDeSprint';
-import { DialogoDeTags } from '../componentes/DialogoDeTags';
+import { DialogoDeColuna } from '../componentes/DialogoDeColuna';
 import {
-  IconeEtiqueta,
-  IconeFechar,
-  IconePessoa,
-  IconeVoltar,
-} from '../componentes/icones';
-import { COLUNAS, dataDoDiaISO, diaLocal, rotuloDaColuna, rotuloDoDia } from '../rotulos';
+  DialogoDeConfirmacao,
+  type PedidoDeConfirmacao,
+} from '../componentes/DialogoDeConfirmacao';
+import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
+import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
+import { DialogoDeNota } from '../componentes/DialogoDeNota';
+import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
+import { DialogoDeTags } from '../componentes/DialogoDeTags';
+import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
+import { Notificacoes } from '../componentes/Notificacoes';
+import { Toasts } from '../componentes/Toasts';
+import { IconeApagar, IconeEditar, IconeMais, IconeVoltar } from '../componentes/icones';
+import {
+  COLUNAS,
+  CORES_DE_STATUS,
+  dataDoDiaISO,
+  diaLocal,
+  rotuloDaColuna,
+  rotuloDoDia,
+} from '../rotulos';
 import type {
   ColunaId,
+  ColunaPersonalizada,
+  CorDeColuna,
   Mural,
+  Notificacao,
   Progresso,
   RespostaConsumo,
   RespostaSprint,
@@ -32,16 +47,28 @@ import type {
 } from '../tipos';
 import './quadro.css';
 
-/** Mensagem de coluna vazia. A da daily não é "nada aqui": é uma instrução,
- *  porque a coluna só enche quando a sua reação aparece — ou quando você marca. */
-function vazioDaColuna(coluna: ColunaId, emojiMeu: string): string | undefined {
-  if (coluna === 'ignorada') {
-    return 'nada ignorado — no menu ⋯ de um card, "Não é pra mim"';
+/** O que uma coluna vazia diz.
+ *
+ *  Uma linha, e curta: a coluna tem 232px, e o vazio é uma legenda, não uma
+ *  aula. Diz o estado, não o mecanismo — quem quer saber como um card chega ali
+ *  descobre no menu do card, não numa coluna sem nada dentro.
+ *
+ *  Sem ponto final, sem instrução, sem exclamação. */
+function vazioDaColuna(coluna: ColunaId, emojiMeu: string, emojiFazendo: string): string {
+  switch (coluna) {
+    case 'aberto':
+      return 'Tudo já teve resposta';
+    case 'fazendo':
+      return emojiFazendo ? 'Ninguém pegou nada' : 'Sem emoji definido';
+    case 'interagido':
+      return 'Nenhuma reação ainda';
+    case 'feito':
+      return 'Nada concluído';
+    case 'meu':
+      return emojiMeu ? 'Nada seu ainda' : 'Marque um card com "Fiz esta"';
+    case 'ignorada':
+      return 'Nada descartado';
   }
-  if (coluna !== 'meu') return undefined;
-  return emojiMeu
-    ? `nada ainda — reaja com ${emojiMeu} no Teams e atualize, ou "Fiz esta" no menu ⋯ do card`
-    : 'nada ainda — use "Fiz esta" no menu ⋯ de um card para anotar o que você resolveu';
 }
 
 export function Quadro() {
@@ -51,7 +78,24 @@ export function Quadro() {
   const [mural, setMural] = useState<Mural | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [resumo, setResumo] = useState<string>('');
+  // O que cada leitura deixou para contar. Antes isto era uma string que vivia
+  // na linha de "última leitura" e sumia na ação seguinte — e o que some sozinho
+  // não dá para reler depois de "espera, quanto custou mesmo?". Agora acumula,
+  // por mural, no navegador: é relato da sua sessão, não dado do quadro.
+  const chaveNotificacoes = `mural:notificacoes:${muralId}`;
+  const chaveLidas = `mural:notificacoes-lidas:${muralId}`;
+
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>(() => {
+    try {
+      const salvas = JSON.parse(localStorage.getItem(chaveNotificacoes) || '[]');
+      return Array.isArray(salvas) ? (salvas as Notificacao[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [lidasEm, setLidasEm] = useState<string>(
+    () => localStorage.getItem(chaveLidas) || '',
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
@@ -67,15 +111,32 @@ export function Quadro() {
   const [confirmando, setConfirmando] = useState(false);
 
   const [anotando, setAnotando] = useState<Task | null>(null);
+  const [creditando, setCreditando] = useState<Task | null>(null);
 
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
-  const [editandoSprint, setEditandoSprint] = useState(false);
+
+  // As colunas que você criou. Diferente das seis, elas não têm regra: quem põe
+  // card ali é você, arrastando. Moram no servidor porque são do quadro — a
+  // ordem e o colapso, que são de tela, continuam no navegador.
+  const [colunasSuas, setColunasSuas] = useState<ColunaPersonalizada[]>([]);
+  const [editandoColuna, setEditandoColuna] = useState<ColunaPersonalizada | null>(null);
+  const [criandoColuna, setCriandoColuna] = useState(false);
+
+  // As reações que decidem a coluna. As duas se editam no mesmo diálogo, aberto
+  // por qualquer um dos dois cabeçalhos: escolher uma sem ver a outra é o que
+  // fazia a regra de "não podem ser iguais" chegar como erro em vez de contexto.
+  const [editandoEmojis, setEditandoEmojis] = useState(false);
+  // O que se pergunta antes de apagar. Um estado só: apagar um card e excluir
+  // uma coluna nunca acontecem ao mesmo tempo.
+  const [pedido, setPedido] = useState<PedidoDeConfirmacao | null>(null);
+  const [checks, setChecks] = useState<string[]>([]);
 
 
   // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
   // está sendo etiquetada e o filtro ligado.
   const [tags, setTags] = useState<TagComContagem[]>([]);
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
+  const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
 
   // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
@@ -94,13 +155,12 @@ export function Quadro() {
   // vice-versa), e uma lista desatualizada no navegador não pode fazer coluna
   // desaparecer do quadro.
   const chaveOrdem = `mural:ordem-das-colunas:${muralId}`;
-  const [ordem, setOrdem] = useState<ColunaId[]>(() => {
+  const [ordem, setOrdem] = useState<string[]>(() => {
     try {
-      const salva = JSON.parse(localStorage.getItem(chaveOrdem) || '[]') as ColunaId[];
-      const conhecidas = salva.filter((c) => COLUNAS.includes(c));
-      return [...conhecidas, ...COLUNAS.filter((c) => !conhecidas.includes(c))];
+      const salva = JSON.parse(localStorage.getItem(chaveOrdem) || '[]') as string[];
+      return Array.isArray(salva) ? salva : [];
     } catch {
-      return [...COLUNAS];
+      return [];
     }
   });
 
@@ -109,8 +169,13 @@ export function Quadro() {
     () => Number(localStorage.getItem(chaveAvisoFora)) || 0,
   );
 
-  const chaveCards = `mural:cards-colapsados:${muralId}`;
-  const [cardsColapsados, setCardsColapsados] = useState<Set<string>>(() => {
+  // Quais COLUNAS estão com os cards recolhidos. Era card por card, e o
+  // resultado era uma coluna metade alta e metade baixa — mais difícil de varrer
+  // com o olho que qualquer das duas alturas por inteiro. A chave é nova de
+  // propósito: a lista velha era de ids de card, e ler aquilo como id de coluna
+  // recolheria colunas ao acaso.
+  const chaveCards = `mural:colunas-com-cards-recolhidos:${muralId}`;
+  const [colunasRecolhidas, setColunasRecolhidas] = useState<Set<string>>(() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(chaveCards) || '[]') as string[]);
     } catch {
@@ -119,20 +184,20 @@ export function Quadro() {
   });
 
   // Qualquer coluna pode ser colapsada: quem trabalha por sprint não olha
-  // "Interagido" toda hora, e quem só quer ver o que está em aberto fecha o
+  // "In review" toda hora, e quem só quer ver o que está em aberto fecha o
   // resto. A coluna fechada continua recebendo cards arrastados — é o gesto de
   // guardar sem abrir.
   //
-  // *Ignoradas* nasce colapsada: ela é onde se põe o que não se quer ver, e
+  // *Out of scope* nasce colapsada: ela é onde se põe o que não se quer ver, e
   // aberta por padrão roubaria largura das colunas que são trabalho.
   const chaveColapsadas = `mural:colunas-colapsadas:${muralId}`;
-  const [colapsadas, setColapsadas] = useState<Set<ColunaId>>(() => {
+  const [colapsadas, setColapsadas] = useState<Set<string>>(() => {
     const salvo = localStorage.getItem(chaveColapsadas);
-    if (!salvo) return new Set<ColunaId>(['ignorada']);
+    if (!salvo) return new Set<string>(['ignorada']);
     try {
-      return new Set<ColunaId>(JSON.parse(salvo) as ColunaId[]);
+      return new Set<string>(JSON.parse(salvo) as string[]);
     } catch {
-      return new Set<ColunaId>(['ignorada']);
+      return new Set<string>(['ignorada']);
     }
   });
 
@@ -143,13 +208,17 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, etiquetas] = await Promise.all([
+      const [tarefas, info, custo, ciclo, etiquetas, suas, prefs] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
         api.tags(muralId),
+        api.colunas(muralId),
+        api.preferencias(),
       ]);
+      setChecks(prefs.checks);
+      setColunasSuas(suas.colunas);
       setTags(etiquetas.tags);
       setMural(info.mural);
       setTasks(tarefas.tasks);
@@ -177,6 +246,80 @@ export function Quadro() {
       window.removeEventListener('pagehide', marcarVisto);
     };
   }, [chaveVisto]);
+
+  // ---- notificações ----------------------------------------------------
+
+  // O teto existe para o histórico não virar um arquivo: trinta leituras é bem
+  // mais do que alguém rola, e o navegador não é onde se guarda registro.
+  const MAX_NOTIFICACOES = 30;
+
+  // Os que estão aparecendo no canto agora. Só entram os que NASCEM nesta
+  // sessão: os que vieram do disco já foram vistos quando aconteceram, e
+  // despejar dez toasts ao abrir o quadro seria contar de novo o que já passou.
+  const [toasts, setToasts] = useState<Notificacao[]>([]);
+
+  function gravarNotificacoes(proximas: Notificacao[]) {
+    localStorage.setItem(chaveNotificacoes, JSON.stringify(proximas));
+    return proximas;
+  }
+
+  const avisar = useCallback(
+    (texto: string, tom: Notificacao['tom'] = 'info') => {
+      const nova: Notificacao = {
+        // O instante já identifica: duas leituras não terminam no mesmo
+        // milissegundo, e o sufixo cobre o empate improvável sem inventar uuid.
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        em: new Date().toISOString(),
+        tom,
+        texto,
+      };
+      setNotificacoes((atuais) => {
+        const proximas = [nova, ...atuais].slice(0, MAX_NOTIFICACOES);
+        localStorage.setItem(chaveNotificacoes, JSON.stringify(proximas));
+        return proximas;
+      });
+      // Guardar sem contar faria você descobrir o resultado de uma leitura de
+      // dois minutos só se lembrasse de abrir o sino. Três é o teto: uma pilha
+      // maior que isso deixa de ser aviso e vira parede.
+      setToasts((atuais) => [nova, ...atuais].slice(0, 3));
+    },
+    [chaveNotificacoes],
+  );
+
+  function fecharToast(id: string) {
+    setToasts((atuais) => atuais.filter((t) => t.id !== id));
+  }
+
+  function marcarNotificacoesLidas() {
+    const agora = new Date().toISOString();
+    localStorage.setItem(chaveLidas, agora);
+    setLidasEm(agora);
+  }
+
+  // A sua nota sobre uma leitura: o texto do item conta o que aconteceu, ela
+  // conta o que aquilo significou. Nota vazia apaga o campo em vez de guardar
+  // string vazia — o histórico não precisa registrar que você desistiu.
+  function anotarNotificacao(id: string, nota: string) {
+    const limpa = nota.trim();
+    setNotificacoes((atuais) =>
+      gravarNotificacoes(
+        atuais.map((n) => (n.id === id ? { ...n, nota: limpa || undefined } : n)),
+      ),
+    );
+  }
+
+  function removerNotificacao(id: string) {
+    setNotificacoes((atuais) => gravarNotificacoes(atuais.filter((n) => n.id !== id)));
+  }
+
+  // Limpar leva só o que você NÃO anotou. Nota é trabalho seu, e um botão
+  // chamado "limpar" não pode descartar trabalho por tabela — o que tem nota
+  // sai uma a uma, pelo ícone do item.
+  function limparNotificacoes() {
+    setNotificacoes((atuais) => gravarNotificacoes(atuais.filter((n) => n.nota)));
+  }
+
+  const naoLidas = notificacoes.filter((n) => n.em > lidasEm).length;
 
   // ---- progresso ao vivo -----------------------------------------------
 
@@ -259,7 +402,6 @@ export function Quadro() {
   async function atualizar() {
     setSincronizando(true);
     setErro(null);
-    setResumo('');
     setProgresso({ etapa: 'iniciando o Claude', lidas: 0, total: 20, segundos: 0 });
     acompanhar();
     try {
@@ -279,7 +421,7 @@ export function Quadro() {
       // evita a impressão de que o quadro perdeu tasks da coluna do Teams.
       if (r.marcados.length) {
         partes.push(
-          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Feito por mim`,
+          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Done by me`,
         );
       }
       // Uma rajada pode continuar depois da leitura: o autor manda mais uma
@@ -299,10 +441,18 @@ export function Quadro() {
             : `custou ${formatarUsd(r.consumo.custoUsd)} · ${formatarTokens(r.consumo.tokensTotal)} tokens`,
         );
       }
-      setResumo(partes.length ? partes.join(', ') : 'nada mudou');
+      avisar(partes.length ? partes.join(', ') : 'nada mudou');
       void api.consumo(muralId).then(setConsumo).catch(() => {});
     } catch (e) {
-      setErro((e as Error).message);
+      // Só na notificação. A falha da leitura é a única coisa nesta tela que já
+      // tem outro lugar para morar, e o contador do sino acende ao lado do botão
+      // que você acabou de clicar — a faixa vermelha repetiria, dois centímetros
+      // abaixo, o que o sino já está dizendo.
+      //
+      // Os outros erros continuam na faixa: "não dá para mover este card" existe
+      // para explicar o gesto que acabou de voltar atrás, e explicação de gesto
+      // atrasada por um clique no sino não explica nada.
+      avisar(`a leitura do Teams falhou: ${(e as Error).message}`, 'erro');
     } finally {
       pararDeAcompanhar();
       setSincronizando(false);
@@ -324,52 +474,58 @@ export function Quadro() {
     }
   }
 
-  // O Graph não diz quem reagiu — `reactions[].users` vem com tudo nulo. Então
-  // "fui eu" é uma convenção sua: um emoji que só você usa naquele canal.
-  async function trocarEmojiMeu() {
-    const atual = consumo?.preferencias.emojiMeu ?? '';
-    const escolhido = window.prompt(
-      'Qual reação você usa no Teams para dizer "fui eu que fiz"?\n\n' +
-        'Toda mensagem com ela cai em "Feito por mim" na próxima atualização. ' +
-        'Escolha algo que só você use — o check não serve, ele já significa ' +
-        '"concluído" para o canal inteiro.\n\n' +
-        'Deixe em branco para desligar e usar só o botão "fiz".',
-      atual,
-    );
-    if (escolhido === null) return;
+  // ---- crédito a outra pessoa ------------------------------------------
+
+  // O mesmo gesto do "fiz esta", virado para fora. Pela mesma razão de ser
+  // manual: o Graph conta que alguém reagiu com o check, nunca quem — então o
+  // nome de quem resolveu só existe se alguém escrever.
+  async function salvarCredito(quem: string, solucao: string) {
+    const task = creditando;
+    setCreditando(null);
+    if (!task) return;
+    setErro(null);
     try {
-      const r = await api.salvarPreferencias({ emojiMeu: escolhido.trim() });
-      setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
-      setErro(null);
+      const r = await api.marcarFeitoPorOutro(muralId, task.id, quem, solucao);
+      setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
     }
   }
 
-  // A coluna Fazendo sai de uma convenção do TIME, não sua: qualquer um que
-  // reagir com esse emoji move o card. Por isso ela mora no cabeçalho da coluna
-  // e não nas suas preferências de daily.
-  async function trocarEmojiFazendo() {
-    const atual = consumo?.preferencias.emojiFazendo ?? '';
-    const escolhido = window.prompt(
-      'Qual reação o time usa no Teams para dizer "peguei esta"?\n\n' +
-        'Toda mensagem com ela cai na coluna Fazendo. Diferente do emoji de "fui eu", ' +
-        'esta vale para qualquer pessoa que reagir.\n\n' +
-        'Deixe em branco para desligar a coluna.',
-      atual,
-    );
-    if (escolhido === null) return;
+  async function tirarCredito(task: Task) {
+    setErro(null);
     try {
-      const r = await api.salvarPreferencias({ emojiFazendo: escolhido.trim() });
-      setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
-      setErro(null);
-      // A regra de status mudou: o quadro precisa reler para os cards caírem na
-      // coluna certa sem esperar a próxima atualização do Teams.
-      await carregar();
+      const r = await api.desmarcarFeitoPorOutro(muralId, task.id);
+      setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
     }
   }
+
+  // As duas reações que o quadro entende. Eram dois `window.prompt`, um em cada
+  // cabeçalho de coluna: sem sugestão, sem ver a outra, e com a regra de que não
+  // podem ser iguais aparecendo só depois, como erro. Agora as duas moram no
+  // mesmo diálogo — que é como a escolha realmente se faz.
+  //
+  // Devolve a mensagem de recusa em vez de lançar: quem valida é o servidor, e a
+  // regra ("não pode ser o check, não pode ser a outra") é dele porque é ela que
+  // decide a coluna de cada card.
+  async function salvarEmojis(quais: {
+    emojiFazendo?: string;
+    emojiMeu?: string;
+  }): Promise<string | null> {
+    try {
+      const r = await api.salvarPreferencias(quais);
+      setConsumo((c) => (c ? { ...c, preferencias: r.preferencias } : c));
+      // A regra de status mudou: o quadro relê para os cards caírem na coluna
+      // certa sem esperar a próxima leitura do Teams.
+      if (quais.emojiFazendo !== undefined) await carregar();
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }
+
 
   async function desmarcar(task: Task) {
     setErro(null);
@@ -397,6 +553,22 @@ export function Quadro() {
     }
   }
 
+  // A nota livre do card: o que você quer lembrar enquanto a demanda está
+  // aberta. As outras duas anotações do quadro exigem que o trabalho tenha
+  // acabado; esta não conclui nada.
+  async function salvarNota(nota: string) {
+    const task = anotandoNota;
+    setAnotandoNota(null);
+    if (!task) return;
+    setErro(null);
+    try {
+      const r = await api.anotar(muralId, task.id, nota);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   async function ignorar(task: Task, marcar: boolean) {
     setErro(null);
     try {
@@ -410,14 +582,31 @@ export function Quadro() {
     }
   }
 
-  async function apagar(task: Task) {
-    const confirmado = window.confirm(
-      `Apagar "${task.summary}" de vez?\n\n` +
-        'O card sai do histórico e a mensagem entra na lista de arquivados: nenhuma ' +
-        'atualização vai trazê-la de volta, mesmo que ela continue no Teams.\n\n' +
-        'Isto não tem como desfazer pela interface.',
-    );
-    if (!confirmado) return;
+  function apagar(task: Task) {
+    setPedido({
+      titulo: 'Apagar de vez?',
+      rotulo: 'Apagar de vez',
+      perigo: true,
+      corpo: (
+        <>
+          {/* O texto do card na pergunta, e não só o título do diálogo: com o
+              card já sumindo atrás do modal, é a última chance de conferir que
+              o que vai embora é o que você acha que é. */}
+          <p className="citacao-do-card">{task.summary}</p>
+          <p>
+            O card sai do histórico e a mensagem entra na lista de arquivados: nenhuma atualização
+            vai trazê-la de volta, mesmo que ela continue no Teams.
+          </p>
+          <p>
+            <strong>Isto não tem como desfazer pela interface.</strong>
+          </p>
+        </>
+      ),
+      aoConfirmar: () => void apagarMesmo(task),
+    });
+  }
+
+  async function apagarMesmo(task: Task) {
     setErro(null);
     try {
       const r = await api.apagar(muralId, task.id);
@@ -428,13 +617,83 @@ export function Quadro() {
   }
 
   function reordenarColunas(de: number, para: number) {
-    setOrdem((atual) => {
-      const nova = [...atual];
-      const [movida] = nova.splice(de, 1);
-      nova.splice(para, 0, movida);
-      localStorage.setItem(chaveOrdem, JSON.stringify(nova));
-      return nova;
+    const nova = [...todasAsColunas];
+    const [movida] = nova.splice(de, 1);
+    nova.splice(para, 0, movida);
+    localStorage.setItem(chaveOrdem, JSON.stringify(nova));
+    setOrdem(nova);
+  }
+
+  // ---- colunas suas ----------------------------------------------------
+
+  async function salvarColuna(dados: { nome: string; cor: CorDeColuna }) {
+    const alvo = editandoColuna;
+    setEditandoColuna(null);
+    setCriandoColuna(false);
+    setErro(null);
+    try {
+      const r = await api.salvarColuna(muralId, { ...dados, id: alvo?.id });
+      setColunasSuas(r.colunas);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // Excluir leva os cards junto, e não tem volta: eles saem do arquivo e as
+  // mensagens entram na lista de arquivados, para nenhuma leitura futura as
+  // ressuscitar. Por isso o número vai na frente, na pergunta.
+  function excluirColuna(coluna: ColunaPersonalizada) {
+    const dentro = tasks.filter((t) => t.coluna === coluna.id).length;
+    setPedido({
+      titulo: `Excluir a coluna "${coluna.nome}"?`,
+      rotulo: dentro === 0 ? 'Excluir a coluna' : `Excluir e apagar ${dentro}`,
+      perigo: dentro > 0,
+      corpo:
+        dentro === 0 ? (
+          <p>Ela está vazia — nenhum card é afetado.</p>
+        ) : (
+          <>
+            <p>
+              Os <strong>{dentro}</strong> card(s) que estão nela são <strong>apagados</strong>{' '}
+              junto, de vez.
+            </p>
+            <p>
+              Eles saem do histórico e as mensagens entram na lista de arquivados: nenhuma
+              atualização vai trazê-las de volta, mesmo que continuem no Teams.
+            </p>
+            <p>
+              <strong>Isto não tem como desfazer pela interface.</strong>
+            </p>
+          </>
+        ),
+      aoConfirmar: () => void excluirColunaMesmo(coluna),
     });
+  }
+
+  async function excluirColunaMesmo(coluna: ColunaPersonalizada) {
+    setErro(null);
+    try {
+      const r = await api.excluirColuna(muralId, coluna.id);
+      setColunasSuas(r.colunas);
+      setTasks(r.tasks);
+      if (r.apagadas > 0) {
+        avisar(`coluna "${r.nome}" excluída — ${r.apagadas} card(s) apagados junto`);
+      }
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  // Soltar o card de volta ao fluxo do Teams. Não precisa de nova leitura: o
+  // `status` nunca parou de ser atualizado por baixo enquanto ele estava preso.
+  async function soltarDaColuna(task: Task) {
+    setErro(null);
+    try {
+      const r = await api.prenderNaColuna(muralId, task.id, null);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
   }
 
   function fecharAvisoFora(quantas: number) {
@@ -442,17 +701,17 @@ export function Quadro() {
     setForaCiente(quantas);
   }
 
-  function colapsarCartao(task: Task, fechar: boolean) {
-    setCardsColapsados((atual) => {
+  function recolherCardsDaColuna(coluna: string, recolher: boolean) {
+    setColunasRecolhidas((atual) => {
       const proximo = new Set(atual);
-      if (fechar) proximo.add(task.id);
-      else proximo.delete(task.id);
+      if (recolher) proximo.add(coluna);
+      else proximo.delete(coluna);
       localStorage.setItem(chaveCards, JSON.stringify([...proximo]));
       return proximo;
     });
   }
 
-  function colapsar(coluna: ColunaId, fechar: boolean) {
+  function colapsar(coluna: string, fechar: boolean) {
     setColapsadas((atual) => {
       const proximo = new Set(atual);
       if (fechar) proximo.add(coluna);
@@ -499,44 +758,6 @@ export function Quadro() {
     }
   }
 
-  // ---- sprint ----------------------------------------------------------
-
-  async function salvarSprint(dados: { nome: string; inicio: string; dias: number }) {
-    setEditandoSprint(false);
-    setErro(null);
-    try {
-      setSprint(await api.definirSprint(muralId, dados));
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
-  async function encerrarSprint() {
-    const atual = sprint?.atual;
-    if (!atual) return;
-    const terminadas = tasks.filter((t) => t.meu || t.status === 'feito').length;
-    const confirmado = window.confirm(
-      `Encerrar a ${atual.nome}?\n\n` +
-        `${terminadas} card(s) de Concluído e de Feito por mim saem do quadro e vão para o ` +
-        'arquivo desta sprint. Nada é apagado: os painéis leem de lá, com as anotações da ' +
-        'daily.\n\nA sprint seguinte começa hoje.',
-    );
-    if (!confirmado) return;
-    setErro(null);
-    try {
-      const r = await api.encerrarSprint(muralId);
-      setTasks(r.tasks);
-      setSprint(r.sprints);
-      setResumo(
-        r.arquivadas === 0
-          ? `${atual.nome} encerrada — não havia nada concluído para arquivar`
-          : `${atual.nome} encerrada: ${r.arquivadas} card(s) arquivado(s)`,
-      );
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
   // ---- drag ------------------------------------------------------------
 
   async function aoSoltar(resultado: DropResult) {
@@ -552,9 +773,40 @@ export function Quadro() {
       return;
     }
 
-    const coluna = destino.droppableId as ColunaId;
+    const coluna = destino.droppableId;
     const task = tasks.find((t) => t.id === resultado.draggableId);
     if (!task) return;
+
+    // Uma coluna sua é o único destino que aceita QUALQUER card — inclusive o
+    // que o Teams ainda acompanha. É a diferença que a torna útil: prender ali
+    // é dizer "este saiu do fluxo do canal por enquanto". O `status` continua
+    // sendo atualizado por baixo, então soltar devolve o card na hora.
+    if (colunasSuas.some((c) => c.id === coluna)) {
+      if (task.coluna === coluna) return;
+      setErro(null);
+      const antes = tasks;
+      setTasks((atual) =>
+        atual.map((t) => (t.id === task.id ? { ...t, coluna, ignorada: null } : t)),
+      );
+      try {
+        const r = await api.prenderNaColuna(muralId, task.id, coluna);
+        setTasks(r.tasks);
+      } catch (e) {
+        setTasks(antes);
+        setErro((e as Error).message);
+      }
+      return;
+    }
+
+    // Saindo de uma coluna sua para uma das seis: solta primeiro, senão ele
+    // voltaria sozinho no render seguinte. Se o destino for a coluna que a
+    // reação já manda, soltar é tudo o que precisa acontecer.
+    if (task.coluna) {
+      await soltarDaColuna(task);
+      if (coluna !== 'meu' && coluna !== 'ignorada' && (!task.podeMover || task.status === coluna)) {
+        return;
+      }
+    }
 
     // Soltar na coluna da daily não muda o status: abre a anotação. É a mesma
     // coisa que o botão "fiz" do card faz, só que pelo gesto.
@@ -578,14 +830,23 @@ export function Quadro() {
       if (!task.podeMover || task.status === coluna) return;
     }
 
-    // "Interagido" não é um destino: não existe emoji que signifique isso. É o
+    // "In review" não é um destino: não existe emoji que signifique isso. É o
     // que sobra quando alguém reage com outra coisa.
     if (coluna === 'interagido') {
       setErro(
-        '"Interagido" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
-          'outra coisa na mensagem. Arraste para Ninguém pegou, Fazendo ou Concluído.',
+        '"In review" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
+          'outra coisa na mensagem. Arraste para Backlog, In progress ou Done.',
       );
       return;
+    }
+
+    // Quem põe o card em "Concluído" pode ser o crédito, não o
+    // Teams. Soltá-lo na mesma coluna não muda nada; sair de lá exige tirar o
+    // crédito primeiro, senão ele voltaria sozinho no render seguinte.
+    if (task.feitoPor) {
+      if (coluna === 'feito') return;
+      await tirarCredito(task);
+      if (!task.podeMover || task.status === coluna) return;
     }
 
     // Saindo da daily: a marca sai e o card volta para a coluna que o Teams
@@ -602,7 +863,9 @@ export function Quadro() {
     // recusar, o estado volta ao que era e o motivo aparece na tela.
     const anterior = tasks;
     setTasks((atual) =>
-      atual.map((t) => (t.id === task.id ? { ...t, status: coluna, movidoAMao: true } : t)),
+      atual.map((t) =>
+        t.id === task.id ? { ...t, status: coluna as Status, movidoAMao: true } : t,
+      ),
     );
     setErro(null);
 
@@ -641,10 +904,20 @@ export function Quadro() {
   // Card marcado como seu sai da coluna do Teams: o status real continua no
   // dado (e visível como badge no card), mas o card mora numa coluna só —
   // senão a mesma task apareceria duas vezes no quadro.
+  // Todas as colunas do quadro, na sua ordem. O que está salvo é validado na
+  // leitura: uma coluna sua pode ter sido excluída noutra aba, e uma lista velha
+  // no navegador não pode fazer coluna desaparecer nem ressuscitar.
+  const todasAsColunas = useMemo(() => {
+    const ids = [...COLUNAS, ...colunasSuas.map((c) => c.id)] as string[];
+    const conhecidas = ordem.filter((c) => ids.includes(c));
+    return [...conhecidas, ...ids.filter((c) => !conhecidas.includes(c))];
+  }, [ordem, colunasSuas]);
+
   const grupos = useMemo(() => {
-    const porColuna: Record<ColunaId, Task[]> = {
+    const porColuna: Record<string, Task[]> = {
       aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
+    for (const c of colunasSuas) porColuna[c.id] = [];
     // Os filtros cortam o quadro inteiro: as perguntas que eles respondem — "o
     // que existe de Financeiro", "o que o Bernardo pediu" — não têm coluna.
     const visiveis = tasks.filter(
@@ -657,7 +930,16 @@ export function Quadro() {
       // Ignorada vence a marca de "fiz": se você decidiu que não é sua, ela não
       // aparece na daily por causa de um clique antigo.
       if (t.ignorada) porColuna.ignorada.push(t);
+      // Preso numa coluna sua: vence a regra do Teams, porque foi um gesto seu e
+      // mais recente que qualquer reação. Se a coluna não existe mais — excluída
+      // noutra aba — o card volta a valer pelo status, em vez de sumir da tela.
+      else if (t.coluna && porColuna[t.coluna]) porColuna[t.coluna].push(t);
       else if (t.meu) porColuna.meu.push(t);
+      // Creditada a outra pessoa mora em "Concluído" mesmo que o
+      // check ainda não tenha aparecido no Teams: alguém disse aqui que está
+      // feita, e é isso que a coluna significa. O `status` real continua no
+      // dado — a marca move o card, não reescreve o que o canal disse.
+      else if (t.feitoPor) porColuna.feito.push(t);
       else (porColuna[t.status] ?? porColuna.aberto).push(t);
     }
     porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
@@ -670,8 +952,13 @@ export function Quadro() {
     // Na daily o mais recente é o que você conta primeiro.
     porColuna.meu.sort((a, b) => (b.meu?.em ?? '').localeCompare(a.meu?.em ?? ''));
 
-    const resultado = {} as Record<ColunaId, GrupoDaColuna[]>;
-    for (const c of COLUNAS) {
+    // Nas suas, o mais recente em cima: você acabou de pôr o card ali.
+    for (const c of colunasSuas) {
+      porColuna[c.id].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+    }
+
+    const resultado: Record<string, GrupoDaColuna[]> = {};
+    for (const c of Object.keys(porColuna)) {
       resultado[c] = [{ chave: c, rotulo: '', tasks: porColuna[c] }];
     }
 
@@ -687,7 +974,7 @@ export function Quadro() {
     resultado.meu = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro, autorFiltro]);
+  }, [tasks, tagFiltro, autorFiltro, colunasSuas]);
 
   // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
   // quem manda mais demanda é quem você procura primeiro.
@@ -722,7 +1009,6 @@ export function Quadro() {
           {lastSync
             ? 'última leitura: ' + new Date(lastSync).toLocaleString('pt-BR')
             : 'nunca sincronizado — clique em Atualizar'}
-          {resumo && `  —  ${resumo}`}
         </span>
         <span className="espaco" />
         {consumo && !consumo.agente.reportaCusto && (
@@ -753,36 +1039,60 @@ export function Quadro() {
             {formatarUsd(consumo.totais.custoUsd)} gastos
           </span>
         )}
-        {/* A sprint fica no cabeçalho porque é ali que ela age: é o botão ao
-            lado que a encerra e zera o que já terminou. */}
-        <button
-          className="sprint"
-          onClick={() => setEditandoSprint(true)}
-          title={
-            sprint?.atual
-              ? `${sprint.atual.nome}: ${dataDoDiaISO(sprint.atual.inicio)} a ${dataDoDiaISO(sprint.atual.fim)}. Clique para corrigir.`
-              : 'Definir o ciclo que você fecha de vez em quando'
-          }
-        >
-          {sprint?.atual
-            ? `${sprint.atual.nome} · até ${dataDoDiaISO(sprint.atual.fim)}`
-            : 'definir sprint'}
-        </button>
+        {/* A sprint aparece, mas não se mexe daqui: definir e encerrar são
+            gestos de organização, e organização é o assunto da listagem. Aqui o
+            ciclo é contexto — saber até quando vale o que está na tela. */}
         {sprint?.atual && (
-          <button
-            className="acao-topo"
-            onClick={() => void encerrarSprint()}
-            title="Arquiva Concluído e Feito por mim, e abre a sprint seguinte"
+          <span
+            className="sprint"
+            title={
+              `${sprint.atual.nome}: ${dataDoDiaISO(sprint.atual.inicio)} a ` +
+              `${dataDoDiaISO(sprint.atual.fim)}. Para mudar ou encerrar, volte para meus murais.`
+            }
           >
-            Encerrar sprint
-          </button>
+            {sprint.atual.nome} · até {dataDoDiaISO(sprint.atual.fim)}
+          </span>
         )}
-        <Link className="acao-topo" to={`/m/${muralId}/painel`} title="Sprints e daily">
-          Painéis
-        </Link>
-        {/* As três ações do cabeçalho têm o mesmo peso visual: escolher uma para
-            ser verde faria o quadro sugerir que atualizar é o que você veio
-            fazer aqui, e quase nunca é. */}
+        {/* Filtro e sino juntos, à direita: um diz o que a tela está te
+            escondendo, o outro o que ela tem a te contar. A barra de selects que
+            morava acima das colunas custava uma faixa de altura o tempo todo por
+            uma escolha que se faz de vez em quando. */}
+        <FiltroDoQuadro
+          autores={autores}
+          tags={tags}
+          autorFiltro={autorFiltro}
+          tagFiltro={tagFiltro}
+          aoFiltrarAutor={setAutorFiltro}
+          aoFiltrarTag={setTagFiltro}
+        />
+        {/* O sino fica ao lado de Atualizar porque é dela que quase tudo aqui
+            dentro vem: o resumo de uma leitura se lê logo depois de pedir uma. */}
+        <Notificacoes
+          itens={notificacoes}
+          naoLidas={naoLidas}
+          fixado={
+            foraDeAlcance > foraCiente
+              ? {
+                  texto: (
+                    <>
+                      {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das
+                      mensagens que a API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não
+                      recebe{foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os
+                      cards <strong>sem fundo, de borda tracejada</strong>: os únicos que você
+                      move arrastando.
+                    </>
+                  ),
+                  aoDispensar: () => fecharAvisoFora(foraDeAlcance),
+                }
+              : null
+          }
+          aoAbrir={marcarNotificacoesLidas}
+          aoAnotar={anotarNotificacao}
+          aoRemover={removerNotificacao}
+          aoLimpar={limparNotificacoes}
+        />
+        {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
+            Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
         <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
           {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
         </button>
@@ -798,21 +1108,20 @@ export function Quadro() {
         />
       )}
 
+      {anotandoNota && (
+        <DialogoDeNota
+          task={anotandoNota}
+          aoSalvar={(nota) => void salvarNota(nota)}
+          aoCancelar={() => setAnotandoNota(null)}
+        />
+      )}
+
       {etiquetando && (
         <DialogoDeTags
           task={etiquetando}
           existentes={tags}
           aoSalvar={(t) => void salvarTags(t)}
           aoCancelar={() => setEtiquetando(null)}
-        />
-      )}
-
-      {editandoSprint && (
-        <DialogoDeSprint
-          sprint={sprint?.atual ?? null}
-          primeiraVez={!sprint?.atual}
-          aoSalvar={(d) => void salvarSprint(d)}
-          aoCancelar={() => setEditandoSprint(false)}
         />
       )}
 
@@ -823,6 +1132,40 @@ export function Quadro() {
           aoCancelar={() => setAnotando(null)}
         />
       )}
+
+      <DialogoDeConfirmacao pedido={pedido} aoCancelar={() => setPedido(null)} />
+
+      {editandoEmojis && (
+        <DialogoDeEmojis
+          emojiFazendo={emojiFazendo}
+          emojiMeu={emojiMeu}
+          checks={checks}
+          aoSalvar={salvarEmojis}
+          aoFechar={() => setEditandoEmojis(false)}
+        />
+      )}
+
+      {(criandoColuna || editandoColuna) && (
+        <DialogoDeColuna
+          coluna={editandoColuna}
+          aoSalvar={(d) => void salvarColuna(d)}
+          aoCancelar={() => {
+            setCriandoColuna(false);
+            setEditandoColuna(null);
+          }}
+        />
+      )}
+
+      {creditando && (
+        <DialogoDeFeitoPorOutro
+          task={creditando}
+          pessoas={autores.map((a) => a.autor)}
+          aoSalvar={(quem, solucao) => void salvarCredito(quem, solucao)}
+          aoCancelar={() => setCreditando(null)}
+        />
+      )}
+
+      <Toasts itens={toasts} aoFechar={fecharToast} />
 
       <BarraDeSync progresso={progresso} />
 
@@ -844,109 +1187,51 @@ export function Quadro() {
         </p>
       )}
 
-      {foraDeAlcance > foraCiente && (
-        <p className="aviso faixa atencao centrada">
-          <span>
-            {foraDeAlcance} {foraDeAlcance === 1 ? 'task saiu' : 'tasks saíram'} das mensagens que a
-            API devolve — {foraDeAlcance === 1 ? 'ela' : 'elas'} não recebe
-            {foraDeAlcance === 1 ? '' : 'm'} mais atualização do Teams. São os cards{' '}
-            <strong>sem fundo, de borda tracejada</strong>: os únicos que você move arrastando.
-          </span>
-          <button
-            className="fechar"
-            onClick={() => fecharAvisoFora(foraDeAlcance)}
-            title="Fechar — volta a aparecer se outra task sair da janela"
-            aria-label="Fechar o aviso"
-          >
-            <IconeFechar tamanho={14} />
-          </button>
-        </p>
-      )}
-
-      {/* Select, e não pílulas: a lista de quem pede cresce com o time e a de
-          etiquetas cresce com o uso, e uma barra que quebra em três linhas
-          empurra o quadro para baixo da dobra. O select mantém a altura fixa por
-          mais longa que a lista fique, e a contagem cabe na própria opção. */}
-      {(autores.length > 1 || tags.length > 0) && (
-        <div className="filtro">
-          {autores.length > 1 && (
-            <label className="campo-de-filtro">
-              <span className="rotulo">
-                <IconePessoa tamanho={13} /> quem pediu
-              </span>
-              <select
-                className={autorFiltro ? 'ligado' : ''}
-                value={autorFiltro ?? ''}
-                onChange={(e) => setAutorFiltro(e.target.value || null)}
-              >
-                <option value="">todos ({tasks.length})</option>
-                {autores.map((a) => (
-                  <option key={a.autor} value={a.autor}>
-                    {a.autor} ({a.quantas})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {tags.length > 0 && (
-            <label className="campo-de-filtro">
-              <span className="rotulo">
-                <IconeEtiqueta tamanho={13} /> etiqueta
-              </span>
-              <select
-                className={tagFiltro ? 'ligado' : ''}
-                value={tagFiltro ?? ''}
-                onChange={(e) => setTagFiltro(e.target.value || null)}
-              >
-                <option value="">todas</option>
-                {tags.map((t) => (
-                  <option key={t.tag} value={t.tag.toLowerCase()}>
-                    {t.tag} ({t.quantas})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-      )}
-
-      {(tagFiltro || autorFiltro) && (
-        <p className="aviso faixa filtrando">
-          Mostrando só {autorFiltro && <strong>o que {autorFiltro} pediu</strong>}
-          {autorFiltro && tagFiltro && ' e '}
-          {tagFiltro && <strong>a etiqueta {tagFiltro}</strong>} — as contagens das colunas são do
-          filtro, não do quadro inteiro.
-          <button
-            onClick={() => {
-              setTagFiltro(null);
-              setAutorFiltro(null);
-            }}
-          >
-            Mostrar tudo
-          </button>
-        </p>
-      )}
-
       <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
         <Droppable droppableId="colunas" type={TIPO_COLUNA} direction="horizontal">
           {(fornecido) => (
             <main className="colunas" ref={fornecido.innerRef} {...fornecido.droppableProps}>
-              {ordem.map((coluna, i) => (
+              {todasAsColunas.map((coluna, i) => {
+                const sua = colunasSuas.find((c) => c.id === coluna);
+                return (
                 <Coluna
                   key={coluna}
                   status={coluna}
                   indiceDaColuna={i}
-                  rotulo={rotuloDaColuna(coluna, mural ?? undefined)}
-                  grupos={grupos[coluna]}
-                  vazio={vazioDaColuna(coluna, emojiMeu)}
+                  rotulo={sua ? sua.nome : rotuloDaColuna(coluna as ColunaId)}
+                  cor={sua ? `var(--coluna-${sua.cor})` : CORES_DE_STATUS[coluna as ColunaId]}
+                  grupos={grupos[coluna] ?? []}
+                  vazio={
+                    sua
+                      ? 'Arraste um card para cá'
+                      : vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo)
+                  }
                   colapsada={colapsadas.has(coluna)}
                   aoColapsar={(fechar) => colapsar(coluna, fechar)}
+                  menu={
+                    sua
+                      ? [
+                          {
+                            rotulo: 'Renomear',
+                            icone: <IconeEditar />,
+                            aoEscolher: () => setEditandoColuna(sua),
+                            dica: 'Nome e cor',
+                          },
+                          {
+                            rotulo: 'Excluir a coluna',
+                            icone: <IconeApagar />,
+                            aoEscolher: () => void excluirColuna(sua),
+                            perigo: true,
+                            dica: 'Apaga junto os cards que estão nela',
+                          },
+                        ]
+                      : undefined
+                  }
                   acessorio={
                     coluna === 'fazendo' ? (
                       <button
                         className="assinatura"
-                        onClick={() => void trocarEmojiFazendo()}
+                        onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiFazendo
                             ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
@@ -958,7 +1243,7 @@ export function Quadro() {
                     ) : coluna === 'meu' ? (
                       <button
                         className="assinatura"
-                        onClick={() => void trocarEmojiMeu()}
+                        onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiMeu
                             ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`
@@ -974,17 +1259,33 @@ export function Quadro() {
                   selecionados={selecionados}
                   aoAbrir={(t) => void abrir(t)}
                   aoMarcarComoMeu={setAnotando}
+                  aoCreditarOutro={setCreditando}
+                  aoTirarCredito={(t) => void tirarCredito(t)}
                   aoDesmarcarComoMeu={(t) => void desmarcar(t)}
                   aoSelecionar={alternarSelecao}
                   aoSeparar={(t) => void separar(t)}
                   aoEtiquetar={setEtiquetando}
+                  aoAnotar={setAnotandoNota}
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
-                  aoApagar={(t) => void apagar(t)}
-                  colapsados={cardsColapsados}
-                  aoColapsarCartao={colapsarCartao}
+                  aoApagar={apagar}
+                  aoSoltarDaColuna={(t) => void soltarDaColuna(t)}
+                  cardsRecolhidos={colunasRecolhidas.has(coluna)}
+                  aoRecolherCards={(recolher) => recolherCardsDaColuna(coluna, recolher)}
                 />
-              ))}
+                );
+              })}
               {fornecido.placeholder}
+
+              {/* Fora do Droppable de propósito: é um botão, não uma coluna, e
+                  arrastar uma coluna para depois dele não pode dar em nada. */}
+              <button
+                className="nova-coluna"
+                onClick={() => setCriandoColuna(true)}
+                title="Uma coluna sua — recebe só o que você arrastar"
+              >
+                <IconeMais tamanho={16} />
+                nova coluna
+              </button>
             </main>
           )}
         </Droppable>

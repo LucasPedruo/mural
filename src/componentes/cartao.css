@@ -24,23 +24,28 @@
 /* Fora de alcance: o Teams nao conta mais nada sobre este card, entao ele e o
    unico que pode ser movido a mao — e o quadro precisa dizer isso de longe, nao
    so quando a pessoa passa o mouse.
-   A distincao e de RELEVO, nao de cor: neste quadro cor significa status, e um
-   fundo colorido competia com a faixa lateral em vez de somar. Sem superficie
-   propria e sem sombra, o card afunda na coluna — que e exatamente o que ele e:
-   um card que ninguem alimenta mais. */
+   Relevo E cor, e as duas dizem coisas diferentes: sem superficie propria e sem
+   sombra o card afunda na coluna (e o que ele e: ninguem o alimenta mais), e o
+   contorno ambar diz por que. Um FUNDO colorido continua fora de questao — era
+   ele que competia com a faixa lateral, onde cor significa status. O contorno
+   nao compete: fala de outra coisa, e e a mesma cor do aviso que conta deles no
+   sino, para o aviso e os cards de que ele fala se reconhecerem. */
 .cartao.fora {
   border-style: dashed;
-  border-color: var(--border-strong);
+  border-color: var(--marca-sem-sinal);
   border-left: 3px solid var(--linha);
   background: transparent;
   box-shadow: none;
   cursor: grab;
 }
 /* No hover ele sobe para a superficie normal: e o sinal de que aqui, ao
-   contrario dos outros, a mao manda. */
+   contrario dos outros, a mao manda. O contorno fica solido — e o unico momento
+   em que ele deixa de ser um card a espera de nada. */
 .cartao.fora:hover {
   background: var(--bg-surface);
-  border-color: var(--border-strong);
+  border-color: var(--marca-sem-sinal);
+  border-style: solid;
+  border-left-style: solid;
 }
 /* A alça de arraste: só nestes cards o gesto existe, então só neles ela
    aparece. É o que substitui a explicação em texto. */
@@ -51,8 +56,8 @@
   right: 11px;
   width: 9px;
   height: 13px;
-  opacity: 0.45;
-  background-image: radial-gradient(circle, var(--text-muted) 1.1px, transparent 1.2px);
+  opacity: 0.5;
+  background-image: radial-gradient(circle, var(--marca-sem-sinal) 1.1px, transparent 1.2px);
   background-size: 4px 4px;
 }
 .cartao.fora:hover::before {
@@ -73,10 +78,25 @@
 
 /* O titulo. Nao e mais um botao: o alvo do clique e o card, porque mirar na
    linha de texto era um detalhe de implementacao vazando para a mao de quem usa. */
+/* O título é o texto da mensagem, verbatim — o Mural não resume mais o que a
+   pessoa escreveu. Como texto de gente não tem limite de tamanho, o card corta
+   em seis linhas e guarda o resto atrás do "expandir"; as quebras de linha da
+   mensagem original ficam de pé, porque numa lista numerada elas são o sentido. */
 .cartao .texto {
   color: var(--text-primary);
   font-size: 13.5px;
   line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+
+/* Recolhido, uma linha só — é o que faz uma coluna cheia caber na tela. */
+.cartao.colapsado .texto {
+  -webkit-line-clamp: 1;
 }
 .cartao:hover .texto {
   text-decoration: underline;
@@ -149,6 +169,8 @@
    título é o que dá nome à task — mas visíveis, porque o detalhe que faz a
    task ser entendida quase sempre está aqui. */
 .cartao .continuacao {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   margin: 6px 0 0;
   padding-left: 9px;
   border-left: 2px solid var(--border-default);
@@ -254,4 +276,18 @@
 }
 .cartao.colapsado .rodape {
   margin-top: 6px;
+}
+
+/* A sua nota no card. Filete próprio e cor da marca: ela não pode se confundir
+   com a continuação da rajada, que é texto de outra pessoa, nem com a anotação
+   da daily, que só existe depois de o trabalho acabar. */
+.cartao .nota-do-card {
+  margin: 6px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--marca-meu);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

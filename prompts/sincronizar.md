@@ -24,7 +24,7 @@ sem markdown, sem cercas de código, sem comentários:
     "id": "1786980568612",
     "author": "Bernardo Veras",
     "createdDateTime": "2026-08-17T15:29:28.612Z",
-    "summary": "Mencionar usuários no modo nota com @nome",
+    "texto": "Mencionar usuários no modo nota com @nome",
     "kind": "bug",
     "soPrint": false,
     "mesmaDemandaQueAnterior": false,
@@ -35,15 +35,24 @@ sem markdown, sem cercas de código, sem comentários:
 
 Regras dos campos:
 
-- `summary`: UMA linha, no máximo ~100 caracteres, no idioma da mensagem original,
-  descrevendo o pedido. Extraia do `body`. Ignore tags `<img>` (são prints).
-  Se a mensagem for só imagem sem texto útil, use exatamente: "(só print — abrir para ver)"
-  Se a mensagem tiver várias sugestões numeradas, resuma como
-  "N sugestões: <primeira>, <segunda>, ..." e mantenha em uma linha.
+- `texto`: **o texto da mensagem, verbatim**. Não resuma, não reescreva, não
+  traduza, não corte, não conserte a ortografia — o card mostra o que a pessoa
+  escreveu, e um card que diz outra coisa faz o time discutir uma demanda que
+  ninguém pediu.
+
+  O que fazer com o `body`: tirar as tags HTML e devolver o texto que sobra.
+  `<br>`, `</p>` e `</div>` viram quebra de linha; `&nbsp;` `&amp;` `&lt;` `&gt;`
+  `&quot;` viram o caractere que representam; `<img>` some (é print, e o campo
+  `soPrint` é quem conta que existe). Corte só o espaço em branco das pontas.
+
+  Se depois disso não sobrar texto nenhum, use exatamente: "(só print — abrir para ver)"
+
+  Mensagem com várias sugestões numeradas vem inteira, com as quebras de linha
+  onde estavam. Quem decide o quanto disso cabe na tela é a interface, não você.
 - `kind`: "bug" se relata algo quebrado/erro/não funciona; "sugestao" se pede algo novo
   ou uma melhoria. Na dúvida, "sugestao".
 - `soPrint`: `true` quando o corpo não tem texto útil além de imagens anexadas —
-  é a mesma condição do summary "(só print — abrir para ver)". `false` caso contrário.
+  é a mesma condição do `texto` "(só print — abrir para ver)". `false` caso contrário.
 - `mesmaDemandaQueAnterior`: veja a seção abaixo. Na dúvida, `false`.
 - `reactions`: array com os emojis do campo `reactions[].reactionType`, na ordem recebida.
   Array vazio se não houver nenhuma. NÃO interprete o status — só copie os emojis.
