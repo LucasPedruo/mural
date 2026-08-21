@@ -200,8 +200,14 @@ npm run build
 node server.js
 ```
 
-Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuração
-com cinco passos: qual agente de IA lê o Teams, com qual conta Microsoft você está
+Abra <http://localhost:4317>. Na primeira vez, antes de qualquer passo, abre uma
+caixa com **o que o Mural precisa para funcionar** — Node, um agente de IA
+autenticado e acesso ao Graph dentro dele — e o que fazer em cada linha. Ela vem
+primeiro porque três dos cinco passos falham por motivos que não estão na tela, e
+descobrir isso passo a passo é descobrir na ordem errada. Quem já sabe marca "não
+mostrar de novo"; o link *o que preciso ter?* traz de volta.
+
+Depois vem a configuração, com cinco passos: qual agente de IA lê o Teams, com qual conta Microsoft você está
 logado, a conversa que vira o quadro, **as reações** — qual emoji significa o quê
 no seu canal — e a sprint, o ciclo que você fecha de vez em quando, que existe
 mesmo que seu time não use a palavra.
@@ -291,8 +297,16 @@ Nem para eles vale arrastar até *In review*: não existe emoji que signifique
 no Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
 próxima atualização.
 
-**Juntar e separar** (⧉ e ⑃ no rodapé) consertam o agrupamento quando ele erra:
-⧉ marca cards para virarem um, ⑃ desmancha um card em suas mensagens.
+**Juntar e separar** (no menu ⋯) consertam o agrupamento quando ele erra: juntar
+marca cards para virarem um, separar desmancha um card em suas mensagens. A faixa
+que explica o gesto **gruda no topo** enquanto você procura o segundo card, e o
+card que nasce do juntar **acende por dois segundos** — juntar faz um card
+desaparecer da coluna, e sem sinal a tela parece ter perdido um em vez de ter
+fundido dois.
+
+**Clicar num card agrupado abre as mensagens dele**, e cada uma abre a si mesma no
+Teams. Antes o clique abria sempre a âncora: o card dizia "4 mensagens" e
+entregava uma. Card de uma mensagem continua indo direto.
 
 **Feito por outra pessoa**, no mesmo menu ⋯, é o espelho do *Fiz esta*: você
 escreve quem resolveu e o card vai para *Done* com o nome no
@@ -689,6 +703,21 @@ configuração. Murais, histórico de tasks e registro de gastos ficam intactos:
 um botão de configuração não pode apagar trabalho acumulado por tabela.
 
 ## Quando um passo da configuração falha
+
+Se a conexão com o Teams falha e o agente escolhido é o **Claude Code**, a tela
+resolve ali mesmo: **Ver conectores do agente** roda `claude mcp list` e mostra o
+estado de cada MCP, e **Conectar** roda `claude mcp login`, que abre o navegador
+para você autorizar. Quem autoriza continua sendo você, na tela da Microsoft —
+este servidor nunca vê credencial, e isso segue verdadeiro depois desse botão.
+
+Não existe botão que "abre o terminal e digita `/mcp`", e não é limitação de
+esforço: `/mcp` é um comando da interface interativa do agente, e um programa não
+digita dentro da janela de outro. O que existe é melhor — o mesmo CLI responde
+`mcp list` e `mcp login` **fora** da TUI, então a pergunta se responde na página.
+
+Isso mora no adaptador (`agentes.js`), não no servidor: é vocabulário daquele CLI.
+Agente sem equivalente não ganha os botões — ganha os passos escritos.
+
 
 Os dois primeiros passos são **diagnósticos, não requisitos**: nem detectar o
 binário nem descobrir a conta logada é necessário para criar um mural. Então cada

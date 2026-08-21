@@ -49,9 +49,21 @@ const BASE = [
     eventos: 'claude',
     reportaCusto: true,
     ferramentas: { ...FERRAMENTAS_CLAUDE },
-    requisitos:
-      'O conector Microsoft 365 precisa estar ativo e autorizado no Claude Code. ' +
-      'Rode `/mcp` no Claude para conferir.',
+    requisitos: 'Precisa do conector Microsoft 365 ligado e autorizado no Claude Code.',
+    // O Claude Code sabe listar e autenticar os proprios MCPs sem entrar na TUI,
+    // e isso permite responder "o conector esta ligado?" dentro da pagina em vez
+    // de mandar a pessoa abrir um terminal e digitar /mcp.
+    //
+    // Fica no adaptador, e nao no servidor, porque e vocabulario DESTE CLI: os
+    // outros nao tem equivalente, e quando tiverem e aqui que se diz qual e. Sem
+    // este campo, a interface simplesmente nao oferece os botoes.
+    mcp: {
+      listar: ['mcp', 'list'],
+      conectar: ['mcp', 'login', '{{NOME}}'],
+      // Como reconhecer, na lista, o MCP que le o Teams. Nao e um nome fixo: a
+      // pessoa pode ter registrado o conector com outro rotulo.
+      procurar: /microsoft|365|graph|teams/i,
+    },
   },
   {
     id: 'codex',
@@ -79,10 +91,7 @@ const BASE = [
       uriCanal: 'teams:///teams/{teamId}/channels/{channelId}/messages',
       uriChat: 'teams:///chats/{chatId}/messages',
     },
-    requisitos:
-      'Precisa de um MCP server de Microsoft Graph configurado no ~/.codex/config.toml. ' +
-      'O conector da claude.ai NAO vale aqui: ajuste abaixo os nomes das tools e o ' +
-      'molde das URIs para os do seu MCP.',
+    requisitos: 'Precisa de um MCP de Microsoft Graph no ~/.codex/config.toml.',
   },
   {
     id: 'gemini',
@@ -103,9 +112,7 @@ const BASE = [
       uriCanal: 'teams:///teams/{teamId}/channels/{channelId}/messages',
       uriChat: 'teams:///chats/{chatId}/messages',
     },
-    requisitos:
-      'Precisa de um MCP server de Microsoft Graph no settings.json do Gemini CLI. ' +
-      'Sem stream de eventos, a barra de progresso mostra so o tempo decorrido.',
+    requisitos: 'Precisa de um MCP de Microsoft Graph no settings.json do Gemini CLI.',
   },
   {
     id: 'personalizado',
@@ -124,9 +131,7 @@ const BASE = [
       uriCanal: 'teams:///teams/{teamId}/channels/{channelId}/messages',
       uriChat: 'teams:///chats/{chatId}/messages',
     },
-    requisitos:
-      'Qualquer CLI que aceite um prompt e consiga ler o Teams e gravar arquivo. ' +
-      'Preencha o binario, o molde de argumentos e os nomes das tools.',
+    requisitos: 'Qualquer CLI que leia o Teams e grave arquivo. Preencha os campos abaixo.',
   },
 ];
 
@@ -346,6 +351,10 @@ export function paraTela(ad, deteccao) {
     entrada: ad.entrada,
     eventos: ad.eventos,
     ferramentas: { ...ad.ferramentas },
+    // A interface só oferece os botões de MCP para quem sabe fazer isso pela
+    // linha de comando. Booleano, e não o objeto: os comandos são do servidor.
+    sabeListarMcp: !!(ad.mcp && ad.mcp.listar),
+    sabeConectarMcp: !!(ad.mcp && ad.mcp.conectar),
     instalado: deteccao ? !!deteccao.instalado : null,
     versao: deteccao ? deteccao.versao || '' : '',
     erro: deteccao ? deteccao.erro || '' : '',

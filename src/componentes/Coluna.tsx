@@ -67,6 +67,8 @@ interface Props {
    *  coluna e não do card: metade alta e metade baixa é mais difícil de varrer
    *  com o olho que qualquer das duas alturas por inteiro. Mora no quadro porque
    *  sobrevive a recarregar a página. */
+  /** O card que acabou de ser juntado, para o realce achá-lo. */
+  recemJuntado: string | null;
   cardsRecolhidos: boolean;
   aoRecolherCards: (recolher: boolean) => void;
 }
@@ -97,6 +99,7 @@ export function Coluna({
   aoAnotar,
   aoIgnorar,
   aoApagar,
+  recemJuntado,
   cardsRecolhidos,
   aoRecolherCards,
 }: Props) {
@@ -226,6 +229,7 @@ export function Coluna({
                           naColunaDeIgnoradas={status === 'ignorada'}
                           ultimaVisita={ultimaVisita}
                           colapsado={cardsRecolhidos}
+                          recemJuntado={recemJuntado === t.id}
                           selecionando={selecionando}
                           selecionado={selecionados.has(t.id)}
                           aoAbrir={aoAbrir}

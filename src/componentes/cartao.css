@@ -297,3 +297,35 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* O card que acabou de ser juntado. Um realce que apaga sozinho: juntar dois
+   cards faz um deles DESAPARECER da coluna, e sem sinal nenhum a tela parece ter
+   perdido um card em vez de ter fundido dois.
+   Só cor e sombra — nada de altura, largura ou transform. É o que faz esta
+   animação ser segura onde a do colapso não era: ela não toca em nada que a
+   biblioteca de arraste mede. */
+@keyframes acabou-de-juntar {
+  0% {
+    border-color: var(--marca-meu);
+    box-shadow: 0 0 0 3px var(--bg-brand-subtle);
+  }
+  70% {
+    border-color: var(--marca-meu);
+    box-shadow: 0 0 0 3px var(--bg-brand-subtle);
+  }
+  100% {
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+.cartao.recem-juntado {
+  animation: acabou-de-juntar 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartao.recem-juntado {
+    animation: none;
+    border-color: var(--marca-meu);
+  }
+}

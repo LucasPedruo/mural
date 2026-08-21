@@ -329,3 +329,58 @@ code {
 .saida-do-passo .dica {
   margin-top: 7px;
 }
+
+/* O caminho para resolver, quando a conexão falha. Passos numerados porque a
+   ação acontece FORA desta tela — em outro programa, em outra janela — e uma
+   frase corrida obriga a pessoa a montar a sequência sozinha enquanto alterna
+   entre as duas. */
+.como-conectar {
+  margin-top: 12px;
+  padding: 13px 15px;
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--marca-fazendo);
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+}
+
+.como-conectar strong {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.como-conectar ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.como-conectar code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-surface-3);
+  color: var(--text-primary);
+}
+
+/* A porta de volta para a lista de requisitos. Quem marcou "não mostrar de
+   novo" e depois travou precisa reencontrá-la sem limpar o navegador. */
+.pagina-onboarding .ligacao-requisitos {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.pagina-onboarding .ligacao-requisitos:hover {
+  color: var(--text-primary);
+}

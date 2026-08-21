@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { Conector } from '../componentes/Conector';
+import { DialogoDeRequisitos } from '../componentes/DialogoDeRequisitos';
 import { EscolherEmoji } from '../componentes/EscolherEmoji';
 import { IconeFeito, IconeVoltar } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
+  RespostaMcp,
   AgenteDisponivel,
   AjustesDoAgente,
   ChatDisponivel,
@@ -59,6 +62,39 @@ function lerLinkDoTeams(bruto: string): FonteEscolhida | null {
   const nome = [nomeTime, nomeCanal].filter(Boolean).join(' › ') || 'Canal do Teams';
 
   return { tipo: 'canal', subtipo: 'canal', teamId, channelId, nome };
+}
+
+/** O que fazer quando a conexão com o Teams falha.
+ *
+ *  Antes esta tela respondia com uma frase — "o conector precisa estar ativo" —
+ *  e, logo abaixo, o painel de ajustes avançados: binário, molde de argumentos,
+ *  `{{FERRAMENTAS}}`, molde de URI. Nada daquilo resolve um conector não
+ *  autorizado, e quem chegou ali por não conseguir conectar não tem como saber
+ *  disso. A tela dizia o que está errado e escondia o que fazer.
+ *
+ *  São passos numerados porque a ação acontece FORA daqui: em outro programa,
+ *  em outra janela. Uma frase corrida obriga a pessoa a montar a sequência
+ *  sozinha enquanto alterna entre as duas telas. */
+function ComoConectar({ nome }: { nome: string }) {
+  return (
+    <div className="como-conectar">
+      <strong>Como resolver</strong>
+      <ol>
+        <li>
+          Abra o <strong>{nome}</strong> num terminal.
+        </li>
+        <li>
+          Configure nele um <strong>MCP de Microsoft Graph</strong> — o conector da claude.ai não
+          vale fora do Claude Code.
+        </li>
+        <li>
+          Nos ajustes avançados abaixo, troque os nomes das tools e o molde das URIs pelos que esse
+          MCP usa.
+        </li>
+        <li>Volte aqui e clique em Tentar de novo.</li>
+      </ol>
+    </div>
+  );
 }
 
 export function Onboarding() {
@@ -115,6 +151,15 @@ export function Onboarding() {
   // ela é a única coisa a fazer no app.
   const [temMurais, setTemMurais] = useState(false);
 
+  // A lista de requisitos abre antes de tudo. Três dos cinco passos falham por
+  // motivos que não estão na tela — Node antigo, CLI que nunca foi instalado,
+  // MCP que ninguém ligou — e descobrir isso passo a passo é descobrir na ordem
+  // errada. Quem já sabe marca a caixa e não vê mais.
+  const chaveRequisitos = 'mural:requisitos-vistos';
+  const [verRequisitos, setVerRequisitos] = useState(
+    () => localStorage.getItem(chaveRequisitos) !== 'sim',
+  );
+
   // Os dois primeiros passos são DIAGNÓSTICOS, não requisitos: nem detectar o
   // binário nem descobrir a conta logada é necessário para criar um mural. Mas
   // eles estavam travando a tela — agente que não responde `--version` (um
@@ -123,6 +168,13 @@ export function Onboarding() {
   //
   // Daí a saída explícita. O que ela custa está escrito ao lado dela: a falha
   // reaparece na primeira leitura, e lá com o motivo em contexto.
+  // O conector, respondido aqui em vez de num terminal. `claude mcp list` e
+  // `claude mcp login` existem fora da TUI, então a pergunta do passo 2 se
+  // responde na própria página — e o botão que faltava é este, não um que abre
+  // terminal para a pessoa digitar /mcp (comando que só existe lá dentro).
+  const [mcp, setMcp] = useState<RespostaMcp | null>(null);
+  const [mcpOcupado, setMcpOcupado] = useState<'lendo' | 'conectando' | null>(null);
+
   const [passo1Forcado, setPasso1Forcado] = useState(false);
   const [contaPulada, setContaPulada] = useState(false);
   const passo1Liberado = passo1 === 'ok' || passo1Forcado;
@@ -171,6 +223,34 @@ export function Onboarding() {
       setEmojiFazendo(antes.emojiFazendo);
       setEmojiMeu(antes.emojiMeu);
       setErroEmoji((e as Error).message);
+    }
+  }
+
+  async function verMcp() {
+    setMcpOcupado('lendo');
+    try {
+      setMcp(await api.listarMcp());
+    } catch (e) {
+      setMcp({ ok: false, erro: (e as Error).message });
+    } finally {
+      setMcpOcupado(null);
+    }
+  }
+
+  /** Abre o navegador para você autorizar. Demora o quanto você demorar — e é
+   *  por isso que o botão diz o que está esperando, em vez de só girar. */
+  async function conectarMcp(nome: string) {
+    setMcpOcupado('conectando');
+    try {
+      const r = await api.conectarMcp(nome);
+      // A lista depois é a única fonte de verdade: sair com código zero não
+      // prova que o conector ficou de pé.
+      setMcp(r.lista ?? { ok: false, erro: r.erro ?? r.saida ?? 'sem resposta do agente' });
+      if (r.lista?.doTeams?.conectado) void verificarConta();
+    } catch (e) {
+      setMcp({ ok: false, erro: (e as Error).message });
+    } finally {
+      setMcpOcupado(null);
     }
   }
 
@@ -304,8 +384,15 @@ export function Onboarding() {
 
   const previaCanal = link.trim() ? lerLinkDoTeams(link) : null;
 
+  function comecar(naoMostrarDeNovo: boolean) {
+    if (naoMostrarDeNovo) localStorage.setItem(chaveRequisitos, 'sim');
+    setVerRequisitos(false);
+  }
+
   return (
     <div className="pagina-onboarding">
+      {verRequisitos && <DialogoDeRequisitos aoComecar={comecar} />}
+
       <div className="topo">
         {/* Só aparece quando existe mural para voltar PARA. Sem nenhum, a
             listagem manda direto para cá, e um botão de voltar que devolve a
@@ -323,7 +410,12 @@ export function Onboarding() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
       </div>
-      <p className="sub">Cinco passos e o quadro está de pé.</p>
+      <p className="sub">
+        Cinco passos e o quadro está de pé.{' '}
+        <button className="ligacao-requisitos" onClick={() => setVerRequisitos(true)}>
+          o que preciso ter?
+        </button>
+      </p>
 
       {/* 1 */}
       <section className="passo" data-estado={passo1}>
@@ -403,17 +495,17 @@ export function Onboarding() {
                   </p>
                 )}
 
-                <button className="alternar" onClick={() => setMostrarAjustes((v) => !v)}>
-                  {mostrarAjustes ? 'esconder ajustes' : 'ajustes avançados'}
-                </button>
-
+                {/* Sem botão para abrir. Os campos aparecem quando são
+                    OBRIGATÓRIOS — no agente "outro", que não tem binário nem
+                    nomes de tool para herdar — e ficam fora do caminho no resto.
+                    Um "ajustes avançados" clicável era um convite a mexer em
+                    molde de argumentos para resolver um conector não autorizado. */}
                 {mostrarAjustes && (
                   <div className="ajustes-agente">
                     <p className="dica">
-                      Como o agente é chamado e como as tools do Teams se chamam nele. Deixar em
-                      branco mantém o padrão. <code>{'{{FERRAMENTAS}}'}</code> vira a lista de tools
-                      permitidas; <code>{'{{PROMPT}}'}</code> vira o prompt, quando ele entra por
-                      argumento em vez de stdin.
+                      <strong>Você provavelmente não precisa mexer aqui.</strong> Isto é para
+                      quando o binário está noutro lugar, ou quando o seu MCP chama as tools do
+                      Teams por outros nomes. Em branco, fica o padrão.
                     </p>
 
                     <div className="campos-agente">
@@ -524,14 +616,28 @@ export function Onboarding() {
             {/* Descobrir a conta é diagnóstico, não requisito: o mural se cria
                 sem isso. A falha quase sempre é o MCP do Teams não estar
                 configurado no agente — e isso não se resolve nesta tela. */}
+            {passo2 === 'erro' && agente?.sabeListarMcp && (
+              <Conector
+                mcp={mcp}
+                ocupado={mcpOcupado}
+                podeConectar={!!agente.sabeConectarMcp}
+                aoVer={() => void verMcp()}
+                aoConectar={(nome) => void conectarMcp(nome)}
+              />
+            )}
+
+            {/* Agente que não sabe fazer isso pela linha de comando cai nos
+                passos escritos: é o que sobra, e é melhor que nada. */}
+            {passo2 === 'erro' && agente && !agente.sabeListarMcp && (
+              <ComoConectar nome={agente.nome} />
+            )}
+
             {passo2 === 'erro' && !contaPulada && (
               <div className="saida-do-passo">
                 <button onClick={() => setContaPulada(true)}>Continuar sem verificar</button>
                 <p className="dica">
-                  O motivo mais comum é o agente não ter o MCP do Microsoft Graph configurado — no
-                  Claude Code, <code>/mcp</code> mostra o que está ligado. Dá para criar o mural
-                  agora e resolver isso depois: quem falha então é o botão Atualizar, com o erro
-                  do agente na tela.
+                  Dá para criar o mural agora e resolver isso depois — quem falha então é o botão
+                  Atualizar, com o erro do agente na tela.
                 </p>
               </div>
             )}

@@ -12,6 +12,7 @@ import type {
   ResultadoExclusaoDeColuna,
   RespostaColunas,
   RespostaConsumo,
+  RespostaMcp,
   RespostaDashboard,
   RespostaPainel,
   RespostaSprint,
@@ -259,6 +260,18 @@ export const api = {
     pedirBruto<{ ok: boolean; chats?: ChatDisponivel[]; erro?: string }>(
       '/api/setup/chats',
       { method: 'POST' },
+    ),
+
+  // Pergunta ao CLI do agente se o conector do Teams está ligado. Substitui
+  // "abra um terminal e digite /mcp": aquele comando só existe dentro da TUI.
+  listarMcp: () => pedirBruto<RespostaMcp>('/api/setup/mcp'),
+
+  // Dispara a autorização. O CLI abre o navegador; quem autoriza é a pessoa, na
+  // tela da Microsoft. Pode levar minutos — o tempo é de quem está autorizando.
+  conectarMcp: (nome: string) =>
+    pedirBruto<RespostaMcp & { saida?: string; lista?: RespostaMcp }>(
+      '/api/setup/mcp/login',
+      json({ nome }),
     ),
 
   resetarOnboarding: () =>

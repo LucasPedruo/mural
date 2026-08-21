@@ -10,6 +10,7 @@ import {
   formatarTokens,
   formatarUsd,
 } from '../componentes/ConfirmarAtualizacao';
+import { DialogoDaRajada } from '../componentes/DialogoDaRajada';
 import { DialogoDeColuna } from '../componentes/DialogoDeColuna';
 import {
   DialogoDeConfirmacao,
@@ -139,6 +140,11 @@ export function Quadro() {
   const [tags, setTags] = useState<TagComContagem[]>([]);
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
+  const [vendoRajada, setVendoRajada] = useState<Task | null>(null);
+  // O card que acabou de ser juntado, para o realce achá-lo. Juntar faz um card
+  // DESAPARECER da coluna, e sem sinal a tela parece ter perdido um em vez de
+  // ter fundido dois.
+  const [recemJuntado, setRecemJuntado] = useState<string | null>(null);
   const [incluindoLink, setIncluindoLink] = useState(false);
   // Os cards em que o seu gesto e a reação no canal discordam. A leitura abre o
   // diálogo; "decidir depois" fecha, e o selo no card é como reencontrar.
@@ -791,6 +797,10 @@ export function Quadro() {
       const r = await api.juntar(muralId, ids);
       setTasks(r.tasks);
       setSelecionados(new Set());
+      setRecemJuntado(r.id);
+      // Apaga sozinho. A marca serve para o olho reencontrar o card agora, não
+      // para ficar no quadro contando o que aconteceu ontem.
+      window.setTimeout(() => setRecemJuntado((atual) => (atual === r.id ? null : atual)), 2200);
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -933,8 +943,18 @@ export function Quadro() {
   // Card do Teams abre a mensagem original. Card `manual` — resquício de quando
   // dava para criar task aqui dentro — não tem mensagem para abrir, e dizer isso
   // é melhor que mandar o Teams procurar um id que ele nunca viu.
-  async function abrir(task: Task) {
-    if (task.origem === 'manual') {
+  // Card de uma mensagem abre o Teams direto. Card agrupado abre o diálogo com
+  // as mensagens: ele diz "4 mensagens" e o clique entregava uma — a âncora.
+  function abrir(task: Task) {
+    if ((task.mensagens?.length ?? 0) > 1) {
+      setVendoRajada(task);
+      return;
+    }
+    void abrirNoTeams(task.id, task.origem === 'manual');
+  }
+
+  async function abrirNoTeams(alvoId: string, propria = false) {
+    if (propria) {
       setErro(
         'Esta task foi criada à mão numa versão anterior do Mural: ela não tem mensagem no ' +
           'Teams para abrir. Você ainda pode arrastá-la entre as colunas.',
@@ -942,7 +962,7 @@ export function Quadro() {
       return;
     }
     try {
-      await api.abrirNoTeams(muralId, task.id);
+      await api.abrirNoTeams(muralId, alvoId);
       setErro(null);
     } catch (e) {
       setErro(
@@ -1187,6 +1207,17 @@ export function Quadro() {
         />
       )}
 
+      {vendoRajada && (
+        <DialogoDaRajada
+          task={vendoRajada}
+          aoAbrirMensagem={(m) => {
+            setVendoRajada(null);
+            void abrirNoTeams(m.id);
+          }}
+          aoFechar={() => setVendoRajada(null)}
+        />
+      )}
+
       {anotandoNota && (
         <DialogoDeNota
           task={anotandoNota}
@@ -1356,6 +1387,7 @@ export function Quadro() {
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
                   aoApagar={apagar}
                   aoSoltarDaColuna={(t) => void soltarDaColuna(t)}
+                  recemJuntado={recemJuntado}
                   cardsRecolhidos={colunasRecolhidas.has(coluna)}
                   aoRecolherCards={(recolher) => recolherCardsDaColuna(coluna, recolher)}
                 />
