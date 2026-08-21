@@ -96,6 +96,16 @@
   border-bottom: 1px solid var(--border-default);
 }
 
+/* A selecao gruda no topo. Juntar cards exige rolar a coluna para achar o
+   segundo, e a faixa que explica o gesto — e que carrega o botao que o conclui —
+   saia da tela justamente enquanto voce procura. Fica acima das colunas e abaixo
+   do cabecalho, que tambem e sticky. */
+.faixa.selecao {
+  position: sticky;
+  top: 59px;
+  z-index: 15;
+}
+
 /* A faixa da selecao carrega os dois botoes do gesto; eles nao podem herdar o
    tamanho do texto da faixa. */
 .faixa.selecao button {

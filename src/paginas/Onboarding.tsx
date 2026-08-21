@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
 import { Conector } from '../componentes/Conector';
+import { DialogoDeRequisitos } from '../componentes/DialogoDeRequisitos';
 import { EscolherEmoji } from '../componentes/EscolherEmoji';
 import { IconeFeito, IconeVoltar } from '../componentes/icones';
 import { mmss } from '../rotulos';
@@ -149,6 +150,15 @@ export function Onboarding() {
   // Se já existe mural, esta tela é opcional e precisa de saída. Se não existe,
   // ela é a única coisa a fazer no app.
   const [temMurais, setTemMurais] = useState(false);
+
+  // A lista de requisitos abre antes de tudo. Três dos cinco passos falham por
+  // motivos que não estão na tela — Node antigo, CLI que nunca foi instalado,
+  // MCP que ninguém ligou — e descobrir isso passo a passo é descobrir na ordem
+  // errada. Quem já sabe marca a caixa e não vê mais.
+  const chaveRequisitos = 'mural:requisitos-vistos';
+  const [verRequisitos, setVerRequisitos] = useState(
+    () => localStorage.getItem(chaveRequisitos) !== 'sim',
+  );
 
   // Os dois primeiros passos são DIAGNÓSTICOS, não requisitos: nem detectar o
   // binário nem descobrir a conta logada é necessário para criar um mural. Mas
@@ -374,8 +384,15 @@ export function Onboarding() {
 
   const previaCanal = link.trim() ? lerLinkDoTeams(link) : null;
 
+  function comecar(naoMostrarDeNovo: boolean) {
+    if (naoMostrarDeNovo) localStorage.setItem(chaveRequisitos, 'sim');
+    setVerRequisitos(false);
+  }
+
   return (
     <div className="pagina-onboarding">
+      {verRequisitos && <DialogoDeRequisitos aoComecar={comecar} />}
+
       <div className="topo">
         {/* Só aparece quando existe mural para voltar PARA. Sem nenhum, a
             listagem manda direto para cá, e um botão de voltar que devolve a
@@ -393,7 +410,12 @@ export function Onboarding() {
         <span className="ponto-marca" />
         <h1>Mural</h1>
       </div>
-      <p className="sub">Cinco passos e o quadro está de pé.</p>
+      <p className="sub">
+        Cinco passos e o quadro está de pé.{' '}
+        <button className="ligacao-requisitos" onClick={() => setVerRequisitos(true)}>
+          o que preciso ter?
+        </button>
+      </p>
 
       {/* 1 */}
       <section className="passo" data-estado={passo1}>
@@ -473,10 +495,11 @@ export function Onboarding() {
                   </p>
                 )}
 
-                <button className="alternar" onClick={() => setMostrarAjustes((v) => !v)}>
-                  {mostrarAjustes ? 'esconder ajustes' : 'ajustes avançados'}
-                </button>
-
+                {/* Sem botão para abrir. Os campos aparecem quando são
+                    OBRIGATÓRIOS — no agente "outro", que não tem binário nem
+                    nomes de tool para herdar — e ficam fora do caminho no resto.
+                    Um "ajustes avançados" clicável era um convite a mexer em
+                    molde de argumentos para resolver um conector não autorizado. */}
                 {mostrarAjustes && (
                   <div className="ajustes-agente">
                     <p className="dica">

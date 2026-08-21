@@ -1,0 +1,71 @@
+/* O que o Mural precisa, antes de pedir qualquer coisa. Lista numerada porque a
+   ordem importa: cada item depende do anterior estar de pé. */
+
+.requisitos {
+  margin: 0 0 16px;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.requisitos li strong {
+  font-size: 13.5px;
+  color: var(--text-primary);
+}
+
+.requisitos li p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* O aviso de qual passo costuma falhar por causa deste item. Recuado, porque é
+   consequência e não instrução. */
+.requisitos .detalhe-requisito {
+  margin-top: 6px;
+  padding-left: 9px;
+  border-left: 2px solid var(--marca-fazendo);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.requisitos code,
+.nota-requisitos code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.nota-requisitos {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--bg-surface-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.nota-requisitos svg {
+  margin-top: 3px;
+  color: var(--marca-feito);
+}
+
+.nao-mostrar {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.nao-mostrar input {
+  cursor: pointer;
+}

@@ -232,3 +232,79 @@
   line-height: 1.45;
   color: var(--text-muted);
 }
+
+/* As mensagens de um card agrupado. Cada uma é um botão que abre a si mesma no
+   Teams: o card dizia "4 mensagens" e o clique entregava uma. */
+.lista-da-rajada {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(56vh, 500px);
+  overflow-y: auto;
+  margin-bottom: 18px;
+}
+
+.mensagem-da-rajada {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.mensagem-da-rajada:hover {
+  border-color: var(--marca-meu);
+  background: var(--bg-surface-2);
+}
+
+/* A âncora dá nome ao card. Um filete a distingue sem precisar ler o selo. */
+.mensagem-da-rajada.ancora {
+  border-left: 3px solid var(--marca-meu);
+}
+
+.mensagem-da-rajada .cabeca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.mensagem-da-rajada .autor {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.mensagem-da-rajada .hora {
+  font-variant-numeric: tabular-nums;
+}
+.mensagem-da-rajada .abrir {
+  margin-left: auto;
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.mensagem-da-rajada:hover .abrir {
+  color: var(--text-primary);
+}
+
+.mensagem-da-rajada .corpo-da-mensagem {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mensagem-da-rajada .so-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.mensagem-da-rajada .reacoes {
+  font-size: 13px;
+}

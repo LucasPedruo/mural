@@ -200,8 +200,14 @@ npm run build
 node server.js
 ```
 
-Abra <http://localhost:4317>. Na primeira vez você cai numa tela de configuração
-com cinco passos: qual agente de IA lê o Teams, com qual conta Microsoft você está
+Abra <http://localhost:4317>. Na primeira vez, antes de qualquer passo, abre uma
+caixa com **o que o Mural precisa para funcionar** — Node, um agente de IA
+autenticado e acesso ao Graph dentro dele — e o que fazer em cada linha. Ela vem
+primeiro porque três dos cinco passos falham por motivos que não estão na tela, e
+descobrir isso passo a passo é descobrir na ordem errada. Quem já sabe marca "não
+mostrar de novo"; o link *o que preciso ter?* traz de volta.
+
+Depois vem a configuração, com cinco passos: qual agente de IA lê o Teams, com qual conta Microsoft você está
 logado, a conversa que vira o quadro, **as reações** — qual emoji significa o quê
 no seu canal — e a sprint, o ciclo que você fecha de vez em quando, que existe
 mesmo que seu time não use a palavra.
@@ -291,8 +297,16 @@ Nem para eles vale arrastar até *In review*: não existe emoji que signifique
 no Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
 próxima atualização.
 
-**Juntar e separar** (⧉ e ⑃ no rodapé) consertam o agrupamento quando ele erra:
-⧉ marca cards para virarem um, ⑃ desmancha um card em suas mensagens.
+**Juntar e separar** (no menu ⋯) consertam o agrupamento quando ele erra: juntar
+marca cards para virarem um, separar desmancha um card em suas mensagens. A faixa
+que explica o gesto **gruda no topo** enquanto você procura o segundo card, e o
+card que nasce do juntar **acende por dois segundos** — juntar faz um card
+desaparecer da coluna, e sem sinal a tela parece ter perdido um em vez de ter
+fundido dois.
+
+**Clicar num card agrupado abre as mensagens dele**, e cada uma abre a si mesma no
+Teams. Antes o clique abria sempre a âncora: o card dizia "4 mensagens" e
+entregava uma. Card de uma mensagem continua indo direto.
 
 **Feito por outra pessoa**, no mesmo menu ⋯, é o espelho do *Fiz esta*: você
 escreve quem resolveu e o card vai para *Done* com o nome no

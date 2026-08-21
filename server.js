@@ -2211,16 +2211,32 @@ function resumoDoResultado(stdout) {
 //
 // A URL NUNCA vem do cliente — o navegador manda so os ids, e o servidor busca o
 // webUrl no proprio historico. Assim nao ha como injetar comando pelo request.
-function abrirNoTeams(muralId, tarefaId) {
+/** Abre no Teams pelo id do CARD ou pelo id de uma MENSAGEM dentro dele.
+ *
+ *  Card agrupado e varias mensagens, e o clique nele abria sempre a ancora — as
+ *  outras nao tinham porta. Agora o dialogo da rajada manda o id da mensagem
+ *  escolhida, e a rota continua sendo uma so: quem procura e o servidor, que ja
+ *  tem o `webUrl` de cada mensagem gravado. */
+function abrirNoTeams(muralId, alvoId) {
   return new Promise((resolve, reject) => {
     const db = lerTasks(muralId);
-    const t = db.tasks[tarefaId];
-    if (!t || !t.webUrl) return reject(new Error('Task desconhecida.'));
+    const id = String(alvoId || '');
+    let url = db.tasks[id] ? db.tasks[id].webUrl : '';
+    if (!url) {
+      for (const t of Object.values(db.tasks)) {
+        const m = mensagensDaTask(t).find((x) => String(x.id) === id);
+        if (m && m.webUrl) {
+          url = m.webUrl;
+          break;
+        }
+      }
+    }
+    if (!url) return reject(new Error('Mensagem desconhecida.'));
 
-    if (!/^https:\/\/teams\.microsoft\.com\//.test(t.webUrl)) {
+    if (!/^https:[/][/]teams[.]microsoft[.]com[/]/.test(url)) {
       return reject(new Error('Link inesperado nesta task, nao vou abrir.'));
     }
-    const deep = t.webUrl.replace(
+    const deep = url.replace(
       /^https:\/\/teams\.microsoft\.com\//,
       'msteams://teams.microsoft.com/'
     );

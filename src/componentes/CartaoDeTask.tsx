@@ -42,6 +42,8 @@ interface Props {
    *  coluna metade alta e metade baixa, que é mais difícil de varrer com o olho
    *  que qualquer das duas alturas por inteiro. */
   colapsado: boolean;
+  /** Acabou de nascer de um "juntar". Ganha um realce que apaga sozinho. */
+  recemJuntado: boolean;
   /** Modo de juntar ligado: o clique no card seleciona em vez de abrir o Teams. */
   selecionando: boolean;
   selecionado: boolean;
@@ -69,6 +71,7 @@ export function CartaoDeTask({
   naColunaDeIgnoradas,
   ultimaVisita,
   colapsado,
+  recemJuntado,
   selecionando,
   selecionado,
   aoAbrir,
@@ -277,6 +280,7 @@ export function CartaoDeTask({
               agrupado ? 'rajada' : '',
               task.ignorada ? 'ignorada' : '',
               colapsado ? 'colapsado' : '',
+              recemJuntado ? 'recem-juntado' : '',
               selecionado ? 'selecionado' : '',
               estado.isDragging ? 'arrastando' : '',
             ]
