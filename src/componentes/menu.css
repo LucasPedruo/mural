@@ -31,6 +31,10 @@
   top: calc(100% + 5px);
   z-index: 30;
   min-width: 178px;
+  /* Nunca mais alto que a janela: uma lista de ações que não caiba rola dentro
+     de si mesma em vez de sair pela borda. */
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   padding: 5px;
@@ -38,6 +42,12 @@
   border: 1px solid var(--border-default);
   border-radius: 10px;
   box-shadow: var(--shadow-arrastando);
+}
+
+/* Aberto para cima: é o último card da coluna, e para baixo não cabia. */
+.menu-flutuante .menu.para-cima {
+  top: auto;
+  bottom: calc(100% + 5px);
 }
 
 .menu-flutuante .item {

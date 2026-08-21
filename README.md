@@ -155,8 +155,12 @@ errada.
 Eles cortam o quadro inteiro — enquanto um filtro está ligado, as contagens das
 colunas são as dele, não as do quadro todo.
 
-O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
-colunas existe só para os cards que o Teams não acompanha mais.
+O Mural **só lê** o Teams: quem move as tasks é a reação lá. **Todo card se
+arrasta**, mas o que o destino aceita muda: uma coluna sua, *Done by me* e *Out
+of scope* aceitam qualquer um — nenhum deles mexe no status, então não há o que a
+próxima leitura desfazer. Mudar de coluna **do Teams** só vale para o card que o
+Teams não acompanha mais, e a recusa acontece no destino, com o motivo. Travar o
+gesto na origem, como era antes, escondia tudo o que era permitido.
 
 **O título do card é o texto da mensagem, verbatim** — o Mural não resume mais o
 que a pessoa escreveu. Um card que diz outra coisa faz o time discutir uma demanda
@@ -673,6 +677,22 @@ configuração**, no topo, limpa só o cache do onboarding — a conta verificad
 lista de chats e a preferência de confirmação — e volta para a tela de
 configuração. Murais, histórico de tasks e registro de gastos ficam intactos:
 um botão de configuração não pode apagar trabalho acumulado por tabela.
+
+## Quando um passo da configuração falha
+
+Os dois primeiros passos são **diagnósticos, não requisitos**: nem detectar o
+binário nem descobrir a conta logada é necessário para criar um mural. Então cada
+um tem saída.
+
+Agente que não responde a `--version` oferece **usar assim mesmo** — wrapper,
+alias e PATH de shell fazem a detecção falhar em CLI que roda perfeitamente. A
+verificação da conta oferece **continuar sem verificar**, com o motivo mais
+provável escrito ao lado: o MCP do Microsoft Graph não estar configurado no
+agente.
+
+Nos dois casos o passo fica marcado, e o que a saída custa está dito: a falha
+reaparece na primeira leitura, e lá com o erro do agente em contexto. Travar
+alguém num "tentar de novo" que vai falhar igual é pior que deixar seguir avisado.
 
 ## Limites conhecidos
 

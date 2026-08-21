@@ -66,8 +66,14 @@
 .cartao.fora:active {
   cursor: grabbing;
 }
+/* Todo card se arrasta, entao todo card mostra que se arrasta. O que muda entre
+   eles nao e o gesto, e para onde ele pode ir — e isso o destino recusa, nao o
+   cursor. */
 .cartao.preso {
-  cursor: default;
+  cursor: grab;
+}
+.cartao.preso:active {
+  cursor: grabbing;
 }
 
 

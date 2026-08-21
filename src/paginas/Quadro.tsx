@@ -886,6 +886,19 @@ export function Quadro() {
 
     if (task.status === coluna) return;
 
+    // Mudar de coluna DO TEAMS só vale para o card que o Teams não acompanha
+    // mais. A recusa acontece aqui, no destino, e não no gesto: o card se
+    // arrasta para uma coluna sua, para Done by me e para Out of scope sem
+    // restrição nenhuma, e travar o arraste na origem escondia tudo isso.
+    if (!task.podeMover) {
+      setErro(
+        'Enquanto a mensagem aparece no Teams, é a reação de lá que decide a coluna — a próxima ' +
+          'leitura desfaria o movimento. Para tirar este card do fluxo do canal, arraste-o para ' +
+          'uma coluna sua.',
+      );
+      return;
+    }
+
     // Otimista: o card muda de coluna na hora e o servidor confirma. Se ele
     // recusar, o estado volta ao que era e o motivo aparece na tela.
     const anterior = tasks;

@@ -310,3 +310,22 @@ code {
   align-items: center;
   margin-top: 12px;
 }
+
+/* A saída de um passo que falhou. Recuada e discreta: é o caminho menos bom, e
+   tem de parecer isso — mas tem de existir, porque o passo é um diagnóstico e
+   não um requisito, e travar a pessoa num "tentar de novo" que vai falhar igual
+   é pior que deixá-la seguir avisada. */
+.saida-do-passo {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-default);
+}
+
+.saida-do-passo button {
+  font-size: 12.5px;
+  padding: 5px 12px;
+}
+
+.saida-do-passo .dica {
+  margin-top: 7px;
+}
