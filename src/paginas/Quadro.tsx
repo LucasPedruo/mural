@@ -1234,11 +1234,16 @@ export function Quadro() {
                         onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiFazendo
-                            ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
-                            : 'Coluna desligada — clique para escolher o emoji de "peguei esta"'
+                            ? `${emojiFazendo} de qualquer pessoa cai aqui — clique para trocar`
+                            : 'Coluna desligada — clique para escolher a reação'
+                        }
+                        aria-label={
+                          emojiFazendo
+                            ? `Reação desta coluna: ${emojiFazendo}`
+                            : 'Coluna desligada — escolher a reação'
                         }
                       >
-                        {emojiFazendo || 'sem emoji'}
+                        {emojiFazendo || '—'}
                       </button>
                     ) : coluna === 'meu' ? (
                       <button
@@ -1246,11 +1251,14 @@ export function Quadro() {
                         onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiMeu
-                            ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`
-                            : 'Nenhuma reação configurada — clique para escolher a sua'
+                            ? `${emojiMeu} na mensagem traz o card para cá — clique para trocar`
+                            : 'Nenhuma reação sua — clique para escolher'
+                        }
+                        aria-label={
+                          emojiMeu ? `Sua reação: ${emojiMeu}` : 'Escolher a sua reação'
                         }
                       >
-                        {emojiMeu || 'sem reação'}
+                        {emojiMeu || '—'}
                       </button>
                     ) : undefined
                   }

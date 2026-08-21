@@ -168,7 +168,10 @@ export function Coluna({
               <span className="pegar" aria-hidden="true">
                 <IconePegar tamanho={13} />
               </span>
-              <span className="selo">
+              {/* O `title` no selo, e não no header: o nome cortado com reticências
+                  precisa poder ser lido inteiro, e o title do header fala do
+                  arraste. */}
+              <span className="selo" title={rotulo}>
                 <span className="ponto" style={{ background: cor }} />
                 {rotulo}
               </span>
