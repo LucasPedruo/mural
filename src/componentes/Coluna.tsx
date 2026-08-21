@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import type { Task } from '../tipos';
 import { CartaoDeTask } from './CartaoDeTask';
-import { IconeAbaixo, IconeColapsar, IconePegar } from './icones';
+import { IconeAbaixo, IconeAcima, IconeColapsar, IconePegar } from './icones';
 import { MenuFlutuante, type ItemDeMenu } from './MenuFlutuante';
 import './coluna.css';
 
@@ -62,10 +62,12 @@ interface Props {
   aoEtiquetar: (task: Task) => void;
   aoIgnorar: (task: Task, ignorar: boolean) => void;
   aoApagar: (task: Task) => void;
-  /** Quais cards estão recolhidos, e como recolher. Mora no quadro porque a
-   *  escolha sobrevive a recarregar a página. */
-  colapsados: Set<string>;
-  aoColapsarCartao: (task: Task, colapsar: boolean) => void;
+  /** Todos os cards desta coluna recolhidos, ou todos expandidos. É escolha da
+   *  coluna e não do card: metade alta e metade baixa é mais difícil de varrer
+   *  com o olho que qualquer das duas alturas por inteiro. Mora no quadro porque
+   *  sobrevive a recarregar a página. */
+  cardsRecolhidos: boolean;
+  aoRecolherCards: (recolher: boolean) => void;
 }
 
 export function Coluna({
@@ -93,8 +95,8 @@ export function Coluna({
   aoEtiquetar,
   aoIgnorar,
   aoApagar,
-  colapsados,
-  aoColapsarCartao,
+  cardsRecolhidos,
+  aoRecolherCards,
 }: Props) {
   const total = grupos.reduce((s, g) => s + g.tasks.length, 0);
   const agrupada = grupos.length > 1 || (grupos[0] && grupos[0].rotulo !== '');
@@ -170,9 +172,18 @@ export function Coluna({
               </span>
               {acessorio}
               <span className="contagem">{total}</span>
-              {menu && menu.length > 0 && (
-                <MenuFlutuante itens={menu} rotulo={`Ações da coluna ${rotulo}`} />
-              )}
+              <MenuFlutuante
+                itens={[
+                  {
+                    rotulo: cardsRecolhidos ? 'Expandir os cards' : 'Recolher os cards',
+                    icone: cardsRecolhidos ? <IconeAbaixo /> : <IconeAcima />,
+                    aoEscolher: () => aoRecolherCards(!cardsRecolhidos),
+                    dica: 'Vale para a coluna inteira',
+                  },
+                  ...(menu ?? []),
+                ]}
+                rotulo={`Ações da coluna ${rotulo}`}
+              />
               <button
                 className="colapsar"
                 onClick={() => aoColapsar(true)}
@@ -209,8 +220,7 @@ export function Coluna({
                           naColunaDaDaily={status === 'meu'}
                           naColunaDeIgnoradas={status === 'ignorada'}
                           ultimaVisita={ultimaVisita}
-                          colapsado={colapsados.has(t.id)}
-                          aoColapsar={aoColapsarCartao}
+                          colapsado={cardsRecolhidos}
                           selecionando={selecionando}
                           selecionado={selecionados.has(t.id)}
                           aoAbrir={aoAbrir}

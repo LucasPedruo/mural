@@ -4,9 +4,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
 import type { Task } from '../tipos';
 import {
-  IconeAbaixo,
   IconeAbrirFora,
-  IconeAcima,
   IconeApagar,
   IconeDesfazer,
   IconeEditar,
@@ -36,14 +34,17 @@ interface Props {
    *  ali não há trabalho a fazer, só decisão a rever. */
   naColunaDeIgnoradas: boolean;
   ultimaVisita: string | null;
-  /** Recolhido: só o título e o rodapé. Prints, continuação da rajada e a
-   *  anotação da daily somem — é o que faz uma coluna cheia caber na tela. */
+  /** Recolhido: uma linha do texto e o rodapé. Prints, continuação da rajada e a
+   *  anotação da daily somem — é o que faz uma coluna cheia caber na tela.
+   *
+   *  Quem decide é a COLUNA, não o card: recolher card por card produzia uma
+   *  coluna metade alta e metade baixa, que é mais difícil de varrer com o olho
+   *  que qualquer das duas alturas por inteiro. */
   colapsado: boolean;
   /** Modo de juntar ligado: o clique no card seleciona em vez de abrir o Teams. */
   selecionando: boolean;
   selecionado: boolean;
   aoAbrir: (task: Task) => void;
-  aoColapsar: (task: Task, colapsar: boolean) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoCreditarOutro: (task: Task) => void;
   aoTirarCredito: (task: Task) => void;
@@ -69,7 +70,6 @@ export function CartaoDeTask({
   selecionando,
   selecionado,
   aoAbrir,
-  aoColapsar,
   aoMarcarComoMeu,
   aoCreditarOutro,
   aoTirarCredito,
@@ -115,13 +115,6 @@ export function CartaoDeTask({
   // Tudo o que se faz num card mora no menu de "…". Antes eram sete botões
   // disputando o canto do rodapé, todos escondidos atrás de hover e sem nome.
   const acoes: ItemDeMenu[] = [];
-
-  acoes.push({
-    rotulo: colapsado ? 'Expandir' : 'Recolher',
-    icone: colapsado ? <IconeAbaixo /> : <IconeAcima />,
-    aoEscolher: () => aoColapsar(task, !colapsado),
-    dica: 'Deixa uma linha do texto',
-  });
 
   // Preso numa coluna sua, o card não tem status a mexer: ele saiu do fluxo do
   // Teams por escolha sua, e a única coisa a fazer é devolvê-lo. As ações de
@@ -367,11 +360,7 @@ export function CartaoDeTask({
               )}
               {/* Recolhido, o card precisa avisar que esconde algo — senão a
                   faixa de print desaparecida parece card sem print. */}
-              {colapsado && (
-                <span className="badge neutral" title="Use o menu para expandir">
-                  recolhido
-                </span>
-              )}
+
               {/* Na coluna da daily o status real do Teams continua visível: a
                   marca pessoal move o card de lugar, não muda o que o canal diz. */}
               {naColunaDaDaily && !propria && (

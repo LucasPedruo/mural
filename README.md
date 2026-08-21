@@ -82,9 +82,13 @@ Encerrar a sprint **não** leva card preso numa coluna sua: ele está num passo 
 seu processo, não terminado — nem que o time já tenha dado o check no Teams.
 
 **Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
-fina com o rótulo de pé e a contagem. **Cada card também**, sem exceção: recolhido,
-ele mostra uma linha do texto e o rodapé, sem os prints, sem a continuação da
-rajada e sem a anotação da daily. Quem trabalha por sprint não olha *In review* toda hora, e o
+fina com o rótulo de pé e a contagem.
+
+**Os cards recolhem por coluna**, no menu ⋯ do cabeçalho dela: ou todos recolhidos
+— uma linha do texto e o rodapé, sem prints, sem a continuação da rajada, sem a
+anotação da daily — ou todos abertos. Era card por card, e o resultado era uma
+coluna metade alta e metade baixa, mais difícil de varrer com o olho que qualquer
+das duas alturas por inteiro. Quem trabalha por sprint não olha *In review* toda hora, e o
 espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
 recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
 por mural e ficam no navegador.

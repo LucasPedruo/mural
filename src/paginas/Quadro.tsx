@@ -167,8 +167,13 @@ export function Quadro() {
     () => Number(localStorage.getItem(chaveAvisoFora)) || 0,
   );
 
-  const chaveCards = `mural:cards-colapsados:${muralId}`;
-  const [cardsColapsados, setCardsColapsados] = useState<Set<string>>(() => {
+  // Quais COLUNAS estão com os cards recolhidos. Era card por card, e o
+  // resultado era uma coluna metade alta e metade baixa — mais difícil de varrer
+  // com o olho que qualquer das duas alturas por inteiro. A chave é nova de
+  // propósito: a lista velha era de ids de card, e ler aquilo como id de coluna
+  // recolheria colunas ao acaso.
+  const chaveCards = `mural:colunas-com-cards-recolhidos:${muralId}`;
+  const [colunasRecolhidas, setColunasRecolhidas] = useState<Set<string>>(() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(chaveCards) || '[]') as string[]);
     } catch {
@@ -678,11 +683,11 @@ export function Quadro() {
     setForaCiente(quantas);
   }
 
-  function colapsarCartao(task: Task, fechar: boolean) {
-    setCardsColapsados((atual) => {
+  function recolherCardsDaColuna(coluna: string, recolher: boolean) {
+    setColunasRecolhidas((atual) => {
       const proximo = new Set(atual);
-      if (fechar) proximo.add(task.id);
-      else proximo.delete(task.id);
+      if (recolher) proximo.add(coluna);
+      else proximo.delete(coluna);
       localStorage.setItem(chaveCards, JSON.stringify([...proximo]));
       return proximo;
     });
@@ -1237,8 +1242,8 @@ export function Quadro() {
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
                   aoApagar={apagar}
                   aoSoltarDaColuna={(t) => void soltarDaColuna(t)}
-                  colapsados={cardsColapsados}
-                  aoColapsarCartao={colapsarCartao}
+                  cardsRecolhidos={colunasRecolhidas.has(coluna)}
+                  aoRecolherCards={(recolher) => recolherCardsDaColuna(coluna, recolher)}
                 />
                 );
               })}
