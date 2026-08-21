@@ -412,7 +412,17 @@ export function CartaoDeTask({
                   fora do fluxo
                 </span>
               )}
-              {task.foraDeAlcance && !propria && (
+              {/* De outra conversa: o sync deste mural nunca vai alcançá-lo, e
+                  isso é diferente de "saiu da janela das ~20". */}
+              {task.deOutraConversa && (
+                <span
+                  className="badge alerta"
+                  title="Trazida por link, de outra conversa — as leituras deste mural não a alcançam"
+                >
+                  de outra conversa
+                </span>
+              )}
+              {task.foraDeAlcance && !propria && !task.deOutraConversa && (
                 <span
                   className="badge alerta"
                   title="O Teams não atualiza mais este card — quem move é você, arrastando"

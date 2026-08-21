@@ -400,6 +400,30 @@ de dias entre o pedido e a conclusão (mediana, não média: uma task esquecida 
 seis meses puxaria a média para um número que não descreve nenhuma semana real)
 e há quantos dias está parada a mais velha em aberto.
 
+## Incluir por link
+
+**Incluir por link**, no cabeçalho do quadro, traz uma mensagem do Teams para o
+quadro a partir do link dela — no Teams, "…" da mensagem › *Copiar link*.
+
+Serve para duas coisas que a leitura normal não alcança: a mensagem que já saiu
+das ~20 que a API devolve, e a que está em **outra conversa** — aquela que
+alguém te mandou por fora e que virou trabalho seu.
+
+O agente lê **aquela mensagem só**, então o card entra com autor, data, texto e
+reações de verdade, em vez de com o que você lembrar de digitar. Uma chamada em
+vez das vinte e uma de uma atualização, então custa uma fração do preço — mas não
+é grátis, e o diálogo mostra a média das leituras passadas antes de você
+confirmar.
+
+O card nasce **fora de alcance** e móvel à mão, que é a verdade sobre ele. Se a
+mensagem for da conversa deste mural e ainda estiver na janela das ~20, a próxima
+leitura o encontra e ele volta a ser um card comum, sem nenhum caso especial. Se
+for de outra conversa, ele ganha o selo **de outra conversa** e fica assim para
+sempre: o sync lê uma conversa só, a do mural.
+
+Mensagem que já está no quadro, ou que foi arquivada aqui antes, é recusada antes
+de o agente ser chamado — recusa não pode custar dinheiro.
+
 ## A nota de um card
 
 **Anotar**, no menu ⋯, guarda o que você quer lembrar sobre a demanda — "o cliente

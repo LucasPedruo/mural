@@ -426,6 +426,143 @@ function encerrarSprint(muralId) {
   return { arquivadas: arquivadas.length, sprints: sprintsResumidas(s) };
 }
 
+// ------------------------------------------------- incluir por link
+
+/** Le um link de mensagem do Teams: de que conversa ele fala e qual mensagem.
+ *
+ *  O onboarding le o mesmo formato para descobrir um canal; aqui interessa
+ *  TAMBEM o id da mensagem, que e a ultima parte do caminho. Link de canal traz
+ *  `groupId`; link de chat nao traz — e e so por isso que da para distinguir os
+ *  dois, porque o resto do endereco e igual. */
+function lerLinkDeMensagem(bruto) {
+  let u;
+  try {
+    u = new URL(String(bruto || '').trim());
+  } catch {
+    throw new Error('Isso nao parece um link. No Teams: "..." da mensagem > Copiar link.');
+  }
+  if (!/teams\.microsoft\.com$/i.test(u.hostname)) {
+    throw new Error('Este link nao e do Teams.');
+  }
+  const m = u.pathname.match(/\/l\/message\/([^/]+)\/([^/?#]+)/);
+  if (!m) {
+    throw new Error('Nao achei a mensagem neste link. No Teams: "..." da mensagem > Copiar link.');
+  }
+  const conversa = decodeURIComponent(m[1]);
+  const mensagemId = decodeURIComponent(m[2]).trim();
+  if (!/^\d+$/.test(mensagemId)) {
+    throw new Error('O link nao aponta para uma mensagem especifica.');
+  }
+  const teamId = u.searchParams.get('groupId');
+  const fonte = teamId
+    ? { tipo: 'canal', subtipo: 'canal', teamId, channelId: conversa }
+    : { tipo: 'chat', subtipo: 'group', chatId: conversa };
+  return { fonte, mensagemId };
+}
+
+/** A mensagem do link e da conversa que este mural acompanha? Se nao for, o card
+ *  entra igual — mas marcado, porque nenhuma leitura futura vai atualiza-lo: o
+ *  sync le uma conversa so, a do mural. */
+function ehDaMesmaConversa(mural, fonte) {
+  if (mural.tipo !== fonte.tipo) return false;
+  if (fonte.tipo === 'chat') return String(mural.chatId) === String(fonte.chatId);
+  return (
+    String(mural.teamId) === String(fonte.teamId) &&
+    String(mural.channelId) === String(fonte.channelId)
+  );
+}
+
+/** Traz UMA mensagem para o quadro a partir do link dela.
+ *
+ *  Custa uma execucao do agente, e e de proposito: o card entra com autor, data,
+ *  texto e reacoes de verdade, em vez de com o que voce lembrar de digitar. Uma
+ *  mensagem em vez de vinte e uma, entao e uma fracao do preco de uma leitura —
+ *  mas nao e gratis, e quem chama confirma antes.
+ *
+ *  O `lastSeen` fica no instante da inclusao, nao no `lastSync`: assim o card
+ *  nasce "fora de alcance" e movivel a mao, que e a verdade sobre ele. Se a
+ *  mensagem estiver na conversa do mural E na janela das ~20, a proxima leitura o
+ *  encontra e ele volta a ser um card comum, sem nenhum caso especial aqui.
+ */
+async function incluirPorLink(muralId, link) {
+  const mural = acharMural(muralId);
+  if (!mural) throw new Error('Mural nao encontrado.');
+  const { fonte, mensagemId } = lerLinkDeMensagem(link);
+
+  const db = lerTasks(muralId);
+  if (db.tasks[mensagemId]) throw new Error('Esta mensagem ja esta no quadro.');
+  for (const t of Object.values(db.tasks)) {
+    if (mensagensDaTask(t).some((m) => String(m.id) === mensagemId)) {
+      throw new Error('Esta mensagem ja esta no quadro, dentro de outro card.');
+    }
+  }
+  if (db.arquivados && db.arquivados[mensagemId]) {
+    throw new Error(
+      'Esta mensagem foi arquivada ou apagada aqui antes. Trazer de volta exigiria ' +
+      'desfazer isso a mao, no tasks.json.'
+    );
+  }
+
+  const ad = agenteEmUso();
+  const arquivo = path.join(pastaDoMural(muralId), 'mensagem.json');
+  fs.mkdirSync(pastaDoMural(muralId), { recursive: true });
+
+  const prompt = montarPrompt('ler-mensagem.md', {
+    URI_MENSAGEM: uriDasMensagens(fonte, ad) + '/' + mensagemId,
+    ARQUIVO_SNAPSHOT: arquivo,
+    FERRAMENTA_LEITURA: ad.ferramentas.leitura,
+    FERRAMENTA_ESCRITA: ad.ferramentas.escrita,
+    LINK_ORIGINAL: link,
+  });
+
+  // `rodarAgenteSimples` resolve com o JSON que o agente gravou — o gasto ele
+  // registra sozinho, no consumo.json, como qualquer outra execucao.
+  const lista = await rodarAgenteSimples(prompt, arquivo, 'sync');
+  const crua = Array.isArray(lista) ? lista.find((x) => x && x.id) : null;
+  if (!crua) {
+    throw new Error(
+      'O agente nao achou essa mensagem. Ela pode ter sido apagada, ou a conta ' +
+      'autenticada pode nao ter acesso a essa conversa.'
+    );
+  }
+
+  const agora = new Date().toISOString();
+  const mensagem = mensagemDoSnapshot({ ...crua, id: mensagemId }, agora);
+  if (!mensagem.webUrl) mensagem.webUrl = link;
+
+  const daMesma = ehDaMesmaConversa(mural, fonte);
+  const t = aplicarMensagensNaTask(
+    {
+      id: mensagemId,
+      origem: 'teams',
+      agrupamento: null,
+      firstSeen: agora,
+      statusChangedAt: agora,
+      statusAnterior: null,
+      lastSeen: agora,
+      movidoAMao: false,
+      meu: null,
+      feitoPor: null,
+      coluna: null,
+      nota: null,
+      ignorada: null,
+      tags: [],
+      // Vindo de outra conversa, nenhuma leitura futura o alcanca: o sync le a
+      // conversa do mural, e so ela. O selo existe para o card nao parecer um
+      // card comum que por acaso parou de atualizar.
+      deOutraConversa: !daMesma,
+      incluidoPorLink: agora,
+    },
+    [mensagem],
+  );
+  t.status = statusDe(t.reactions, prefsDoUsuario(usuarioAtual()).emojiFazendo);
+  db.tasks[mensagemId] = t;
+  gravarTasks(muralId, db);
+
+  try { fs.unlinkSync(arquivo); } catch {}
+  return { id: mensagemId, deOutraConversa: !daMesma };
+}
+
 // ------------------------------------------------------------------- paineis
 
 // Tudo que ja passou pelo mural: o que esta no quadro agora mais o que as
@@ -1006,6 +1143,7 @@ function tasksParaTela(muralId) {
     feitoPor: t.feitoPor || null,
     coluna: t.coluna || null,
     nota: t.nota || null,
+    deOutraConversa: !!t.deOutraConversa,
     ignorada: t.ignorada || null,
     tags: Array.isArray(t.tags) ? t.tags : [],
     mensagens: mensagensDaTask(t),
@@ -2440,6 +2578,20 @@ async function rotear(req, res) {
       const corpo = await lerCorpoJson(req);
       anotarTask(muralId, corpo.id, corpo.nota);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  // Traz uma mensagem para o quadro pelo link dela. Custa uma execucao do
+  // agente: uma mensagem em vez de vinte e uma, mas nao e gratis — quem confirma
+  // e a interface, com a estimativa na frente.
+  if (p === '/api/incluir-por-link' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      const corpo = await lerCorpoJson(req);
+      const r = await incluirPorLink(muralId, corpo.link);
+      return json(res, 200, { ok: true, ...r, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }

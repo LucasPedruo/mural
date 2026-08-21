@@ -130,6 +130,14 @@ export const api = {
       json({ id, tags }),
     ),
 
+  // Traz uma mensagem para o quadro pelo link dela. Custa uma execução do
+  // agente — uma mensagem, não as vinte e uma de uma atualização.
+  incluirPorLink: (muralId: string, link: string) =>
+    pedir<RespostaTasks & { id: string; deOutraConversa: boolean }>(
+      `/api/incluir-por-link?mural=${muralId}`,
+      json({ link }),
+    ),
+
   // A nota livre de um card. Nota vazia apaga.
   anotar: (muralId: string, id: string, nota: string) =>
     pedir<RespostaTasks>(`/api/nota?mural=${muralId}`, json({ id, nota })),

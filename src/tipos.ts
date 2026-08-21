@@ -113,6 +113,10 @@ export interface Task {
    *  terminado o trabalho. Aqui cabe "o cliente vai testar sexta", que não é
    *  conclusão de nada. Campo próprio: nenhuma leitura a apaga. */
   nota: string | null;
+  /** Veio de uma conversa que NÃO é a deste mural, trazida pelo link. Nenhuma
+   *  leitura futura a alcança — o sync lê uma conversa só — e o selo existe para
+   *  o card não parecer um card comum que por acaso parou de atualizar. */
+  deOutraConversa: boolean;
   /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */

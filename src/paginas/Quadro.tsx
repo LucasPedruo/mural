@@ -17,6 +17,7 @@ import {
 } from '../componentes/DialogoDeConfirmacao';
 import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
+import { DialogoDeLink } from '../componentes/DialogoDeLink';
 import { DialogoDeNota } from '../componentes/DialogoDeNota';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
@@ -137,6 +138,8 @@ export function Quadro() {
   const [tags, setTags] = useState<TagComContagem[]>([]);
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
+  const [incluindoLink, setIncluindoLink] = useState(false);
+  const [lendoLink, setLendoLink] = useState(false);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
 
   // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
@@ -550,6 +553,30 @@ export function Quadro() {
       setTags(r.tags);
     } catch (e) {
       setErro((e as Error).message);
+    }
+  }
+
+  // Traz uma mensagem para o quadro pelo link dela. Serve para a que já saiu das
+  // ~20 e para a que está em outra conversa — a que alguém te mandou por fora e
+  // que virou trabalho seu. Custa uma execução do agente, então o diálogo mostra
+  // a estimativa antes.
+  async function incluirPorLink(link: string) {
+    setLendoLink(true);
+    setErro(null);
+    try {
+      const r = await api.incluirPorLink(muralId, link);
+      setTasks(r.tasks);
+      setIncluindoLink(false);
+      avisar(
+        r.deOutraConversa
+          ? 'card incluído por link — de outra conversa, não recebe atualização'
+          : 'card incluído por link',
+      );
+      void api.consumo(muralId).then(setConsumo).catch(() => {});
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setLendoLink(false);
     }
   }
 
@@ -1091,6 +1118,14 @@ export function Quadro() {
           aoRemover={removerNotificacao}
           aoLimpar={limparNotificacoes}
         />
+        <button
+          className="acao-topo"
+          onClick={() => setIncluindoLink(true)}
+          disabled={sincronizando}
+          title="Trazer uma mensagem do Teams pelo link dela"
+        >
+          Incluir por link
+        </button>
         {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
             Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
         <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
@@ -1105,6 +1140,16 @@ export function Quadro() {
           usuario={consumo.usuario}
           aoConfirmar={confirmar}
           aoCancelar={() => setConfirmando(false)}
+        />
+      )}
+
+      {incluindoLink && (
+        <DialogoDeLink
+          estimativa={consumo?.estimativa ?? null}
+          reportaCusto={consumo?.agente.reportaCusto !== false}
+          ocupado={lendoLink}
+          aoIncluir={(link) => void incluirPorLink(link)}
+          aoCancelar={() => setIncluindoLink(false)}
         />
       )}
 
