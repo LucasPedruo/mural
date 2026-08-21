@@ -98,12 +98,15 @@ export function CartaoDeTask({
   const linhas = mensagens.filter((m) => !m.soPrint && m.summary !== task.summary);
   const agrupado = mensagens.length > 1;
 
-  // Arrastar entre as colunas do Teams so vale para task fora de alcance ou
-  // gravada por uma versao anterior: enquanto a mensagem aparece no Teams, a
-  // reacao de la manda e a proxima atualizacao desfaria o movimento. O servidor
-  // recusa esse caso, e aqui o gesto nem comeca. Marcar como "feito por mim" e
-  // outra historia — nao mexe no status, entao vale para qualquer card.
-  const podeArrastar = task.podeMover;
+  // TODO card se arrasta. Antes o gesto nem comecava fora dos cards sem sinal do
+  // Teams, e isso escondia tres destinos que sempre aceitaram qualquer card: uma
+  // coluna sua, "Done by me" e "Out of scope". Nenhum deles mexe no status, entao
+  // nao ha o que a proxima leitura desfazer.
+  //
+  // O que continua restrito e uma coisa so: mudar de coluna DO TEAMS. Ali a
+  // reacao de la manda, e quem recusa e o `aoSoltar`, no destino — nao o gesto,
+  // na origem. Bloquear na origem tornava invisivel tudo o que era permitido.
+  const soPelaReacao = !task.podeMover;
 
   const dica = selecionando
     ? selecionado
@@ -111,9 +114,9 @@ export function CartaoDeTask({
       : 'Clique para juntar com o outro'
     : propria
       ? 'Criada à mão — não tem mensagem no Teams'
-      : podeArrastar
-        ? 'Clique para abrir no Teams · arraste para mudar de coluna'
-        : 'Clique para abrir no Teams';
+      : soPelaReacao
+        ? 'Clique para abrir no Teams · arraste para uma coluna sua'
+        : 'Clique para abrir no Teams · arraste para mudar de coluna';
 
   // Tudo o que se faz num card mora no menu de "…". Antes eram sete botões
   // disputando o canto do rodapé, todos escondidos atrás de hover e sem nome.
@@ -243,7 +246,7 @@ export function CartaoDeTask({
   }
 
   return (
-    <Draggable draggableId={task.id} index={indice} isDragDisabled={!podeArrastar}>
+    <Draggable draggableId={task.id} index={indice}>
       {(fornecido, estado) => {
         // O card inteiro é o alvo do clique, não só o texto: o gesto natural em
         // cima de um card é clicar nele, e mirar na linha do título era um
@@ -412,7 +415,17 @@ export function CartaoDeTask({
                   fora do fluxo
                 </span>
               )}
-              {task.foraDeAlcance && !propria && (
+              {/* De outra conversa: o sync deste mural nunca vai alcançá-lo, e
+                  isso é diferente de "saiu da janela das ~20". */}
+              {task.deOutraConversa && (
+                <span
+                  className="badge alerta"
+                  title="Trazida por link, de outra conversa — as leituras deste mural não a alcançam"
+                >
+                  de outra conversa
+                </span>
+              )}
+              {task.foraDeAlcance && !propria && !task.deOutraConversa && (
                 <span
                   className="badge alerta"
                   title="O Teams não atualiza mais este card — quem move é você, arrastando"
@@ -420,7 +433,19 @@ export function CartaoDeTask({
                   sem sinal do Teams
                 </span>
               )}
-              {task.movidoAMao && <span className="badge neutral">movido à mão</span>}
+              {/* O desacordo fica no card, não só no diálogo: quem fechou em
+                  "decidir depois" precisa reencontrá-lo. */}
+              {task.conflito && (
+                <span
+                  className="badge warning"
+                  title="Você moveu este card à mão e a reação no Teams diz outra coisa — atualize o quadro para decidir"
+                >
+                  discorda do Teams
+                </span>
+              )}
+              {task.movidoAMao && !task.conflito && (
+                <span className="badge neutral">movido à mão</span>
+              )}
               {/* Etiquetas suas. Ficam antes das reações porque são o que você
                   escreveu, e as reações são o que o Teams contou. */}
               {task.tags.map((tag) => (

@@ -113,6 +113,14 @@ export interface Task {
    *  terminado o trabalho. Aqui cabe "o cliente vai testar sexta", que não é
    *  conclusão de nada. Campo próprio: nenhuma leitura a apaga. */
   nota: string | null;
+  /** Veio de uma conversa que NÃO é a deste mural, trazida pelo link. Nenhuma
+   *  leitura futura a alcança — o sync lê uma conversa só — e o selo existe para
+   *  o card não parecer um card comum que por acaso parou de atualizar. */
+  deOutraConversa: boolean;
+  /** O seu gesto discorda da reação no canal. Enquanto isto existe, o card fica
+   *  ONDE VOCÊ O PÔS — a leitura registra o desacordo em vez de desfazer o
+   *  gesto, e quem decide é você. */
+  conflito: Conflito | null;
   /** Quando você decidiu que esta não é sua — data da decisão. O card sai das
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */
@@ -125,6 +133,17 @@ export interface Task {
   /** 'auto' = o Mural juntou a rajada; 'mao' = você juntou ou separou, e nenhuma
    *  leitura desfaz isso. null = mensagem solta. */
   agrupamento: 'auto' | 'mao' | null;
+}
+
+/** Onde o seu gesto e a reação no canal discordam.
+ *
+ *  `reacoes` é a assinatura das reações no momento em que o desacordo apareceu.
+ *  É o que faz "mantenho onde pus" não virar um aviso eterno: a pergunta só
+ *  volta quando as reações da mensagem mudarem. */
+export interface Conflito {
+  statusDoTeams: Status;
+  em: string;
+  reacoes: string;
 }
 
 export interface RespostaTasks {
@@ -191,9 +210,11 @@ export interface ResultadoSync extends RespostaTasks {
   ok: boolean;
   novos: string[];
   mudaram: string[];
-  retomadas: string[];
   /** Ganharam a marca "feito por mim" pela sua reação nesta leitura. */
   marcados: string[];
+  /** Cards que você moveu à mão e que a reação no canal contradiz. Nada foi
+   *  movido: cada um espera a sua decisão. */
+  conflitos: string[];
   /** Cards que ganharam mensagens novas da mesma rajada — o autor continuou
    *  escrevendo depois da última leitura. */
   cresceram: string[];

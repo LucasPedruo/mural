@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
 import { EscolherEmoji } from '../componentes/EscolherEmoji';
-import { IconeFeito } from '../componentes/icones';
+import { IconeFeito, IconeVoltar } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
   AgenteDisponivel,
@@ -111,6 +111,23 @@ export function Onboarding() {
   const [checks, setChecks] = useState<string[]>([]);
   const [erroEmoji, setErroEmoji] = useState<string | null>(null);
 
+  // Se já existe mural, esta tela é opcional e precisa de saída. Se não existe,
+  // ela é a única coisa a fazer no app.
+  const [temMurais, setTemMurais] = useState(false);
+
+  // Os dois primeiros passos são DIAGNÓSTICOS, não requisitos: nem detectar o
+  // binário nem descobrir a conta logada é necessário para criar um mural. Mas
+  // eles estavam travando a tela — agente que não responde `--version` (um
+  // wrapper, um alias, um PATH estranho) deixava a pessoa parada num passo com um
+  // botão de "tentar de novo" que ia falhar igual para sempre.
+  //
+  // Daí a saída explícita. O que ela custa está escrito ao lado dela: a falha
+  // reaparece na primeira leitura, e lá com o motivo em contexto.
+  const [passo1Forcado, setPasso1Forcado] = useState(false);
+  const [contaPulada, setContaPulada] = useState(false);
+  const passo1Liberado = passo1 === 'ok' || passo1Forcado;
+  const podeEscolherConversa = passo2 === 'ok' || contaPulada;
+
   const jaVerificou = useRef(false);
 
   useEffect(() => {
@@ -119,6 +136,12 @@ export function Onboarding() {
     jaVerificou.current = true;
 
     void carregarAgentes();
+    void api
+      .listarMurais()
+      .then((r) => setTemMurais(r.murais.length > 0))
+      .catch(() => {
+        /* sem a lista a tela segue: o botão de voltar só não aparece */
+      });
     void api
       .preferencias()
       .then((r) => {
@@ -284,6 +307,19 @@ export function Onboarding() {
   return (
     <div className="pagina-onboarding">
       <div className="topo">
+        {/* Só aparece quando existe mural para voltar PARA. Sem nenhum, a
+            listagem manda direto para cá, e um botão de voltar que devolve a
+            pessoa ao lugar que a expulsou é um beco. */}
+        {temMurais && (
+          <button
+            className="icone"
+            onClick={() => navegar('/')}
+            title="Voltar para meus murais"
+            aria-label="Voltar para meus murais"
+          >
+            <IconeVoltar />
+          </button>
+        )}
         <span className="ponto-marca" />
         <h1>Mural</h1>
       </div>
@@ -346,6 +382,26 @@ export function Onboarding() {
                 <p className={'aviso ' + (agente.instalado ? 'info' : 'erro')}>
                   {agente.requisitos}
                 </p>
+
+                {/* O binário não respondeu, e isso não prova que ele não
+                    funciona: wrapper, alias e PATH de shell fazem `--version`
+                    falhar em CLI que roda. */}
+                {passo1 === 'erro' && !passo1Forcado && (
+                  <div className="saida-do-passo">
+                    <button onClick={() => setPasso1Forcado(true)}>Usar assim mesmo</button>
+                    <p className="dica">
+                      Não conseguimos rodar <code>{ajustes.binario ?? agente.binario}</code> aqui.
+                      Se você sabe que ele funciona — é um alias, um wrapper, ou está num PATH que
+                      só o seu shell conhece — siga. Se estiver errado, a primeira leitura falha
+                      dizendo o que aconteceu.
+                    </p>
+                  </div>
+                )}
+                {passo1Forcado && (
+                  <p className="aviso atencao">
+                    Seguindo sem detectar o agente. Se a leitura falhar, é aqui que se volta.
+                  </p>
+                )}
 
                 <button className="alternar" onClick={() => setMostrarAjustes((v) => !v)}>
                   {mostrarAjustes ? 'esconder ajustes' : 'ajustes avançados'}
@@ -448,7 +504,7 @@ export function Onboarding() {
       </section>
 
       {/* 2 */}
-      <section className="passo" data-estado={passo1 === 'ok' ? passo2 : 'espera'}>
+      <section className="passo" data-estado={passo1Liberado ? passo2 : 'espera'}>
         <div className="passo-topo">
           <span className="num">{passo2 === 'ok' ? <IconeFeito tamanho={13} /> : '2'}</span>
           <h2>Conta Microsoft conectada</h2>
@@ -456,7 +512,7 @@ export function Onboarding() {
         <p className={'detalhe ' + (passo2 === 'ok' ? 'bom' : passo2 === 'erro' ? 'ruim' : '')}>
           {contaCarregando ? `perguntando ao Claude Code… ${mmss(cronoConta)}` : detalhe2}
         </p>
-        {passo1 === 'ok' && passo2 !== 'ok' && (
+        {passo1Liberado && passo2 !== 'ok' && (
           <div className="corpo">
             <button className="primario" onClick={verificarConta} disabled={contaCarregando}>
               {passo2 === 'erro' ? 'Tentar de novo' : 'Verificar conexão'}
@@ -464,21 +520,44 @@ export function Onboarding() {
             <p className="dica">
               Nenhuma senha é pedida aqui — só perguntamos quem já está logado no agente.
             </p>
+
+            {/* Descobrir a conta é diagnóstico, não requisito: o mural se cria
+                sem isso. A falha quase sempre é o MCP do Teams não estar
+                configurado no agente — e isso não se resolve nesta tela. */}
+            {passo2 === 'erro' && !contaPulada && (
+              <div className="saida-do-passo">
+                <button onClick={() => setContaPulada(true)}>Continuar sem verificar</button>
+                <p className="dica">
+                  O motivo mais comum é o agente não ter o MCP do Microsoft Graph configurado — no
+                  Claude Code, <code>/mcp</code> mostra o que está ligado. Dá para criar o mural
+                  agora e resolver isso depois: quem falha então é o botão Atualizar, com o erro
+                  do agente na tela.
+                </p>
+              </div>
+            )}
+            {contaPulada && (
+              <p className="aviso atencao">
+                Seguindo sem saber qual conta está logada. A leitura do Teams pode falhar até você
+                configurar o MCP no agente.
+              </p>
+            )}
           </div>
         )}
       </section>
 
       {/* 3 */}
-      <section className="passo" data-estado={passo2 === 'ok' ? passo3 : 'espera'}>
+      <section className="passo" data-estado={podeEscolherConversa ? passo3 : 'espera'}>
         <div className="passo-topo">
           <span className="num">3</span>
           <h2>Escolher a conversa</h2>
         </div>
         <p className="detalhe">
-          {passo2 === 'ok' ? 'escolha o canal ou o chat que vira o quadro' : 'aguardando o passo 2'}
+          {podeEscolherConversa
+            ? 'escolha o canal ou o chat que vira o quadro'
+            : 'aguardando o passo 2'}
         </p>
 
-        {passo2 === 'ok' && (
+        {podeEscolherConversa && (
           <div className="corpo">
             <div className="abas" role="tablist">
               <button

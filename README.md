@@ -155,8 +155,22 @@ errada.
 Eles cortam o quadro inteiro — enquanto um filtro está ligado, as contagens das
 colunas são as dele, não as do quadro todo.
 
-O Mural **só lê** o Teams: quem move as tasks é a reação lá. O arraste entre
-colunas existe só para os cards que o Teams não acompanha mais.
+O Mural **só lê** o Teams: quem move as tasks é a reação lá. Mas **todo card se
+arrasta, para qualquer coluna** — inclusive o que o Teams ainda acompanha.
+
+Antes isso era recusado, e a razão era boa: a próxima leitura desfaria o gesto. A
+razão contra é melhor — um quadro que recusa o gesto obriga você a ir reagir no
+Teams *antes* de poder organizar o próprio quadro, e as duas coisas não acontecem
+no mesmo minuto.
+
+Então o gesto passa, marcado. A leitura seguinte compara com a reação no canal e,
+discordando, **pergunta em vez de desfazer**: um diálogo mostra qual card é, onde
+você o pôs e o que a reação diz, e você escolhe — *aceitar o Teams*, e o card
+volta para a coluna da reação; ou *manter onde eu pus*, e ele fica.
+
+Mantendo, a pergunta só volta **se as reações da mensagem mudarem**. O que fica
+guardado não é "eu já respondi", é *quais reações eu aceitei* — então voltar a
+perguntar significa que alguém mexeu, não que o Mural esqueceu.
 
 **O título do card é o texto da mensagem, verbatim** — o Mural não resume mais o
 que a pessoa escreveu. Um card que diz outra coisa faz o time discutir uma demanda
@@ -399,6 +413,30 @@ Em cima, seis números que o quadro não dá de relance — entre eles a **media
 de dias entre o pedido e a conclusão (mediana, não média: uma task esquecida há
 seis meses puxaria a média para um número que não descreve nenhuma semana real)
 e há quantos dias está parada a mais velha em aberto.
+
+## Incluir por link
+
+**Incluir por link**, no cabeçalho do quadro, traz uma mensagem do Teams para o
+quadro a partir do link dela — no Teams, "…" da mensagem › *Copiar link*.
+
+Serve para duas coisas que a leitura normal não alcança: a mensagem que já saiu
+das ~20 que a API devolve, e a que está em **outra conversa** — aquela que
+alguém te mandou por fora e que virou trabalho seu.
+
+O agente lê **aquela mensagem só**, então o card entra com autor, data, texto e
+reações de verdade, em vez de com o que você lembrar de digitar. Uma chamada em
+vez das vinte e uma de uma atualização, então custa uma fração do preço — mas não
+é grátis, e o diálogo mostra a média das leituras passadas antes de você
+confirmar.
+
+O card nasce **fora de alcance** e móvel à mão, que é a verdade sobre ele. Se a
+mensagem for da conversa deste mural e ainda estiver na janela das ~20, a próxima
+leitura o encontra e ele volta a ser um card comum, sem nenhum caso especial. Se
+for de outra conversa, ele ganha o selo **de outra conversa** e fica assim para
+sempre: o sync lê uma conversa só, a do mural.
+
+Mensagem que já está no quadro, ou que foi arquivada aqui antes, é recusada antes
+de o agente ser chamado — recusa não pode custar dinheiro.
 
 ## A nota de um card
 
@@ -649,6 +687,22 @@ configuração**, no topo, limpa só o cache do onboarding — a conta verificad
 lista de chats e a preferência de confirmação — e volta para a tela de
 configuração. Murais, histórico de tasks e registro de gastos ficam intactos:
 um botão de configuração não pode apagar trabalho acumulado por tabela.
+
+## Quando um passo da configuração falha
+
+Os dois primeiros passos são **diagnósticos, não requisitos**: nem detectar o
+binário nem descobrir a conta logada é necessário para criar um mural. Então cada
+um tem saída.
+
+Agente que não responde a `--version` oferece **usar assim mesmo** — wrapper,
+alias e PATH de shell fazem a detecção falhar em CLI que roda perfeitamente. A
+verificação da conta oferece **continuar sem verificar**, com o motivo mais
+provável escrito ao lado: o MCP do Microsoft Graph não estar configurado no
+agente.
+
+Nos dois casos o passo fica marcado, e o que a saída custa está dito: a falha
+reaparece na primeira leitura, e lá com o erro do agente em contexto. Travar
+alguém num "tentar de novo" que vai falhar igual é pior que deixar seguir avisado.
 
 ## Limites conhecidos
 

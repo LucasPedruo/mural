@@ -199,6 +199,28 @@ body {
   outline-offset: 2px;
 }
 
+/* Tudo em que se clica mostra que se clica.
+   O `button` sozinho ja tinha pointer, mas link, select e os papeis ARIA nao —
+   e o navegador da cursor de TEXTO para `select`, que e o unico cursor que
+   sugere exatamente o contrario do que o controle faz.
+   Especificidade de um elemento so, de proposito: e o piso. As excecoes deste
+   projeto sao todas por classe (o `grab` do card e do cabecalho da coluna, o
+   `default` do botao desabilitado) e continuam ganhando desta. */
+button,
+a[href],
+select,
+summary,
+[role='button'],
+[role='tab'],
+[role='menuitem'] {
+  cursor: pointer;
+}
+
+/* Link SEM destino nao e link. Se algum dia aparecer um, ele nao pode fingir. */
+a:not([href]) {
+  cursor: default;
+}
+
 /* ---- botoes ---- */
 button {
   font: inherit;

@@ -7,12 +7,19 @@
 /* O cabecalho e a alca da coluna: e por ele que ela se arrasta. O cursor e a
    alca de pontinhos dizem isso — sem sinal nenhum, um gesto que existe e um
    gesto que ninguem descobre. */
+/* Nada aqui quebra linha. O nome da coluna quebrado em "Done / by / me" dentro
+   de uma pilula deixa de ser um rotulo e passa a ser tres palavras empilhadas —
+   e o cabecalho, que existe para ser lido de relance, vira o item mais alto da
+   coluna. Se o nome nao cabe, ele corta com reticencias; quem precisa do nome
+   inteiro tem o `title`. */
 .coluna > header {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 12px 14px 10px;
+  gap: 7px;
+  padding: 12px 12px 10px;
   cursor: grab;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 .coluna > header:active {
   cursor: grabbing;
@@ -34,6 +41,7 @@
 .coluna .colapsar {
   display: inline-flex;
   align-items: center;
+  flex: none;
   padding: 3px 5px;
   border-radius: 7px;
   font-size: 12px;
@@ -63,11 +71,19 @@
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   border-radius: 999px;
-  padding: 5px 12px 5px 9px;
+  padding: 5px 11px 5px 9px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-primary);
   line-height: 1;
+  /* O selo e o unico que cede espaco: a contagem e os dois botoes ao lado tem
+     largura de um caractere ou de um icone, e cortar QUALQUER um deles perde
+     informacao que o nome truncado ainda entrega. */
+  min-width: 0;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .coluna .selo .ponto {
   width: 8px;
@@ -81,6 +97,8 @@
   font-size: 12.5px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  flex: none;
+  white-space: nowrap;
 }
 
 .coluna .lista {
@@ -141,12 +159,21 @@
 
 /* A reação que marca os cards como seus. Fica no cabeçalho da coluna porque é
    ali que ela age — e porque o emoji sozinho não se explica. */
+/* A reacao configurada. Mostra o emoji e nada mais: "sem reacao" escrito em
+   duas linhas ocupava mais cabecalho que o nome da coluna, para dizer uma coisa
+   que o `title` diz melhor. Vazio, fica um travessao. */
 .coluna .assinatura {
-  padding: 3px 9px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 3px 6px;
   border-radius: 999px;
   font-size: 13px;
   line-height: 1.3;
   background: var(--bg-surface);
+  white-space: nowrap;
 }
 .coluna .assinatura:hover {
   border-color: var(--marca-meu);

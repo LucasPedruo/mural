@@ -15,8 +15,10 @@ import {
   DialogoDeConfirmacao,
   type PedidoDeConfirmacao,
 } from '../componentes/DialogoDeConfirmacao';
+import { DialogoDeConflitos } from '../componentes/DialogoDeConflitos';
 import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
+import { DialogoDeLink } from '../componentes/DialogoDeLink';
 import { DialogoDeNota } from '../componentes/DialogoDeNota';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
@@ -137,6 +139,11 @@ export function Quadro() {
   const [tags, setTags] = useState<TagComContagem[]>([]);
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
+  const [incluindoLink, setIncluindoLink] = useState(false);
+  // Os cards em que o seu gesto e a reação no canal discordam. A leitura abre o
+  // diálogo; "decidir depois" fecha, e o selo no card é como reencontrar.
+  const [verConflitos, setVerConflitos] = useState(false);
+  const [lendoLink, setLendoLink] = useState(false);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
 
   // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
@@ -412,10 +419,12 @@ export function Quadro() {
       const partes: string[] = [];
       if (r.novos.length) partes.push(`${r.novos.length} nova(s)`);
       if (r.mudaram.length) partes.push(`${r.mudaram.length} mudou/mudaram de status`);
-      // Uma task movida a mao que reapareceu no Teams volta a obedecer a reacao
-      // real; avisar evita a impressao de que o quadro desfez a acao sozinho.
-      if (r.retomadas.length) {
-        partes.push(`${r.retomadas.length} voltou ao Teams e teve o status corrigido`);
+      // O desacordo não é contado como "corrigido", porque nada foi corrigido:
+      // os cards ficaram onde você os pôs, e o diálogo abre para você decidir.
+      if (r.conflitos?.length) {
+        partes.push(
+          `${r.conflitos.length} ${r.conflitos.length === 1 ? 'discorda' : 'discordam'} do Teams`,
+        );
       }
       // A marca automática move card de coluna sozinha; dizer quantas foram
       // evita a impressão de que o quadro perdeu tasks da coluna do Teams.
@@ -442,6 +451,9 @@ export function Quadro() {
         );
       }
       avisar(partes.length ? partes.join(', ') : 'nada mudou');
+      // Abre na hora: um desacordo que espera você lembrar de abrir um diálogo
+      // é um card parado na coluna errada até você lembrar.
+      if (r.conflitos?.length) setVerConflitos(true);
       void api.consumo(muralId).then(setConsumo).catch(() => {});
     } catch (e) {
       // Só na notificação. A falha da leitura é a única coisa nesta tela que já
@@ -550,6 +562,30 @@ export function Quadro() {
       setTags(r.tags);
     } catch (e) {
       setErro((e as Error).message);
+    }
+  }
+
+  // Traz uma mensagem para o quadro pelo link dela. Serve para a que já saiu das
+  // ~20 e para a que está em outra conversa — a que alguém te mandou por fora e
+  // que virou trabalho seu. Custa uma execução do agente, então o diálogo mostra
+  // a estimativa antes.
+  async function incluirPorLink(link: string) {
+    setLendoLink(true);
+    setErro(null);
+    try {
+      const r = await api.incluirPorLink(muralId, link);
+      setTasks(r.tasks);
+      setIncluindoLink(false);
+      avisar(
+        r.deOutraConversa
+          ? 'card incluído por link — de outra conversa, não recebe atualização'
+          : 'card incluído por link',
+      );
+      void api.consumo(muralId).then(setConsumo).catch(() => {});
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setLendoLink(false);
     }
   }
 
@@ -686,6 +722,18 @@ export function Quadro() {
 
   // Soltar o card de volta ao fluxo do Teams. Não precisa de nova leitura: o
   // `status` nunca parou de ser atualizado por baixo enquanto ele estava preso.
+  // Você decide o desacordo. "teams" devolve o card à coluna que a reação manda;
+  // "meu" o mantém, e a pergunta só volta se as reações mudarem.
+  async function decidirConflito(task: Task, decisao: 'teams' | 'meu') {
+    setErro(null);
+    try {
+      const r = await api.decidirConflito(muralId, task.id, decisao);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   async function soltarDaColuna(task: Task) {
     setErro(null);
     try {
@@ -859,6 +907,10 @@ export function Quadro() {
 
     if (task.status === coluna) return;
 
+    // Mudar de coluna DO TEAMS vale para qualquer card, inclusive o que o Teams
+    // acompanha. O gesto não mente: ele fica marcado, e a próxima leitura
+    // compara com a reação no canal — discordando, ela PERGUNTA em vez de
+    // desfazer. Ver `decidirConflito` e o diálogo que a leitura abre.
     // Otimista: o card muda de coluna na hora e o servidor confirma. Se ele
     // recusar, o estado volta ao que era e o motivo aparece na tela.
     const anterior = tasks;
@@ -986,6 +1038,7 @@ export function Quadro() {
       .sort((a, b) => b.quantas - a.quantas || a.autor.localeCompare(b.autor));
   }, [tasks]);
 
+  const emConflito = tasks.filter((t) => t.conflito);
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
@@ -1091,6 +1144,14 @@ export function Quadro() {
           aoRemover={removerNotificacao}
           aoLimpar={limparNotificacoes}
         />
+        <button
+          className="acao-topo"
+          onClick={() => setIncluindoLink(true)}
+          disabled={sincronizando}
+          title="Trazer uma mensagem do Teams pelo link dela"
+        >
+          Incluir por link
+        </button>
         {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
             Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
         <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
@@ -1105,6 +1166,24 @@ export function Quadro() {
           usuario={consumo.usuario}
           aoConfirmar={confirmar}
           aoCancelar={() => setConfirmando(false)}
+        />
+      )}
+
+      {verConflitos && emConflito.length > 0 && (
+        <DialogoDeConflitos
+          tasks={emConflito}
+          aoDecidir={(t, d) => void decidirConflito(t, d)}
+          aoFechar={() => setVerConflitos(false)}
+        />
+      )}
+
+      {incluindoLink && (
+        <DialogoDeLink
+          estimativa={consumo?.estimativa ?? null}
+          reportaCusto={consumo?.agente.reportaCusto !== false}
+          ocupado={lendoLink}
+          aoIncluir={(link) => void incluirPorLink(link)}
+          aoCancelar={() => setIncluindoLink(false)}
         />
       )}
 
@@ -1234,11 +1313,16 @@ export function Quadro() {
                         onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiFazendo
-                            ? `Cards com a reação ${emojiFazendo} de QUALQUER pessoa caem aqui. Clique para trocar.`
-                            : 'Coluna desligada — clique para escolher o emoji de "peguei esta"'
+                            ? `${emojiFazendo} de qualquer pessoa cai aqui — clique para trocar`
+                            : 'Coluna desligada — clique para escolher a reação'
+                        }
+                        aria-label={
+                          emojiFazendo
+                            ? `Reação desta coluna: ${emojiFazendo}`
+                            : 'Coluna desligada — escolher a reação'
                         }
                       >
-                        {emojiFazendo || 'sem emoji'}
+                        {emojiFazendo || '—'}
                       </button>
                     ) : coluna === 'meu' ? (
                       <button
@@ -1246,11 +1330,14 @@ export function Quadro() {
                         onClick={() => setEditandoEmojis(true)}
                         title={
                           emojiMeu
-                            ? `Cards com a reação ${emojiMeu} caem aqui sozinhos. Clique para trocar.`
-                            : 'Nenhuma reação configurada — clique para escolher a sua'
+                            ? `${emojiMeu} na mensagem traz o card para cá — clique para trocar`
+                            : 'Nenhuma reação sua — clique para escolher'
+                        }
+                        aria-label={
+                          emojiMeu ? `Sua reação: ${emojiMeu}` : 'Escolher a sua reação'
                         }
                       >
-                        {emojiMeu || 'sem reação'}
+                        {emojiMeu || '—'}
                       </button>
                     ) : undefined
                   }

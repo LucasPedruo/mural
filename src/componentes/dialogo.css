@@ -154,3 +154,81 @@
   max-height: 120px;
   overflow-y: auto;
 }
+
+/* A lista de desacordos entre o seu gesto e a reação no canal. Um bloco por
+   card, porque a decisão é por card: um botão só para "aceitar tudo" pareceria
+   mais simples e esconderia que os casos podem ser diferentes. */
+.lista-conflitos {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  margin-bottom: 18px;
+}
+
+.lista-conflitos .conflito {
+  padding: 13px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 11px;
+  background: var(--bg-surface-2);
+}
+
+.lista-conflitos .texto-do-card {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+/* Os dois lados um ao lado do outro: a pergunta é a distância entre eles, e
+   empilhados verticalmente eles parecem dois fatos soltos. */
+.lista-conflitos .lados {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.lista-conflitos .lado {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.lista-conflitos .de-quem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.lista-conflitos .emojis {
+  font-size: 12px;
+}
+
+.lista-conflitos .decisao {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lista-conflitos .decisao button {
+  font-size: 12.5px;
+  padding: 6px 12px;
+}
+
+.lista-conflitos .dica {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
