@@ -61,6 +61,53 @@ function lerLinkDoTeams(bruto: string): FonteEscolhida | null {
   return { tipo: 'canal', subtipo: 'canal', teamId, channelId, nome };
 }
 
+/** O que fazer quando a conexão com o Teams falha.
+ *
+ *  Antes esta tela respondia com uma frase — "o conector precisa estar ativo" —
+ *  e, logo abaixo, o painel de ajustes avançados: binário, molde de argumentos,
+ *  `{{FERRAMENTAS}}`, molde de URI. Nada daquilo resolve um conector não
+ *  autorizado, e quem chegou ali por não conseguir conectar não tem como saber
+ *  disso. A tela dizia o que está errado e escondia o que fazer.
+ *
+ *  São passos numerados porque a ação acontece FORA daqui: em outro programa,
+ *  em outra janela. Uma frase corrida obriga a pessoa a montar a sequência
+ *  sozinha enquanto alterna entre as duas telas. */
+function ComoConectar({ agenteId, nome }: { agenteId: string; nome: string }) {
+  const noClaude = agenteId === 'claude';
+  return (
+    <div className="como-conectar">
+      <strong>Como resolver</strong>
+      <ol>
+        <li>
+          Abra o <strong>{nome}</strong> num terminal.
+        </li>
+        {noClaude ? (
+          <>
+            <li>
+              Rode <code>/mcp</code>.
+            </li>
+            <li>
+              Conecte o <strong>Microsoft 365</strong> e autorize no navegador que abrir.
+            </li>
+          </>
+        ) : (
+          <>
+            <li>
+              Configure nele um <strong>MCP de Microsoft Graph</strong> — o conector da claude.ai
+              não vale fora do Claude Code.
+            </li>
+            <li>
+              Nos ajustes avançados abaixo, troque os nomes das tools e o molde das URIs pelos que
+              esse MCP usa.
+            </li>
+          </>
+        )}
+        <li>Volte aqui e clique em Tentar de novo.</li>
+      </ol>
+    </div>
+  );
+}
+
 export function Onboarding() {
   const navegar = useNavigate();
 
@@ -410,10 +457,9 @@ export function Onboarding() {
                 {mostrarAjustes && (
                   <div className="ajustes-agente">
                     <p className="dica">
-                      Como o agente é chamado e como as tools do Teams se chamam nele. Deixar em
-                      branco mantém o padrão. <code>{'{{FERRAMENTAS}}'}</code> vira a lista de tools
-                      permitidas; <code>{'{{PROMPT}}'}</code> vira o prompt, quando ele entra por
-                      argumento em vez de stdin.
+                      <strong>Você provavelmente não precisa mexer aqui.</strong> Isto é para
+                      quando o binário está noutro lugar, ou quando o seu MCP chama as tools do
+                      Teams por outros nomes. Em branco, fica o padrão.
                     </p>
 
                     <div className="campos-agente">
@@ -524,14 +570,16 @@ export function Onboarding() {
             {/* Descobrir a conta é diagnóstico, não requisito: o mural se cria
                 sem isso. A falha quase sempre é o MCP do Teams não estar
                 configurado no agente — e isso não se resolve nesta tela. */}
+            {passo2 === 'erro' && agente && (
+              <ComoConectar agenteId={agente.id} nome={agente.nome} />
+            )}
+
             {passo2 === 'erro' && !contaPulada && (
               <div className="saida-do-passo">
                 <button onClick={() => setContaPulada(true)}>Continuar sem verificar</button>
                 <p className="dica">
-                  O motivo mais comum é o agente não ter o MCP do Microsoft Graph configurado — no
-                  Claude Code, <code>/mcp</code> mostra o que está ligado. Dá para criar o mural
-                  agora e resolver isso depois: quem falha então é o botão Atualizar, com o erro
-                  do agente na tela.
+                  Dá para criar o mural agora e resolver isso depois — quem falha então é o botão
+                  Atualizar, com o erro do agente na tela.
                 </p>
               </div>
             )}
