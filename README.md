@@ -155,12 +155,22 @@ errada.
 Eles cortam o quadro inteiro — enquanto um filtro está ligado, as contagens das
 colunas são as dele, não as do quadro todo.
 
-O Mural **só lê** o Teams: quem move as tasks é a reação lá. **Todo card se
-arrasta**, mas o que o destino aceita muda: uma coluna sua, *Done by me* e *Out
-of scope* aceitam qualquer um — nenhum deles mexe no status, então não há o que a
-próxima leitura desfazer. Mudar de coluna **do Teams** só vale para o card que o
-Teams não acompanha mais, e a recusa acontece no destino, com o motivo. Travar o
-gesto na origem, como era antes, escondia tudo o que era permitido.
+O Mural **só lê** o Teams: quem move as tasks é a reação lá. Mas **todo card se
+arrasta, para qualquer coluna** — inclusive o que o Teams ainda acompanha.
+
+Antes isso era recusado, e a razão era boa: a próxima leitura desfaria o gesto. A
+razão contra é melhor — um quadro que recusa o gesto obriga você a ir reagir no
+Teams *antes* de poder organizar o próprio quadro, e as duas coisas não acontecem
+no mesmo minuto.
+
+Então o gesto passa, marcado. A leitura seguinte compara com a reação no canal e,
+discordando, **pergunta em vez de desfazer**: um diálogo mostra qual card é, onde
+você o pôs e o que a reação diz, e você escolhe — *aceitar o Teams*, e o card
+volta para a coluna da reação; ou *manter onde eu pus*, e ele fica.
+
+Mantendo, a pergunta só volta **se as reações da mensagem mudarem**. O que fica
+guardado não é "eu já respondi", é *quais reações eu aceitei* — então voltar a
+perguntar significa que alguém mexeu, não que o Mural esqueceu.
 
 **O título do card é o texto da mensagem, verbatim** — o Mural não resume mais o
 que a pessoa escreveu. Um card que diz outra coisa faz o time discutir uma demanda

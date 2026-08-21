@@ -433,7 +433,19 @@ export function CartaoDeTask({
                   sem sinal do Teams
                 </span>
               )}
-              {task.movidoAMao && <span className="badge neutral">movido à mão</span>}
+              {/* O desacordo fica no card, não só no diálogo: quem fechou em
+                  "decidir depois" precisa reencontrá-lo. */}
+              {task.conflito && (
+                <span
+                  className="badge warning"
+                  title="Você moveu este card à mão e a reação no Teams diz outra coisa — atualize o quadro para decidir"
+                >
+                  discorda do Teams
+                </span>
+              )}
+              {task.movidoAMao && !task.conflito && (
+                <span className="badge neutral">movido à mão</span>
+              )}
               {/* Etiquetas suas. Ficam antes das reações porque são o que você
                   escreveu, e as reações são o que o Teams contou. */}
               {task.tags.map((tag) => (

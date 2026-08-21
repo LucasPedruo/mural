@@ -15,6 +15,7 @@ import {
   DialogoDeConfirmacao,
   type PedidoDeConfirmacao,
 } from '../componentes/DialogoDeConfirmacao';
+import { DialogoDeConflitos } from '../componentes/DialogoDeConflitos';
 import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeLink } from '../componentes/DialogoDeLink';
@@ -139,6 +140,9 @@ export function Quadro() {
   const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
   const [incluindoLink, setIncluindoLink] = useState(false);
+  // Os cards em que o seu gesto e a reação no canal discordam. A leitura abre o
+  // diálogo; "decidir depois" fecha, e o selo no card é como reencontrar.
+  const [verConflitos, setVerConflitos] = useState(false);
   const [lendoLink, setLendoLink] = useState(false);
   const [tagFiltro, setTagFiltro] = useState<string | null>(null);
 
@@ -415,10 +419,12 @@ export function Quadro() {
       const partes: string[] = [];
       if (r.novos.length) partes.push(`${r.novos.length} nova(s)`);
       if (r.mudaram.length) partes.push(`${r.mudaram.length} mudou/mudaram de status`);
-      // Uma task movida a mao que reapareceu no Teams volta a obedecer a reacao
-      // real; avisar evita a impressao de que o quadro desfez a acao sozinho.
-      if (r.retomadas.length) {
-        partes.push(`${r.retomadas.length} voltou ao Teams e teve o status corrigido`);
+      // O desacordo não é contado como "corrigido", porque nada foi corrigido:
+      // os cards ficaram onde você os pôs, e o diálogo abre para você decidir.
+      if (r.conflitos?.length) {
+        partes.push(
+          `${r.conflitos.length} ${r.conflitos.length === 1 ? 'discorda' : 'discordam'} do Teams`,
+        );
       }
       // A marca automática move card de coluna sozinha; dizer quantas foram
       // evita a impressão de que o quadro perdeu tasks da coluna do Teams.
@@ -445,6 +451,9 @@ export function Quadro() {
         );
       }
       avisar(partes.length ? partes.join(', ') : 'nada mudou');
+      // Abre na hora: um desacordo que espera você lembrar de abrir um diálogo
+      // é um card parado na coluna errada até você lembrar.
+      if (r.conflitos?.length) setVerConflitos(true);
       void api.consumo(muralId).then(setConsumo).catch(() => {});
     } catch (e) {
       // Só na notificação. A falha da leitura é a única coisa nesta tela que já
@@ -713,6 +722,18 @@ export function Quadro() {
 
   // Soltar o card de volta ao fluxo do Teams. Não precisa de nova leitura: o
   // `status` nunca parou de ser atualizado por baixo enquanto ele estava preso.
+  // Você decide o desacordo. "teams" devolve o card à coluna que a reação manda;
+  // "meu" o mantém, e a pergunta só volta se as reações mudarem.
+  async function decidirConflito(task: Task, decisao: 'teams' | 'meu') {
+    setErro(null);
+    try {
+      const r = await api.decidirConflito(muralId, task.id, decisao);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   async function soltarDaColuna(task: Task) {
     setErro(null);
     try {
@@ -886,19 +907,10 @@ export function Quadro() {
 
     if (task.status === coluna) return;
 
-    // Mudar de coluna DO TEAMS só vale para o card que o Teams não acompanha
-    // mais. A recusa acontece aqui, no destino, e não no gesto: o card se
-    // arrasta para uma coluna sua, para Done by me e para Out of scope sem
-    // restrição nenhuma, e travar o arraste na origem escondia tudo isso.
-    if (!task.podeMover) {
-      setErro(
-        'Enquanto a mensagem aparece no Teams, é a reação de lá que decide a coluna — a próxima ' +
-          'leitura desfaria o movimento. Para tirar este card do fluxo do canal, arraste-o para ' +
-          'uma coluna sua.',
-      );
-      return;
-    }
-
+    // Mudar de coluna DO TEAMS vale para qualquer card, inclusive o que o Teams
+    // acompanha. O gesto não mente: ele fica marcado, e a próxima leitura
+    // compara com a reação no canal — discordando, ela PERGUNTA em vez de
+    // desfazer. Ver `decidirConflito` e o diálogo que a leitura abre.
     // Otimista: o card muda de coluna na hora e o servidor confirma. Se ele
     // recusar, o estado volta ao que era e o motivo aparece na tela.
     const anterior = tasks;
@@ -1026,6 +1038,7 @@ export function Quadro() {
       .sort((a, b) => b.quantas - a.quantas || a.autor.localeCompare(b.autor));
   }, [tasks]);
 
+  const emConflito = tasks.filter((t) => t.conflito);
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
@@ -1153,6 +1166,14 @@ export function Quadro() {
           usuario={consumo.usuario}
           aoConfirmar={confirmar}
           aoCancelar={() => setConfirmando(false)}
+        />
+      )}
+
+      {verConflitos && emConflito.length > 0 && (
+        <DialogoDeConflitos
+          tasks={emConflito}
+          aoDecidir={(t, d) => void decidirConflito(t, d)}
+          aoFechar={() => setVerConflitos(false)}
         />
       )}
 

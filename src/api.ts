@@ -130,6 +130,10 @@ export const api = {
       json({ id, tags }),
     ),
 
+  // Você decide o desacordo entre o seu gesto e a reação no canal.
+  decidirConflito: (muralId: string, id: string, decisao: 'teams' | 'meu') =>
+    pedir<RespostaTasks>(`/api/conflito?mural=${muralId}`, json({ id, decisao })),
+
   // Traz uma mensagem para o quadro pelo link dela. Custa uma execução do
   // agente — uma mensagem, não as vinte e uma de uma atualização.
   incluirPorLink: (muralId: string, link: string) =>
