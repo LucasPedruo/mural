@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
 import { EscolherEmoji } from '../componentes/EscolherEmoji';
-import { IconeFeito } from '../componentes/icones';
+import { IconeFeito, IconeVoltar } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
   AgenteDisponivel,
@@ -111,6 +111,10 @@ export function Onboarding() {
   const [checks, setChecks] = useState<string[]>([]);
   const [erroEmoji, setErroEmoji] = useState<string | null>(null);
 
+  // Se já existe mural, esta tela é opcional e precisa de saída. Se não existe,
+  // ela é a única coisa a fazer no app.
+  const [temMurais, setTemMurais] = useState(false);
+
   const jaVerificou = useRef(false);
 
   useEffect(() => {
@@ -119,6 +123,12 @@ export function Onboarding() {
     jaVerificou.current = true;
 
     void carregarAgentes();
+    void api
+      .listarMurais()
+      .then((r) => setTemMurais(r.murais.length > 0))
+      .catch(() => {
+        /* sem a lista a tela segue: o botão de voltar só não aparece */
+      });
     void api
       .preferencias()
       .then((r) => {
@@ -284,6 +294,19 @@ export function Onboarding() {
   return (
     <div className="pagina-onboarding">
       <div className="topo">
+        {/* Só aparece quando existe mural para voltar PARA. Sem nenhum, a
+            listagem manda direto para cá, e um botão de voltar que devolve a
+            pessoa ao lugar que a expulsou é um beco. */}
+        {temMurais && (
+          <button
+            className="icone"
+            onClick={() => navegar('/')}
+            title="Voltar para meus murais"
+            aria-label="Voltar para meus murais"
+          >
+            <IconeVoltar />
+          </button>
+        )}
         <span className="ponto-marca" />
         <h1>Mural</h1>
       </div>
