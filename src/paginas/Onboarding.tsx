@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
+import { Conector } from '../componentes/Conector';
 import { EscolherEmoji } from '../componentes/EscolherEmoji';
 import { IconeFeito, IconeVoltar } from '../componentes/icones';
 import { mmss } from '../rotulos';
 import type {
+  RespostaMcp,
   AgenteDisponivel,
   AjustesDoAgente,
   ChatDisponivel,
@@ -72,8 +74,7 @@ function lerLinkDoTeams(bruto: string): FonteEscolhida | null {
  *  São passos numerados porque a ação acontece FORA daqui: em outro programa,
  *  em outra janela. Uma frase corrida obriga a pessoa a montar a sequência
  *  sozinha enquanto alterna entre as duas telas. */
-function ComoConectar({ agenteId, nome }: { agenteId: string; nome: string }) {
-  const noClaude = agenteId === 'claude';
+function ComoConectar({ nome }: { nome: string }) {
   return (
     <div className="como-conectar">
       <strong>Como resolver</strong>
@@ -81,27 +82,14 @@ function ComoConectar({ agenteId, nome }: { agenteId: string; nome: string }) {
         <li>
           Abra o <strong>{nome}</strong> num terminal.
         </li>
-        {noClaude ? (
-          <>
-            <li>
-              Rode <code>/mcp</code>.
-            </li>
-            <li>
-              Conecte o <strong>Microsoft 365</strong> e autorize no navegador que abrir.
-            </li>
-          </>
-        ) : (
-          <>
-            <li>
-              Configure nele um <strong>MCP de Microsoft Graph</strong> — o conector da claude.ai
-              não vale fora do Claude Code.
-            </li>
-            <li>
-              Nos ajustes avançados abaixo, troque os nomes das tools e o molde das URIs pelos que
-              esse MCP usa.
-            </li>
-          </>
-        )}
+        <li>
+          Configure nele um <strong>MCP de Microsoft Graph</strong> — o conector da claude.ai não
+          vale fora do Claude Code.
+        </li>
+        <li>
+          Nos ajustes avançados abaixo, troque os nomes das tools e o molde das URIs pelos que esse
+          MCP usa.
+        </li>
         <li>Volte aqui e clique em Tentar de novo.</li>
       </ol>
     </div>
@@ -170,6 +158,13 @@ export function Onboarding() {
   //
   // Daí a saída explícita. O que ela custa está escrito ao lado dela: a falha
   // reaparece na primeira leitura, e lá com o motivo em contexto.
+  // O conector, respondido aqui em vez de num terminal. `claude mcp list` e
+  // `claude mcp login` existem fora da TUI, então a pergunta do passo 2 se
+  // responde na própria página — e o botão que faltava é este, não um que abre
+  // terminal para a pessoa digitar /mcp (comando que só existe lá dentro).
+  const [mcp, setMcp] = useState<RespostaMcp | null>(null);
+  const [mcpOcupado, setMcpOcupado] = useState<'lendo' | 'conectando' | null>(null);
+
   const [passo1Forcado, setPasso1Forcado] = useState(false);
   const [contaPulada, setContaPulada] = useState(false);
   const passo1Liberado = passo1 === 'ok' || passo1Forcado;
@@ -218,6 +213,34 @@ export function Onboarding() {
       setEmojiFazendo(antes.emojiFazendo);
       setEmojiMeu(antes.emojiMeu);
       setErroEmoji((e as Error).message);
+    }
+  }
+
+  async function verMcp() {
+    setMcpOcupado('lendo');
+    try {
+      setMcp(await api.listarMcp());
+    } catch (e) {
+      setMcp({ ok: false, erro: (e as Error).message });
+    } finally {
+      setMcpOcupado(null);
+    }
+  }
+
+  /** Abre o navegador para você autorizar. Demora o quanto você demorar — e é
+   *  por isso que o botão diz o que está esperando, em vez de só girar. */
+  async function conectarMcp(nome: string) {
+    setMcpOcupado('conectando');
+    try {
+      const r = await api.conectarMcp(nome);
+      // A lista depois é a única fonte de verdade: sair com código zero não
+      // prova que o conector ficou de pé.
+      setMcp(r.lista ?? { ok: false, erro: r.erro ?? r.saida ?? 'sem resposta do agente' });
+      if (r.lista?.doTeams?.conectado) void verificarConta();
+    } catch (e) {
+      setMcp({ ok: false, erro: (e as Error).message });
+    } finally {
+      setMcpOcupado(null);
     }
   }
 
@@ -570,8 +593,20 @@ export function Onboarding() {
             {/* Descobrir a conta é diagnóstico, não requisito: o mural se cria
                 sem isso. A falha quase sempre é o MCP do Teams não estar
                 configurado no agente — e isso não se resolve nesta tela. */}
-            {passo2 === 'erro' && agente && (
-              <ComoConectar agenteId={agente.id} nome={agente.nome} />
+            {passo2 === 'erro' && agente?.sabeListarMcp && (
+              <Conector
+                mcp={mcp}
+                ocupado={mcpOcupado}
+                podeConectar={!!agente.sabeConectarMcp}
+                aoVer={() => void verMcp()}
+                aoConectar={(nome) => void conectarMcp(nome)}
+              />
+            )}
+
+            {/* Agente que não sabe fazer isso pela linha de comando cai nos
+                passos escritos: é o que sobra, e é melhor que nada. */}
+            {passo2 === 'erro' && agente && !agente.sabeListarMcp && (
+              <ComoConectar nome={agente.nome} />
             )}
 
             {passo2 === 'erro' && !contaPulada && (

@@ -426,6 +426,89 @@ function encerrarSprint(muralId) {
   return { arquivadas: arquivadas.length, sprints: sprintsResumidas(s) };
 }
 
+// ------------------------------------------------------------- mcp do agente
+
+// Perguntar ao proprio CLI se o conector do Teams esta ligado, sem entrar na TUI
+// dele. Existe porque a resposta anterior para "nao conecta" era mandar a pessoa
+// abrir um terminal e digitar /mcp — um comando que so existe DENTRO da interface
+// interativa, e que esta tela nao tem como executar por ela.
+//
+// O que da para fazer daqui e melhor que abrir um terminal: o CLI tem os mesmos
+// dados fora da TUI, entao a pergunta se responde na propria pagina.
+
+/** Uma linha de `claude mcp list`:
+ *    claude.ai Microsoft 365: https://... - ✔ Connected
+ *  Texto, e nao JSON, porque o comando nao oferece JSON. O formato pode mudar
+ *  numa versao nova do CLI — por isso a linha crua vai junto, e a interface
+ *  mostra ela quando nao consegue interpretar. */
+function lerLinhaDeMcp(linha) {
+  const m = String(linha).match(/^(.+?):\s+(\S+)(?:\s+\(\w+\))?\s+-\s+(.+)$/);
+  if (!m) return null;
+  const estado = m[3].trim();
+  return {
+    nome: m[1].trim(),
+    endereco: m[2].trim(),
+    estado,
+    conectado: /✔|connected/i.test(estado) && !/needs|failed|✘|!/i.test(estado),
+    linha: String(linha).trim(),
+  };
+}
+
+function rodarComandoDoAgente(ad, args, timeoutMs = 60_000) {
+  return new Promise((resolve, reject) => {
+    if (!ad.binario) return reject(new Error('O agente nao tem binario configurado.'));
+    const proc = spawn(ad.binario, args, { cwd: ROOT, shell: true });
+    let saida = '';
+    let erro = '';
+    const relogio = setTimeout(() => {
+      proc.kill();
+      reject(new Error('O agente nao respondeu a tempo.'));
+    }, timeoutMs);
+    proc.stdout.on('data', (d) => { saida += d.toString(); });
+    proc.stderr.on('data', (d) => { erro += d.toString(); });
+    proc.on('error', (e) => { clearTimeout(relogio); reject(e); });
+    proc.on('close', (codigo) => {
+      clearTimeout(relogio);
+      resolve({ codigo, saida, erro });
+    });
+  });
+}
+
+async function listarMcpDoAgente() {
+  const ad = agenteEmUso();
+  if (!ad.mcp || !ad.mcp.listar) {
+    throw new Error(`${ad.nome} nao sabe listar MCPs pela linha de comando.`);
+  }
+  const r = await rodarComandoDoAgente(ad, ad.mcp.listar);
+  const NL = String.fromCharCode(10);
+  const linhas = [r.saida, r.erro]
+    .join(NL)
+    .split(NL)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const servidores = linhas.map(lerLinhaDeMcp).filter(Boolean);
+  const doTeams = ad.mcp.procurar
+    ? servidores.find((sv) => ad.mcp.procurar.test(sv.nome))
+    : null;
+  return { servidores, doTeams: doTeams || null, bruto: linhas.join(NL) };
+}
+
+/** Dispara o fluxo de autorizacao do conector. O CLI abre o navegador e espera o
+ *  retorno; quem autoriza e a pessoa, na tela da Microsoft. Este servidor nunca
+ *  ve credencial nenhuma — continua sendo verdade depois deste botao. */
+async function conectarMcpDoAgente(nome) {
+  const ad = agenteEmUso();
+  if (!ad.mcp || !ad.mcp.conectar) {
+    throw new Error(`${ad.nome} nao sabe autenticar MCPs pela linha de comando.`);
+  }
+  const alvo = String(nome || '').trim();
+  if (!alvo) throw new Error('Diga qual MCP conectar.');
+  const args = ad.mcp.conectar.map((a) => (a === '{{NOME}}' ? alvo : a));
+  // Cinco minutos: o tempo e de quem esta autorizando no navegador, nao do CLI.
+  const r = await rodarComandoDoAgente(ad, args, 5 * 60 * 1000);
+  return { codigo: r.codigo, saida: (r.saida + r.erro).trim().slice(-2000) };
+}
+
 // ------------------------------------------------- incluir por link
 
 /** Le um link de mensagem do Teams: de que conversa ele fala e qual mensagem.
@@ -2782,6 +2865,33 @@ async function rotear(req, res) {
   // no historico de tasks nem no registro de consumo — esses sao dados, nao
   // configuracao, e um botao chamado "refazer configuracao" nao pode apagar
   // trabalho acumulado por tabela.
+  // Pergunta ao proprio CLI se o conector do Teams esta ligado. Substitui "abra
+  // um terminal e digite /mcp" — um comando que so existe dentro da TUI, e que
+  // esta tela nao tem como executar por ninguem.
+  if (p === '/api/setup/mcp' && req.method === 'GET') {
+    try {
+      return json(res, 200, { ok: true, ...(await listarMcpDoAgente()) });
+    } catch (e) {
+      return json(res, 200, { ok: false, erro: e.message });
+    }
+  }
+
+  // Dispara a autorizacao. O CLI abre o navegador e espera o retorno; quem
+  // autoriza e a pessoa, na tela da Microsoft. Este servidor continua sem ver
+  // credencial nenhuma.
+  if (p === '/api/setup/mcp/login' && req.method === 'POST') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      const r = await conectarMcpDoAgente(corpo.nome);
+      // Depois de autorizar, a lista e a unica fonte de verdade sobre o
+      // resultado: codigo de saida zero nao prova que o conector ficou de pe.
+      const depois = await listarMcpDoAgente().catch(() => null);
+      return json(res, 200, { ok: true, ...r, lista: depois });
+    } catch (e) {
+      return json(res, 200, { ok: false, erro: e.message });
+    }
+  }
+
   if (p === '/api/setup/reset' && req.method === 'POST') {
     const apagados = [];
     for (const arquivo of [CONTA_FILE, CHATS_FILE, PREFS_FILE, AGENTES_FILE]) {

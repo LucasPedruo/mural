@@ -466,6 +466,27 @@ export interface RespostaDashboard {
   porAutor: LinhaDeAutor[];
 }
 
+/** Um MCP configurado no agente, como o CLI dele reporta. `linha` é o texto cru:
+ *  o comando não oferece JSON, então o formato pode mudar numa versão nova — e
+ *  quando o parse falhar, é a linha crua que a tela mostra. */
+export interface McpDoAgente {
+  nome: string;
+  endereco: string;
+  estado: string;
+  conectado: boolean;
+  linha: string;
+}
+
+export interface RespostaMcp {
+  ok: boolean;
+  erro?: string;
+  servidores?: McpDoAgente[];
+  /** O que parece ser o MCP que lê o Teams. Não é nome fixo: quem configurou
+   *  pode ter dado outro rótulo ao conector. */
+  doTeams?: McpDoAgente | null;
+  bruto?: string;
+}
+
 // ------------------------------------------------------------------- agentes
 
 /** O Mural não fala com o Teams: ele pede a um agente de IA já autenticado que
@@ -503,6 +524,12 @@ export interface AgenteDisponivel {
   entrada: 'stdin' | 'arg';
   eventos: FormatoDeEventos;
   ferramentas: FerramentasDoAgente;
+  /** Este CLI sabe listar e autenticar os próprios MCPs sem entrar na TUI dele.
+   *  É o que permite responder "o conector está ligado?" dentro da página, em
+   *  vez de mandar a pessoa abrir um terminal e digitar um comando que só existe
+   *  lá dentro. Falso = a tela cai nos passos escritos. */
+  sabeListarMcp: boolean;
+  sabeConectarMcp: boolean;
   /** null = ainda não detectado. Responder `--version` não prova que o MCP do
    *  Teams está configurado ali: isso só o passo da conta descobre. */
   instalado: boolean | null;

@@ -690,6 +690,21 @@ um botão de configuração não pode apagar trabalho acumulado por tabela.
 
 ## Quando um passo da configuração falha
 
+Se a conexão com o Teams falha e o agente escolhido é o **Claude Code**, a tela
+resolve ali mesmo: **Ver conectores do agente** roda `claude mcp list` e mostra o
+estado de cada MCP, e **Conectar** roda `claude mcp login`, que abre o navegador
+para você autorizar. Quem autoriza continua sendo você, na tela da Microsoft —
+este servidor nunca vê credencial, e isso segue verdadeiro depois desse botão.
+
+Não existe botão que "abre o terminal e digita `/mcp`", e não é limitação de
+esforço: `/mcp` é um comando da interface interativa do agente, e um programa não
+digita dentro da janela de outro. O que existe é melhor — o mesmo CLI responde
+`mcp list` e `mcp login` **fora** da TUI, então a pergunta se responde na página.
+
+Isso mora no adaptador (`agentes.js`), não no servidor: é vocabulário daquele CLI.
+Agente sem equivalente não ganha os botões — ganha os passos escritos.
+
+
 Os dois primeiros passos são **diagnósticos, não requisitos**: nem detectar o
 binário nem descobrir a conta logada é necessário para criar um mural. Então cada
 um tem saída.

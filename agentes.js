@@ -50,6 +50,20 @@ const BASE = [
     reportaCusto: true,
     ferramentas: { ...FERRAMENTAS_CLAUDE },
     requisitos: 'Precisa do conector Microsoft 365 ligado e autorizado no Claude Code.',
+    // O Claude Code sabe listar e autenticar os proprios MCPs sem entrar na TUI,
+    // e isso permite responder "o conector esta ligado?" dentro da pagina em vez
+    // de mandar a pessoa abrir um terminal e digitar /mcp.
+    //
+    // Fica no adaptador, e nao no servidor, porque e vocabulario DESTE CLI: os
+    // outros nao tem equivalente, e quando tiverem e aqui que se diz qual e. Sem
+    // este campo, a interface simplesmente nao oferece os botoes.
+    mcp: {
+      listar: ['mcp', 'list'],
+      conectar: ['mcp', 'login', '{{NOME}}'],
+      // Como reconhecer, na lista, o MCP que le o Teams. Nao e um nome fixo: a
+      // pessoa pode ter registrado o conector com outro rotulo.
+      procurar: /microsoft|365|graph|teams/i,
+    },
   },
   {
     id: 'codex',
@@ -337,6 +351,10 @@ export function paraTela(ad, deteccao) {
     entrada: ad.entrada,
     eventos: ad.eventos,
     ferramentas: { ...ad.ferramentas },
+    // A interface só oferece os botões de MCP para quem sabe fazer isso pela
+    // linha de comando. Booleano, e não o objeto: os comandos são do servidor.
+    sabeListarMcp: !!(ad.mcp && ad.mcp.listar),
+    sabeConectarMcp: !!(ad.mcp && ad.mcp.conectar),
     instalado: deteccao ? !!deteccao.instalado : null,
     versao: deteccao ? deteccao.versao || '' : '',
     erro: deteccao ? deteccao.erro || '' : '',
