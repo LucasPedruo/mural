@@ -24,7 +24,7 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
         aria-labelledby="titulo-solucao"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="titulo-solucao">{task.meu ? 'Editar a anotação' : 'Concluído por mim'}</h2>
+        <h2 id="titulo-solucao">{task.meu ? 'Editar a anotação' : 'Done by me'}</h2>
         <p className="explicacao">{task.summary}</p>
 
         <label className="campo">
@@ -40,7 +40,7 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) aoSalvar(solucao);
             }}
           />
-          <span className="dica">O card vai para Concluído por mim, no dia de hoje.</span>
+          <span className="dica">O card vai para Done by me, no dia de hoje.</span>
         </label>
 
         <div className="acoes-modal">

@@ -121,8 +121,8 @@ export function Home() {
       corpo: (
         <>
           <p>
-            <strong>{terminadas}</strong> card(s) de <em>Concluído</em> e de{' '}
-            <em>Concluído por mim</em> saem do quadro e vão para o arquivo desta sprint.
+            <strong>{terminadas}</strong> card(s) de <em>Done</em> e de <em>Done by me</em> saem
+            do quadro e vão para o arquivo desta sprint.
           </p>
           <p>Nada é apagado. A sprint seguinte começa hoje.</p>
         </>
@@ -218,7 +218,7 @@ export function Home() {
             </div>
 
             <div className="numeros">
-              {/* Inclui "Concluído por mim": um card marcado sai da coluna do
+              {/* Inclui "Done by me": um card marcado sai da coluna do
                   Teams, então sem essa pílula a soma da linha não fecharia. */}
               {COLUNAS.map((s) => (
                 <span className="pilula" key={s} title={rotuloDaColuna(s)}>

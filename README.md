@@ -22,15 +22,18 @@ As colunas:
 | Coluna | O que cai nela |
 | --- | --- |
 | **Backlog** | mensagem sem reação nenhuma |
-| **Em andamento** | mensagem com ⚪ — a reação de "peguei esta" (configurável) |
-| **Em atendimento** | mensagem com qualquer outra reação que não seja check |
-| **Concluído** | mensagem com check (✅ ☑️ ✔️) que não é sua — ou creditada por você a alguém |
-| **Concluído por mim** | o que *você* fez — agrupada por dia, com a anotação da daily |
-| **Fora do escopo** | o que você decidiu que não é pra você — nasce colapsada |
+| **In progress** | mensagem com ⚪ — a reação de "peguei esta" (configurável) |
+| **In review** | mensagem com qualquer outra reação que não seja check |
+| **Done** | mensagem com check (✅ ☑️ ✔️) que não é sua — ou creditada por você a alguém |
+| **Done by me** | o que *você* fez — agrupada por dia, com a anotação da daily |
+| **Out of scope** | o que você decidiu que não é pra você — nasce colapsada |
 
-O que **você** fez sai de *Concluído* para *Concluído por mim*: o que resta na
-primeira é o trabalho do resto do time. Nenhum dos seis nomes pressupõe time —
-um quadro de duas pessoas lê igual a um de dez.
+O que **você** fez sai de *Done* para *Done by me*: o que resta na primeira é o
+trabalho do resto do time. Nenhum dos seis nomes pressupõe time — um quadro de
+duas pessoas lê igual a um de dez.
+
+Os seis são em inglês, e só eles: é o vocabulário de quadro que se lê sem
+traduzir. As colunas que **você** cria ficam com o nome que você escrever.
 
 Clicar em qualquer lugar do card abre a mensagem original no Teams. Clicar em
 **Atualizar** relê a conversa.
@@ -81,7 +84,7 @@ seu processo, não terminado — nem que o time já tenha dado o check no Teams.
 **Qualquer coluna colapsa** — o botão de recolher no cabeçalho dela vira uma faixa
 fina com o rótulo de pé e a contagem. **Cada card também**, sem exceção: recolhido,
 ele mostra uma linha do texto e o rodapé, sem os prints, sem a continuação da
-rajada e sem a anotação da daily. Quem trabalha por sprint não olha *Em atendimento* toda hora, e o
+rajada e sem a anotação da daily. Quem trabalha por sprint não olha *In review* toda hora, e o
 espaço vai para as colunas que são trabalho agora. A coluna fechada **continua
 recebendo cards arrastados**: é o gesto de guardar sem abrir. As duas escolhas são
 por mural e ficam no navegador.
@@ -263,10 +266,10 @@ custo — veja [Quanto custa atualizar](#quanto-custa-atualizar).
 verdade é sempre a conversa. O arraste entre colunas só funciona nos cards que o
 Teams não acompanha mais — os "fora de alcance".
 
-Nem para eles vale arrastar até *Em atendimento*: não existe emoji que signifique
+Nem para eles vale arrastar até *In review*: não existe emoji que signifique
 "interagido", é o que sobra quando alguém reage com outra coisa.
 
-**Fiz esta**, no menu ⋯ de qualquer card, joga ele para *Concluído por mim*. Ou reaja
+**Fiz esta**, no menu ⋯ de qualquer card, joga ele para *Done by me*. Ou reaja
 no Teams com seu emoji de assinatura (🟢 por padrão) e o card cai lá sozinho na
 próxima atualização.
 
@@ -274,7 +277,7 @@ próxima atualização.
 ⧉ marca cards para virarem um, ⑃ desmancha um card em suas mensagens.
 
 **Feito por outra pessoa**, no mesmo menu ⋯, é o espelho do *Fiz esta*: você
-escreve quem resolveu e o card vai para *Concluído* com o nome no
+escreve quem resolveu e o card vai para *Done* com o nome no
 rodapé. Existe porque o Graph conta que **alguém** reagiu com o check, nunca
 quem — `reactions[].users` vem vazio. Sem essa anotação, o quadro sabe que a
 task acabou e não sabe por obra de quem, que é justamente a pergunta da
@@ -334,14 +337,14 @@ sai da união das reações do grupo — um check em qualquer uma conclui o card
 
 Uma sprint aqui é só um **ciclo com começo e fim**, e o seu time não precisa usar
 a palavra. Ela existe para responder a uma pergunta que o quadro sozinho não
-responde: *concluído desde quando?* Sem ciclo, a coluna Concluído acumula meses
+responde: *concluído desde quando?* Sem ciclo, a coluna Done acumula meses
 e deixa de dizer alguma coisa.
 
 Você define a sprint no onboarding — nome, data de início e duração — e pode
 corrigir tudo depois, na linha de cada mural na **listagem**.
 
-**Encerrar sprint**, também na listagem, faz três coisas: tira do quadro os cards de *Concluído* e de
-*Concluído por mim*, guarda todos no arquivo daquela sprint, e abre a sprint seguinte
+**Encerrar sprint**, também na listagem, faz três coisas: tira do quadro os cards de *Done* e de
+*Done by me*, guarda todos no arquivo daquela sprint, e abre a sprint seguinte
 começando hoje ("Sprint 7" vira "Sprint 8" sozinha).
 
 Nada é apagado. Os cards arquivados continuam em `sprints.json` com as anotações
@@ -400,12 +403,12 @@ moram em campos próprios justamente para nenhuma leitura as apagar.
 
 **Ignorar** ("Não é pra mim", no menu ⋯ do card) é para o que não é pra você: chegou no canal, alguém vai
 cuidar, e não precisa ocupar espaço no seu quadro. O card sai das colunas de
-trabalho e vai para *Fora do escopo* — que nasce **colapsada**, porque uma coluna de
+trabalho e vai para *Out of scope* — que nasce **colapsada**, porque uma coluna de
 descartes não pode roubar largura das que são trabalho. Ao ignorar o primeiro card
 ela abre uma vez, para você ver onde ele foi. Nada é escrito no Teams: ignorar
 em público seria outra coisa, e não é essa.
 
-**Apagar de vez** existe dentro de *Fora do escopo*, e é o **único gesto irreversível
+**Apagar de vez** existe dentro de *Out of scope*, e é o **único gesto irreversível
 do Mural**: o card sai do histórico e a mensagem entra na lista de arquivados,
 para nenhuma atualização trazê-la de volta — mesmo que ela continue no Teams. É a
 mesma máquina que o encerramento de sprint usa.
@@ -454,7 +457,7 @@ convenção fixa é a única forma de saber o que aconteceu ali.
 Há **duas exceções**, e as duas são emojis que o time combina de propósito:
 
 - o **check** (✅ ☑️ ✔️), que significa concluído em qualquer canal;
-- o **⚪ de "peguei esta"**, que enche a coluna *Em andamento* — configurável no
+- o **⚪ de "peguei esta"**, que enche a coluna *In progress* — configurável no
   cabeçalho dela, e vale para **qualquer pessoa** que reagir, não só para você.
 
 Esses dois não aparecem como badge: a coluna já diz o que eles significam.
@@ -462,7 +465,7 @@ Quando as duas reações estão na mesma mensagem, o check ganha — quem termin
 terminou, e não faz sentido obrigar alguém a tirar a bolinha para o quadro ficar
 certo.
 
-O ⚪ de *Em andamento* é diferente do 🟢 de *Concluído por mim*: aquele é uma convenção do
+O ⚪ de *In progress* é diferente do 🟢 de *Done by me*: aquele é uma convenção do
 time, este é sua. O Mural recusa configurar os dois com o mesmo emoji, senão um
 card cairia em duas colunas e a contagem passaria a mentir.
 
@@ -532,7 +535,7 @@ uma funcionalidade removida seria pior que manter duas linhas de código.
 </details>
 
 <details>
-<summary><b>Concluído por mim: as regras da coluna da daily</b></summary>
+<summary><b>Done by me: as regras da coluna da daily</b></summary>
 
 A coluna é **agrupada pelo dia** — Hoje, Ontem, e a data nos anteriores. A
 anotação de como você resolveu fica visível no próprio card, não escondida atrás
@@ -542,7 +545,7 @@ Um card chega ali de dois jeitos.
 
 **Pela sua reação.** Você escolhe um emoji de assinatura — 🟢 por padrão, no
 cabeçalho da coluna — e reage com ele na mensagem do Teams. Na próxima
-atualização o card cai em Concluído por mim sozinho, e a anotação você escreve
+atualização o card cai em Done by me sozinho, e a anotação você escreve
 quando quiser.
 
 Isso é uma **convenção sua, não um dado da API**. O Graph devolve a reação com
@@ -665,7 +668,7 @@ Vale saber antes de adotar:
   card errado que não dá para consertar é pior que card errado.
 - **Encerrar uma sprint é definitivo para aquelas mensagens.** O card sai do
   quadro e o merge passa a ignorá-lo: se alguém reagir depois naquela mensagem,
-  o Mural não fica sabendo. Vale para o que estava em *Concluído por mim* mesmo que o
+  o Mural não fica sabendo. Vale para o que estava em *Done by me* mesmo que o
   Teams ainda mostrasse a demanda como aberta — a marca é sua, e encerrar a
   sprint respeita ela. Para desfazer, só editando `sprints.json` e
   `tasks.json` na mão.

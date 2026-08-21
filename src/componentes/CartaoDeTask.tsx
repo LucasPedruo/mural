@@ -149,7 +149,7 @@ export function CartaoDeTask({
     });
     if (task.podeDesmarcar) {
       acoes.push({
-        rotulo: 'Tirar de Concluído por mim',
+        rotulo: 'Tirar de Done by me',
         icone: <IconeDesfazer />,
         aoEscolher: () => aoDesmarcarComoMeu(task),
         dica: 'O card volta para a coluna que a reação manda',

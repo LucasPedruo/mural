@@ -124,7 +124,7 @@ export function Painel() {
                   Por mim
                 </span>
                 <span role="columnheader" className="num">
-                  Fora do escopo
+                  Out of scope
                 </span>
               </div>
 

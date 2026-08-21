@@ -177,11 +177,11 @@ export function Quadro() {
   });
 
   // Qualquer coluna pode ser colapsada: quem trabalha por sprint não olha
-  // "Em atendimento" toda hora, e quem só quer ver o que está em aberto fecha o
+  // "In review" toda hora, e quem só quer ver o que está em aberto fecha o
   // resto. A coluna fechada continua recebendo cards arrastados — é o gesto de
   // guardar sem abrir.
   //
-  // *Fora do escopo* nasce colapsada: ela é onde se põe o que não se quer ver, e
+  // *Out of scope* nasce colapsada: ela é onde se põe o que não se quer ver, e
   // aberta por padrão roubaria largura das colunas que são trabalho.
   const chaveColapsadas = `mural:colunas-colapsadas:${muralId}`;
   const [colapsadas, setColapsadas] = useState<Set<string>>(() => {
@@ -414,7 +414,7 @@ export function Quadro() {
       // evita a impressão de que o quadro perdeu tasks da coluna do Teams.
       if (r.marcados.length) {
         partes.push(
-          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Concluído por mim`,
+          `${r.marcados.length} ${r.marcados.length === 1 ? 'foi' : 'foram'} para Done by me`,
         );
       }
       // Uma rajada pode continuar depois da leitura: o autor manda mais uma
@@ -807,12 +807,12 @@ export function Quadro() {
       if (!task.podeMover || task.status === coluna) return;
     }
 
-    // "Em atendimento" não é um destino: não existe emoji que signifique isso. É o
+    // "In review" não é um destino: não existe emoji que signifique isso. É o
     // que sobra quando alguém reage com outra coisa.
     if (coluna === 'interagido') {
       setErro(
-        '"Em atendimento" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
-          'outra coisa na mensagem. Arraste para Backlog, Em andamento ou Concluído.',
+        '"In review" não é um estado que se escolhe: é o que sobra quando alguém reage com ' +
+          'outra coisa na mensagem. Arraste para Backlog, In progress ou Done.',
       );
       return;
     }

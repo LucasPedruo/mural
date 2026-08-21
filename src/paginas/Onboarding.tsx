@@ -607,7 +607,7 @@ export function Onboarding() {
             id="emoji-fazendo"
             titulo="peguei esta"
             dono="time"
-            explicacao="Enche a coluna Em andamento. Vale para qualquer pessoa que reagir."
+            explicacao="Enche a coluna In progress. Vale para qualquer pessoa que reagir."
             valor={emojiFazendo}
             sugestoes={['⚪', '⏱️', '👀', '🔨', '🚧']}
             rotuloDeDesligar="desligar a coluna"
@@ -618,7 +618,7 @@ export function Onboarding() {
             id="emoji-meu"
             titulo="fui eu que fiz"
             dono="você"
-            explicacao="Manda o card para Concluído por mim. Escolha um emoji que só você usa."
+            explicacao="Manda o card para Done by me. Escolha um emoji que só você usa."
             valor={emojiMeu}
             sugestoes={['🟢', '💚', '🙌', '🦄', '🎯']}
             rotuloDeDesligar="marcar à mão no card"
@@ -629,7 +629,7 @@ export function Onboarding() {
             <div className="check-fixo">
               <span className="emojis">{checks.slice(0, 3).join(' ')}</span>
               <p>
-                <strong>Concluído</strong> não se configura — o check já quer dizer "feito" para o
+                <strong>Done</strong> não se configura — o check já quer dizer "feito" para o
                 canal inteiro.
               </p>
             </div>

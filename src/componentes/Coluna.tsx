@@ -14,7 +14,7 @@ export const TIPO_CARTAO = 'cartao';
 export const TIPO_COLUNA = 'coluna';
 
 /** Um bloco de cards com cabeçalho próprio dentro da coluna — usado pela
- *  "Concluído por mim", que separa os cards por dia. */
+ *  "Done by me", que separa os cards por dia. */
 export interface GrupoDaColuna {
   chave: string;
   rotulo: string;

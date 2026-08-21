@@ -74,7 +74,7 @@ export function DialogoDeFeitoPorOutro({ task, pessoas, aoSalvar, aoCancelar }: 
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) salvar();
             }}
           />
-          <span className="dica">O card vai para Concluído. Nada é escrito no Teams.</span>
+          <span className="dica">O card vai para Done. Nada é escrito no Teams.</span>
         </label>
 
         <div className="acoes-modal">
