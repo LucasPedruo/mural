@@ -37,6 +37,7 @@ interface Props {
   indiceDaColuna: number;
   ultimaVisita: string | null;
   vazio?: string;
+  naColunaDaDaily: boolean;
   /** Colapsada: a coluna vira uma faixa fina com o rótulo de pé e a contagem.
    *  Continua aceitando cards soltos nela — é o que permite guardar algo numa
    *  coluna que você não quer olhar agora. */
@@ -51,7 +52,10 @@ interface Props {
   /** O menu de "…" do cabeçalho. Só as colunas suas têm: renomear e excluir não
    *  fazem sentido em coluna que é regra do Teams. */
   menu?: ItemDeMenu[];
+  pessoaAtual: string | null;
   aoAbrir: (task: Task) => void;
+  aoAssumir: (task: Task) => void;
+  aoDeixarDeAssumir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoCreditarOutro: (task: Task) => void;
   aoTirarCredito: (task: Task) => void;
@@ -80,6 +84,7 @@ export function Coluna({
   grupos,
   indiceDaColuna,
   ultimaVisita,
+  naColunaDaDaily,
   acessorio,
   menu,
   vazio = 'Nada aqui',
@@ -87,7 +92,10 @@ export function Coluna({
   aoColapsar,
   selecionando,
   selecionados,
+  pessoaAtual,
   aoAbrir,
+  aoAssumir,
+  aoDeixarDeAssumir,
   aoMarcarComoMeu,
   aoCreditarOutro,
   aoTirarCredito,
@@ -225,14 +233,17 @@ export function Coluna({
                           key={t.id}
                           task={t}
                           indice={indice++}
-                          naColunaDaDaily={status === 'meu'}
+                          naColunaDaDaily={naColunaDaDaily}
                           naColunaDeIgnoradas={status === 'ignorada'}
                           ultimaVisita={ultimaVisita}
                           colapsado={cardsRecolhidos}
                           recemJuntado={recemJuntado === t.id}
                           selecionando={selecionando}
                           selecionado={selecionados.has(t.id)}
+                          pessoaAtual={pessoaAtual}
                           aoAbrir={aoAbrir}
+                          aoAssumir={aoAssumir}
+                          aoDeixarDeAssumir={aoDeixarDeAssumir}
                           aoMarcarComoMeu={aoMarcarComoMeu}
                           aoCreditarOutro={aoCreditarOutro}
                           aoTirarCredito={aoTirarCredito}

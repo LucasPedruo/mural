@@ -21,6 +21,7 @@ import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeLink } from '../componentes/DialogoDeLink';
 import { DialogoDeNota } from '../componentes/DialogoDeNota';
+import { DialogoDePessoa } from '../componentes/DialogoDePessoa';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
@@ -35,12 +36,14 @@ import {
   rotuloDaColuna,
   rotuloDoDia,
 } from '../rotulos';
+import { PESSOAS_DO_TIME } from '../tipos';
 import type {
   ColunaId,
   ColunaPersonalizada,
   CorDeColuna,
   Mural,
   Notificacao,
+  PessoaDoTime,
   Progresso,
   RespostaConsumo,
   RespostaSprint,
@@ -115,6 +118,12 @@ export function Quadro() {
 
   const [anotando, setAnotando] = useState<Task | null>(null);
   const [creditando, setCreditando] = useState<Task | null>(null);
+  const chavePessoa = `mural:pessoa:${muralId}`;
+  const [pessoaAtual, setPessoaAtual] = useState<PessoaDoTime | null>(() => {
+    const salva = localStorage.getItem(chavePessoa);
+    return PESSOAS_DO_TIME.includes(salva as PessoaDoTime) ? (salva as PessoaDoTime) : null;
+  });
+  const [escolhendoPessoa, setEscolhendoPessoa] = useState(!pessoaAtual);
 
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
 
@@ -218,6 +227,15 @@ export function Quadro() {
   // abrir o Teams. Um Set porque a ordem não importa: a âncora do card juntado
   // é sempre a mensagem mais antiga, não a primeira que você clicou.
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+
+  const colunaFazendoDaPessoa = pessoaAtual ? `fazendo:${pessoaAtual}` : null;
+  const colunaFeitoDaPessoa = pessoaAtual ? `feito:${pessoaAtual}` : null;
+
+  function escolherPessoa(pessoa: PessoaDoTime) {
+    localStorage.setItem(chavePessoa, pessoa);
+    setPessoaAtual(pessoa);
+    setEscolhendoPessoa(false);
+  }
 
   const carregar = useCallback(async () => {
     try {
@@ -483,9 +501,37 @@ export function Quadro() {
     const task = anotando;
     setAnotando(null);
     if (!task) return;
+    if (!pessoaAtual) {
+      setEscolhendoPessoa(true);
+      return;
+    }
     setErro(null);
     try {
-      const r = await api.marcarComoMeu(muralId, task.id, solucao);
+      const r = await api.marcarFeitoPorOutro(muralId, task.id, pessoaAtual, solucao);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function assumir(task: Task) {
+    if (!pessoaAtual) {
+      setEscolhendoPessoa(true);
+      return;
+    }
+    setErro(null);
+    try {
+      const r = await api.assumir(muralId, task.id, pessoaAtual);
+      setTasks(r.tasks);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  async function deixarDeAssumir(task: Task) {
+    setErro(null);
+    try {
+      const r = await api.deixarDeAssumir(muralId, task.id);
       setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
@@ -835,6 +881,16 @@ export function Quadro() {
     const task = tasks.find((t) => t.id === resultado.draggableId);
     if (!task) return;
 
+    if (coluna === colunaFazendoDaPessoa) {
+      await assumir(task);
+      return;
+    }
+
+    if (coluna === colunaFeitoDaPessoa) {
+      setAnotando(task);
+      return;
+    }
+
     // Uma coluna sua é o único destino que aceita QUALQUER card — inclusive o
     // que o Teams ainda acompanha. É a diferença que a torna útil: prender ali
     // é dizer "este saiu do fluxo do canal por enquanto". O `status` continua
@@ -980,18 +1036,21 @@ export function Quadro() {
   // leitura: uma coluna sua pode ter sido excluída noutra aba, e uma lista velha
   // no navegador não pode fazer coluna desaparecer nem ressuscitar.
   const todasAsColunas = useMemo(() => {
-    const ids = [...COLUNAS, ...colunasSuas.map((c) => c.id)] as string[];
+    const base = COLUNAS.filter((c) => c !== 'meu') as string[];
+    const pessoais = pessoaAtual ? [`fazendo:${pessoaAtual}`, `feito:${pessoaAtual}`] : [];
+    const ids = [...base, ...pessoais, ...colunasSuas.map((c) => c.id)] as string[];
     const conhecidas = ordem.filter((c) => ids.includes(c));
     return [...conhecidas, ...ids.filter((c) => !conhecidas.includes(c))];
-  }, [ordem, colunasSuas]);
+  }, [ordem, colunasSuas, pessoaAtual]);
 
   const grupos = useMemo(() => {
     const porColuna: Record<string, Task[]> = {
       aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
+    if (colunaFazendoDaPessoa) porColuna[colunaFazendoDaPessoa] = [];
+    if (colunaFeitoDaPessoa) porColuna[colunaFeitoDaPessoa] = [];
     for (const c of colunasSuas) porColuna[c.id] = [];
-    // Os filtros cortam o quadro inteiro: as perguntas que eles respondem — "o
-    // que existe de Financeiro", "o que o Bernardo pediu" — não têm coluna.
+
     const visiveis = tasks.filter(
       (t) =>
         (!tagFiltro || t.tags.some((x) => x.toLowerCase() === tagFiltro)) &&
@@ -999,32 +1058,31 @@ export function Quadro() {
     );
 
     for (const t of visiveis) {
-      // Ignorada vence a marca de "fiz": se você decidiu que não é sua, ela não
-      // aparece na daily por causa de um clique antigo.
       if (t.ignorada) porColuna.ignorada.push(t);
-      // Preso numa coluna sua: vence a regra do Teams, porque foi um gesto seu e
-      // mais recente que qualquer reação. Se a coluna não existe mais — excluída
-      // noutra aba — o card volta a valer pelo status, em vez de sumir da tela.
       else if (t.coluna && porColuna[t.coluna]) porColuna[t.coluna].push(t);
-      else if (t.meu) porColuna.meu.push(t);
-      // Creditada a outra pessoa mora em "Concluído" mesmo que o
-      // check ainda não tenha aparecido no Teams: alguém disse aqui que está
-      // feita, e é isso que a coluna significa. O `status` real continua no
-      // dado — a marca move o card, não reescreve o que o canal disse.
-      else if (t.feitoPor) porColuna.feito.push(t);
+      else if (colunaFeitoDaPessoa && t.feitoPor?.quem === pessoaAtual) {
+        porColuna[colunaFeitoDaPessoa].push(t);
+      }
+      else if (colunaFeitoDaPessoa && t.meu) porColuna[colunaFeitoDaPessoa].push(t);
+      else if (colunaFazendoDaPessoa && t.fazendoPor?.quem === pessoaAtual) {
+        porColuna[colunaFazendoDaPessoa].push(t);
+      }
+      else if (t.feitoPor || t.meu) porColuna.feito.push(t);
       else (porColuna[t.status] ?? porColuna.aberto).push(t);
     }
-    porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
 
-    // Abertas: mais antigas primeiro — o que está parado há mais tempo sobe.
+    porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
     porColuna.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
     for (const k of ['fazendo', 'interagido', 'feito'] as const) {
       porColuna[k].sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt));
     }
-    // Na daily o mais recente é o que você conta primeiro.
+    if (colunaFazendoDaPessoa) {
+      porColuna[colunaFazendoDaPessoa].sort((a, b) =>
+        (b.fazendoPor?.em ?? '').localeCompare(a.fazendoPor?.em ?? ''),
+      );
+    }
     porColuna.meu.sort((a, b) => (b.meu?.em ?? '').localeCompare(a.meu?.em ?? ''));
 
-    // Nas suas, o mais recente em cima: você acabou de pôr o card ali.
     for (const c of colunasSuas) {
       porColuna[c.id].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
     }
@@ -1034,20 +1092,25 @@ export function Quadro() {
       resultado[c] = [{ chave: c, rotulo: '', tasks: porColuna[c] }];
     }
 
-    // A coluna da daily é a única quebrada por dia: na reunião você conta o de
-    // ontem e o de hoje, e uma lista corrida obrigaria a ler data por data.
+    const colunaDeDaily = colunaFeitoDaPessoa || 'meu';
+    const feitasDaPessoa = porColuna[colunaDeDaily] ?? [];
+    feitasDaPessoa.sort((a, b) =>
+      ((b.feitoPor?.em ?? b.meu?.em) ?? '').localeCompare((a.feitoPor?.em ?? a.meu?.em) ?? ''),
+    );
+
     const porDia: GrupoDaColuna[] = [];
-    for (const t of porColuna.meu) {
-      const chave = diaLocal(t.meu!.em);
+    for (const t of feitasDaPessoa) {
+      const em = t.feitoPor?.em ?? t.meu?.em;
+      if (!em) continue;
+      const chave = diaLocal(em);
       const ultimo = porDia[porDia.length - 1];
       if (ultimo && ultimo.chave === chave) ultimo.tasks.push(t);
-      else porDia.push({ chave, rotulo: rotuloDoDia(t.meu!.em), tasks: [t] });
+      else porDia.push({ chave, rotulo: rotuloDoDia(em), tasks: [t] });
     }
-    resultado.meu = porDia;
+    resultado[colunaDeDaily] = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro, autorFiltro, colunasSuas]);
-
+  }, [tasks, tagFiltro, autorFiltro, colunasSuas, pessoaAtual, colunaFazendoDaPessoa, colunaFeitoDaPessoa]);
   // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
   // quem manda mais demanda é quem você procura primeiro.
   const autores = useMemo(() => {
@@ -1062,6 +1125,24 @@ export function Quadro() {
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
+
+  function rotuloDaColunaAtual(coluna: string): string {
+    if (colunaFazendoDaPessoa && coluna === colunaFazendoDaPessoa) return `In progress ${pessoaAtual}`;
+    if (colunaFeitoDaPessoa && coluna === colunaFeitoDaPessoa) return `Done by ${pessoaAtual}`;
+    return rotuloDaColuna(coluna as ColunaId);
+  }
+
+  function corDaColunaAtual(coluna: string): string {
+    if (colunaFazendoDaPessoa && coluna === colunaFazendoDaPessoa) return 'var(--marca-fazendo)';
+    if (colunaFeitoDaPessoa && coluna === colunaFeitoDaPessoa) return 'var(--marca-meu)';
+    return CORES_DE_STATUS[coluna as ColunaId];
+  }
+
+  function vazioDaColunaAtual(coluna: string): string {
+    if (colunaFazendoDaPessoa && coluna === colunaFazendoDaPessoa) return 'Nada seu em andamento';
+    if (colunaFeitoDaPessoa && coluna === colunaFeitoDaPessoa) return 'Nada seu concluido';
+    return vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo);
+  }
 
   return (
     <>
@@ -1084,6 +1165,13 @@ export function Quadro() {
             : 'nunca sincronizado — clique em Atualizar'}
         </span>
         <span className="espaco" />
+        <button
+          className="pessoa-atual"
+          onClick={() => setEscolhendoPessoa(true)}
+          title="Trocar quem esta usando este navegador"
+        >
+          {pessoaAtual || 'Escolher pessoa'}
+        </button>
         {consumo && !consumo.agente.reportaCusto && (
           <span
             className="gasto"
@@ -1175,7 +1263,7 @@ export function Quadro() {
         {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
             Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
         <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
-          {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
+          {sincronizando ? 'Lendo o Teams⬦' : 'Atualizar'}
         </button>
       </header>
 
@@ -1211,7 +1299,6 @@ export function Quadro() {
         <DialogoDaRajada
           task={vendoRajada}
           aoAbrirMensagem={(m) => {
-            setVendoRajada(null);
             void abrirNoTeams(m.id);
           }}
           aoFechar={() => setVendoRajada(null)}
@@ -1238,8 +1325,17 @@ export function Quadro() {
       {anotando && (
         <DialogoDeSolucao
           task={anotando}
+          pessoa={pessoaAtual}
           aoSalvar={(s) => void salvarSolucao(s)}
           aoCancelar={() => setAnotando(null)}
+        />
+      )}
+
+      {escolhendoPessoa && (
+        <DialogoDePessoa
+          atual={pessoaAtual}
+          aoEscolher={escolherPessoa}
+          aoCancelar={pessoaAtual ? () => setEscolhendoPessoa(false) : undefined}
         />
       )}
 
@@ -1269,7 +1365,7 @@ export function Quadro() {
       {creditando && (
         <DialogoDeFeitoPorOutro
           task={creditando}
-          pessoas={autores.map((a) => a.autor)}
+          pessoas={[...PESSOAS_DO_TIME, ...autores.map((a) => a.autor)]}
           aoSalvar={(quem, solucao) => void salvarCredito(quem, solucao)}
           aoCancelar={() => setCreditando(null)}
         />
@@ -1308,13 +1404,14 @@ export function Quadro() {
                   key={coluna}
                   status={coluna}
                   indiceDaColuna={i}
-                  rotulo={sua ? sua.nome : rotuloDaColuna(coluna as ColunaId)}
-                  cor={sua ? `var(--coluna-${sua.cor})` : CORES_DE_STATUS[coluna as ColunaId]}
+                  rotulo={sua ? sua.nome : rotuloDaColunaAtual(coluna)}
+                  cor={sua ? `var(--coluna-${sua.cor})` : corDaColunaAtual(coluna)}
                   grupos={grupos[coluna] ?? []}
+                  naColunaDaDaily={coluna === 'meu' || coluna === colunaFeitoDaPessoa}
                   vazio={
                     sua
                       ? 'Arraste um card para cá'
-                      : vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo)
+                      : vazioDaColunaAtual(coluna)
                   }
                   colapsada={colapsadas.has(coluna)}
                   aoColapsar={(fechar) => colapsar(coluna, fechar)}
@@ -1375,7 +1472,10 @@ export function Quadro() {
                   ultimaVisita={ultimaVisita}
                   selecionando={selecionados.size > 0}
                   selecionados={selecionados}
+                  pessoaAtual={pessoaAtual}
                   aoAbrir={(t) => void abrir(t)}
+                  aoAssumir={(t) => void assumir(t)}
+                  aoDeixarDeAssumir={(t) => void deixarDeAssumir(t)}
                   aoMarcarComoMeu={setAnotando}
                   aoCreditarOutro={setCreditando}
                   aoTirarCredito={(t) => void tirarCredito(t)}
@@ -1412,3 +1512,4 @@ export function Quadro() {
     </>
   );
 }
+

@@ -47,7 +47,10 @@ interface Props {
   /** Modo de juntar ligado: o clique no card seleciona em vez de abrir o Teams. */
   selecionando: boolean;
   selecionado: boolean;
+  pessoaAtual: string | null;
   aoAbrir: (task: Task) => void;
+  aoAssumir: (task: Task) => void;
+  aoDeixarDeAssumir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoCreditarOutro: (task: Task) => void;
   aoTirarCredito: (task: Task) => void;
@@ -74,7 +77,10 @@ export function CartaoDeTask({
   recemJuntado,
   selecionando,
   selecionado,
+  pessoaAtual,
   aoAbrir,
+  aoAssumir,
+  aoDeixarDeAssumir,
   aoMarcarComoMeu,
   aoCreditarOutro,
   aoTirarCredito,
@@ -137,6 +143,25 @@ export function CartaoDeTask({
     });
   }
 
+  if (!naColunaDeIgnoradas && !task.feitoPor && !task.meu) {
+    if (task.fazendoPor) {
+      acoes.push({
+        rotulo: task.fazendoPor.quem === pessoaAtual ? 'Soltar In progress' : 'Trocar responsavel',
+        icone: <IconeDesfazer />,
+        aoEscolher: () =>
+          task.fazendoPor?.quem === pessoaAtual ? aoDeixarDeAssumir(task) : aoAssumir(task),
+        dica: `Hoje: ${task.fazendoPor.quem}`,
+      });
+    } else {
+      acoes.push({
+        rotulo: 'Peguei esta',
+        icone: <IconePessoa />,
+        aoEscolher: () => aoAssumir(task),
+        dica: pessoaAtual ? `Marca como In progress de ${pessoaAtual}` : 'Escolha quem e voce',
+      });
+    }
+  }
+
   if (naColunaDeIgnoradas) {
     acoes.push({
       rotulo: 'Devolver ao quadro',
@@ -149,7 +174,14 @@ export function CartaoDeTask({
       icone: <IconeEditar />,
       aoEscolher: () => aoMarcarComoMeu(task),
     });
-    if (task.podeDesmarcar) {
+    if (task.feitoPor) {
+      acoes.push({
+        rotulo: 'Tirar o crédito',
+        icone: <IconeDesfazer />,
+        aoEscolher: () => aoTirarCredito(task),
+        dica: 'O card volta para a coluna que a reação manda',
+      });
+    } else if (task.podeDesmarcar) {
       acoes.push({
         rotulo: 'Tirar de Done by me',
         icone: <IconeDesfazer />,
@@ -398,6 +430,14 @@ export function CartaoDeTask({
                   title={`Creditado a ${task.feitoPor.quem} em ${dataCurta(task.feitoPor.em)}`}
                 >
                   feito por {task.feitoPor.quem}
+                </span>
+              )}
+              {task.fazendoPor && !task.feitoPor && !task.meu && (
+                <span
+                  className="badge marca"
+                  title={`Em andamento com ${task.fazendoPor.quem} desde ${dataCurta(task.fazendoPor.em)}`}
+                >
+                  com {task.fazendoPor.quem}
                 </span>
               )}
               {task.meu?.via === 'emoji' && (

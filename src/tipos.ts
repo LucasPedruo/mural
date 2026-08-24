@@ -4,6 +4,17 @@
  *  sobra: reagiram com outra coisa. */
 export type Status = 'aberto' | 'fazendo' | 'interagido' | 'feito';
 
+export const PESSOAS_DO_TIME = [
+  'Vinicius',
+  'Bernardo',
+  'Marcio',
+  'Lucas Pedro',
+  'Felipe',
+  'Juan',
+] as const;
+
+export type PessoaDoTime = (typeof PESSOAS_DO_TIME)[number];
+
 /** As colunas do quadro. `meu` e `ignorada` não são status do Teams: são marcas
  *  pessoais, guardadas em campos separados justamente para o sync não as apagar.
  *  Ver `MeuFeito` e `Task.ignorada`. */
@@ -58,6 +69,11 @@ export interface FeitoPorOutro {
   solucao: string;
 }
 
+export interface FazendoPor {
+  em: string;
+  quem: string;
+}
+
 /** Uma mensagem do Teams dentro de um card. Uma demanda raramente chega como
  *  uma mensagem só: o padrão é a rajada — dois prints e três linhas de texto do
  *  mesmo autor, em segundos, que são UMA task. Card solto tem um item aqui. */
@@ -103,6 +119,7 @@ export interface Task {
   /** Quem resolveu, quando não foi você. Exclusivo com `meu`: o crédito é de uma
    *  pessoa só, senão o mesmo card apareceria em duas colunas. */
   feitoPor: FeitoPorOutro | null;
+  fazendoPor: FazendoPor | null;
   /** A coluna SUA em que você prendeu este card, se prendeu. Vence a regra do
    *  Teams: foi um gesto explícito, e mais recente que qualquer reação. O
    *  `status` continua sendo atualizado por baixo — é o que faz soltar o card

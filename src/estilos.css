@@ -77,6 +77,7 @@
   --bg-warning: #fff7e5;
   --bg-danger: #fdeeee;
   --bg-info: #ebf3ff;
+  --bg-note: #fff1a8;
 
   --border-subtle: var(--color-neutral-100);
   --border-default: var(--color-neutral-200);
@@ -137,6 +138,7 @@
   --bg-warning: color-mix(in srgb, var(--color-warning-500) 18%, transparent);
   --bg-danger: color-mix(in srgb, var(--color-danger-500) 18%, transparent);
   --bg-info: color-mix(in srgb, var(--color-info-500) 20%, transparent);
+  --bg-note: color-mix(in srgb, var(--color-warning-300) 26%, var(--bg-surface));
 
   --border-subtle: var(--color-neutral-750);
   --border-default: var(--color-neutral-700);

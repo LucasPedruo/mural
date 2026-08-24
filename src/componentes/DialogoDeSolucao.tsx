@@ -6,14 +6,15 @@ import './dialogo.css';
 
 interface Props {
   task: Task;
+  pessoa: string | null;
   aoSalvar: (solucao: string) => void;
   aoCancelar: () => void;
 }
 
 /** A anotação que você lê na daily. Escrita na hora em que a solução ainda
  *  está fresca — dois dias depois ninguém lembra o que foi feito. */
-export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
-  const [solucao, setSolucao] = useState(task.meu?.solucao ?? '');
+export function DialogoDeSolucao({ task, pessoa, aoSalvar, aoCancelar }: Props) {
+  const [solucao, setSolucao] = useState(task.feitoPor?.solucao ?? task.meu?.solucao ?? '');
 
   return (
     <div className="fundo-modal" onClick={aoCancelar} role="presentation">
@@ -24,7 +25,9 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
         aria-labelledby="titulo-solucao"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="titulo-solucao">{task.meu ? 'Editar a anotação' : 'Done by me'}</h2>
+        <h2 id="titulo-solucao">
+          {task.feitoPor || task.meu ? 'Editar a anotação' : `Done by ${pessoa || 'me'}`}
+        </h2>
         <p className="explicacao">{task.summary}</p>
 
         <label className="campo">
@@ -40,7 +43,9 @@ export function DialogoDeSolucao({ task, aoSalvar, aoCancelar }: Props) {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) aoSalvar(solucao);
             }}
           />
-          <span className="dica">O card vai para Done by me, no dia de hoje.</span>
+          <span className="dica">
+            O card vai para {pessoa ? `Done by ${pessoa}` : 'Done'}, no dia de hoje.
+          </span>
         </label>
 
         <div className="acoes-modal">

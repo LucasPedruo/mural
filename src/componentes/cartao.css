@@ -289,11 +289,13 @@
    da daily, que só existe depois de o trabalho acabar. */
 .cartao .nota-do-card {
   margin: 6px 0 0;
-  padding-left: 9px;
+  padding: 7px 9px;
+  background: var(--bg-note);
   border-left: 2px solid var(--marca-meu);
+  border-radius: 7px;
   font-size: 12.5px;
   line-height: 1.45;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
