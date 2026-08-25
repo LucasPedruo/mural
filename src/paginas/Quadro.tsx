@@ -21,7 +21,6 @@ import { DialogoDeEmojis } from '../componentes/DialogoDeEmojis';
 import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeLink } from '../componentes/DialogoDeLink';
 import { DialogoDeNota } from '../componentes/DialogoDeNota';
-import { DialogoDePessoa } from '../componentes/DialogoDePessoa';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
 import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
@@ -36,14 +35,12 @@ import {
   rotuloDaColuna,
   rotuloDoDia,
 } from '../rotulos';
-import { PESSOAS_DO_TIME } from '../tipos';
 import type {
   ColunaId,
   ColunaPersonalizada,
   CorDeColuna,
   Mural,
   Notificacao,
-  PessoaDoTime,
   Progresso,
   RespostaConsumo,
   RespostaSprint,
@@ -118,12 +115,6 @@ export function Quadro() {
 
   const [anotando, setAnotando] = useState<Task | null>(null);
   const [creditando, setCreditando] = useState<Task | null>(null);
-  const chavePessoa = `mural:pessoa:${muralId}`;
-  const [pessoaAtual, setPessoaAtual] = useState<PessoaDoTime | null>(() => {
-    const salva = localStorage.getItem(chavePessoa);
-    return PESSOAS_DO_TIME.includes(salva as PessoaDoTime) ? (salva as PessoaDoTime) : null;
-  });
-  const [escolhendoPessoa, setEscolhendoPessoa] = useState(!pessoaAtual);
 
   const [sprint, setSprint] = useState<RespostaSprint | null>(null);
 
@@ -227,15 +218,6 @@ export function Quadro() {
   // abrir o Teams. Um Set porque a ordem não importa: a âncora do card juntado
   // é sempre a mensagem mais antiga, não a primeira que você clicou.
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-
-  const colunaFazendoDaPessoa = pessoaAtual ? `fazendo:${pessoaAtual}` : null;
-  const colunaFeitoDaPessoa = pessoaAtual ? `feito:${pessoaAtual}` : null;
-
-  function escolherPessoa(pessoa: PessoaDoTime) {
-    localStorage.setItem(chavePessoa, pessoa);
-    setPessoaAtual(pessoa);
-    setEscolhendoPessoa(false);
-  }
 
   const carregar = useCallback(async () => {
     try {
@@ -501,37 +483,9 @@ export function Quadro() {
     const task = anotando;
     setAnotando(null);
     if (!task) return;
-    if (!pessoaAtual) {
-      setEscolhendoPessoa(true);
-      return;
-    }
     setErro(null);
     try {
-      const r = await api.marcarFeitoPorOutro(muralId, task.id, pessoaAtual, solucao);
-      setTasks(r.tasks);
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
-  async function assumir(task: Task) {
-    if (!pessoaAtual) {
-      setEscolhendoPessoa(true);
-      return;
-    }
-    setErro(null);
-    try {
-      const r = await api.assumir(muralId, task.id, pessoaAtual);
-      setTasks(r.tasks);
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
-  async function deixarDeAssumir(task: Task) {
-    setErro(null);
-    try {
-      const r = await api.deixarDeAssumir(muralId, task.id);
+      const r = await api.marcarComoMeu(muralId, task.id, solucao);
       setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
@@ -881,16 +835,6 @@ export function Quadro() {
     const task = tasks.find((t) => t.id === resultado.draggableId);
     if (!task) return;
 
-    if (coluna === colunaFazendoDaPessoa) {
-      await assumir(task);
-      return;
-    }
-
-    if (coluna === colunaFeitoDaPessoa) {
-      setAnotando(task);
-      return;
-    }
-
     // Uma coluna sua é o único destino que aceita QUALQUER card — inclusive o
     // que o Teams ainda acompanha. É a diferença que a torna útil: prender ali
     // é dizer "este saiu do fluxo do canal por enquanto". O `status` continua
@@ -1036,19 +980,15 @@ export function Quadro() {
   // leitura: uma coluna sua pode ter sido excluída noutra aba, e uma lista velha
   // no navegador não pode fazer coluna desaparecer nem ressuscitar.
   const todasAsColunas = useMemo(() => {
-    const base = COLUNAS.filter((c) => c !== 'meu') as string[];
-    const pessoais = pessoaAtual ? [`fazendo:${pessoaAtual}`, `feito:${pessoaAtual}`] : [];
-    const ids = [...base, ...pessoais, ...colunasSuas.map((c) => c.id)] as string[];
+    const ids = [...COLUNAS, ...colunasSuas.map((c) => c.id)] as string[];
     const conhecidas = ordem.filter((c) => ids.includes(c));
     return [...conhecidas, ...ids.filter((c) => !conhecidas.includes(c))];
-  }, [ordem, colunasSuas, pessoaAtual]);
+  }, [ordem, colunasSuas]);
 
   const grupos = useMemo(() => {
     const porColuna: Record<string, Task[]> = {
       aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
-    if (colunaFazendoDaPessoa) porColuna[colunaFazendoDaPessoa] = [];
-    if (colunaFeitoDaPessoa) porColuna[colunaFeitoDaPessoa] = [];
     for (const c of colunasSuas) porColuna[c.id] = [];
 
     const visiveis = tasks.filter(
@@ -1060,14 +1000,8 @@ export function Quadro() {
     for (const t of visiveis) {
       if (t.ignorada) porColuna.ignorada.push(t);
       else if (t.coluna && porColuna[t.coluna]) porColuna[t.coluna].push(t);
-      else if (colunaFeitoDaPessoa && t.feitoPor?.quem === pessoaAtual) {
-        porColuna[colunaFeitoDaPessoa].push(t);
-      }
-      else if (colunaFeitoDaPessoa && t.meu) porColuna[colunaFeitoDaPessoa].push(t);
-      else if (colunaFazendoDaPessoa && t.fazendoPor?.quem === pessoaAtual) {
-        porColuna[colunaFazendoDaPessoa].push(t);
-      }
-      else if (t.feitoPor || t.meu) porColuna.feito.push(t);
+      else if (t.meu) porColuna.meu.push(t);
+      else if (t.feitoPor) porColuna.feito.push(t);
       else (porColuna[t.status] ?? porColuna.aberto).push(t);
     }
 
@@ -1075,11 +1009,6 @@ export function Quadro() {
     porColuna.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
     for (const k of ['fazendo', 'interagido', 'feito'] as const) {
       porColuna[k].sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt));
-    }
-    if (colunaFazendoDaPessoa) {
-      porColuna[colunaFazendoDaPessoa].sort((a, b) =>
-        (b.fazendoPor?.em ?? '').localeCompare(a.fazendoPor?.em ?? ''),
-      );
     }
     porColuna.meu.sort((a, b) => (b.meu?.em ?? '').localeCompare(a.meu?.em ?? ''));
 
@@ -1092,25 +1021,17 @@ export function Quadro() {
       resultado[c] = [{ chave: c, rotulo: '', tasks: porColuna[c] }];
     }
 
-    const colunaDeDaily = colunaFeitoDaPessoa || 'meu';
-    const feitasDaPessoa = porColuna[colunaDeDaily] ?? [];
-    feitasDaPessoa.sort((a, b) =>
-      ((b.feitoPor?.em ?? b.meu?.em) ?? '').localeCompare((a.feitoPor?.em ?? a.meu?.em) ?? ''),
-    );
-
     const porDia: GrupoDaColuna[] = [];
-    for (const t of feitasDaPessoa) {
-      const em = t.feitoPor?.em ?? t.meu?.em;
-      if (!em) continue;
-      const chave = diaLocal(em);
+    for (const t of porColuna.meu) {
+      const chave = diaLocal(t.meu!.em);
       const ultimo = porDia[porDia.length - 1];
       if (ultimo && ultimo.chave === chave) ultimo.tasks.push(t);
-      else porDia.push({ chave, rotulo: rotuloDoDia(em), tasks: [t] });
+      else porDia.push({ chave, rotulo: rotuloDoDia(t.meu!.em), tasks: [t] });
     }
-    resultado[colunaDeDaily] = porDia;
+    resultado.meu = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro, autorFiltro, colunasSuas, pessoaAtual, colunaFazendoDaPessoa, colunaFeitoDaPessoa]);
+  }, [tasks, tagFiltro, autorFiltro, colunasSuas]);
   // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
   // quem manda mais demanda é quem você procura primeiro.
   const autores = useMemo(() => {
@@ -1125,24 +1046,6 @@ export function Quadro() {
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
-
-  function rotuloDaColunaAtual(coluna: string): string {
-    if (colunaFazendoDaPessoa && coluna === colunaFazendoDaPessoa) return `In progress ${pessoaAtual}`;
-    if (colunaFeitoDaPessoa && coluna === colunaFeitoDaPessoa) return `Done by ${pessoaAtual}`;
-    return rotuloDaColuna(coluna as ColunaId);
-  }
-
-  function corDaColunaAtual(coluna: string): string {
-    if (colunaFazendoDaPessoa && coluna === colunaFazendoDaPessoa) return 'var(--marca-fazendo)';
-    if (colunaFeitoDaPessoa && coluna === colunaFeitoDaPessoa) return 'var(--marca-meu)';
-    return CORES_DE_STATUS[coluna as ColunaId];
-  }
-
-  function vazioDaColunaAtual(coluna: string): string {
-    if (colunaFazendoDaPessoa && coluna === colunaFazendoDaPessoa) return 'Nada seu em andamento';
-    if (colunaFeitoDaPessoa && coluna === colunaFeitoDaPessoa) return 'Nada seu concluido';
-    return vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo);
-  }
 
   return (
     <>
@@ -1165,13 +1068,6 @@ export function Quadro() {
             : 'nunca sincronizado — clique em Atualizar'}
         </span>
         <span className="espaco" />
-        <button
-          className="pessoa-atual"
-          onClick={() => setEscolhendoPessoa(true)}
-          title="Trocar quem esta usando este navegador"
-        >
-          {pessoaAtual || 'Escolher pessoa'}
-        </button>
         {consumo && !consumo.agente.reportaCusto && (
           <span
             className="gasto"
@@ -1325,17 +1221,8 @@ export function Quadro() {
       {anotando && (
         <DialogoDeSolucao
           task={anotando}
-          pessoa={pessoaAtual}
           aoSalvar={(s) => void salvarSolucao(s)}
           aoCancelar={() => setAnotando(null)}
-        />
-      )}
-
-      {escolhendoPessoa && (
-        <DialogoDePessoa
-          atual={pessoaAtual}
-          aoEscolher={escolherPessoa}
-          aoCancelar={pessoaAtual ? () => setEscolhendoPessoa(false) : undefined}
         />
       )}
 
@@ -1365,7 +1252,7 @@ export function Quadro() {
       {creditando && (
         <DialogoDeFeitoPorOutro
           task={creditando}
-          pessoas={[...PESSOAS_DO_TIME, ...autores.map((a) => a.autor)]}
+          pessoas={autores.map((a) => a.autor)}
           aoSalvar={(quem, solucao) => void salvarCredito(quem, solucao)}
           aoCancelar={() => setCreditando(null)}
         />
@@ -1404,14 +1291,14 @@ export function Quadro() {
                   key={coluna}
                   status={coluna}
                   indiceDaColuna={i}
-                  rotulo={sua ? sua.nome : rotuloDaColunaAtual(coluna)}
-                  cor={sua ? `var(--coluna-${sua.cor})` : corDaColunaAtual(coluna)}
+                  rotulo={sua ? sua.nome : rotuloDaColuna(coluna as ColunaId)}
+                  cor={sua ? `var(--coluna-${sua.cor})` : CORES_DE_STATUS[coluna as ColunaId]}
                   grupos={grupos[coluna] ?? []}
-                  naColunaDaDaily={coluna === 'meu' || coluna === colunaFeitoDaPessoa}
+                  naColunaDaDaily={coluna === 'meu'}
                   vazio={
                     sua
                       ? 'Arraste um card para cá'
-                      : vazioDaColunaAtual(coluna)
+                      : vazioDaColuna(coluna as ColunaId, emojiMeu, emojiFazendo)
                   }
                   colapsada={colapsadas.has(coluna)}
                   aoColapsar={(fechar) => colapsar(coluna, fechar)}
@@ -1472,10 +1359,7 @@ export function Quadro() {
                   ultimaVisita={ultimaVisita}
                   selecionando={selecionados.size > 0}
                   selecionados={selecionados}
-                  pessoaAtual={pessoaAtual}
                   aoAbrir={(t) => void abrir(t)}
-                  aoAssumir={(t) => void assumir(t)}
-                  aoDeixarDeAssumir={(t) => void deixarDeAssumir(t)}
                   aoMarcarComoMeu={setAnotando}
                   aoCreditarOutro={setCreditando}
                   aoTirarCredito={(t) => void tirarCredito(t)}

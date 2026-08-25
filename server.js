@@ -1225,7 +1225,6 @@ function tasksParaTela(muralId) {
     origem: t.origem === 'manual' ? 'manual' : 'teams',
     meu: t.meu || null,
     feitoPor: t.feitoPor || null,
-    fazendoPor: t.fazendoPor || null,
     coluna: t.coluna || null,
     nota: t.nota || null,
     deOutraConversa: !!t.deOutraConversa,
@@ -1353,7 +1352,6 @@ function desmarcarComoMeu(muralId, id) {
     );
   }
   t.meu = null;
-  t.fazendoPor = null;
   gravarTasks(muralId, db);
 }
 
@@ -1381,7 +1379,6 @@ function marcarFeitoPorOutro(muralId, id, quem, solucao) {
   // O credito e de uma pessoa so. Se estava marcada como sua, deixa de estar —
   // senao o card apareceria em duas colunas e contaria duas vezes no dashboard.
   t.meu = null;
-  t.fazendoPor = null;
   gravarTasks(muralId, db);
 }
 
@@ -1406,33 +1403,6 @@ function desmarcarFeitoPorOutro(muralId, id) {
   const t = db.tasks[String(id || '')];
   if (!t) throw new Error('Task desconhecida.');
   t.feitoPor = null;
-  gravarTasks(muralId, db);
-}
-
-function assumirTask(muralId, id, quem) {
-  const db = lerTasks(muralId);
-  const t = db.tasks[String(id || '')];
-  if (!t) throw new Error('Task desconhecida.');
-  const nome = String(quem || '').trim().slice(0, 80);
-  if (!nome) throw new Error('Escolha quem pegou esta task.');
-  t.fazendoPor = {
-    em: (t.fazendoPor && t.fazendoPor.quem === nome && t.fazendoPor.em) || new Date().toISOString(),
-    quem: nome,
-  };
-  if (t.status !== 'fazendo') {
-    t.statusAnterior = t.status;
-    t.status = 'fazendo';
-    t.statusChangedAt = new Date().toISOString();
-  }
-  t.movidoAMao = true;
-  gravarTasks(muralId, db);
-}
-
-function desassumirTask(muralId, id) {
-  const db = lerTasks(muralId);
-  const t = db.tasks[String(id || '')];
-  if (!t) throw new Error('Task desconhecida.');
-  t.fazendoPor = null;
   gravarTasks(muralId, db);
 }
 
@@ -2680,19 +2650,6 @@ async function rotear(req, res) {
       const corpo = await lerCorpoJson(req);
       if (corpo.marcar === false) desmarcarFeitoPorOutro(muralId, corpo.id);
       else marcarFeitoPorOutro(muralId, corpo.id, corpo.quem, corpo.solucao);
-      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/assumir' && req.method === 'POST') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      const corpo = await lerCorpoJson(req);
-      if (corpo.marcar === false) desassumirTask(muralId, corpo.id);
-      else assumirTask(muralId, corpo.id, corpo.quem);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });

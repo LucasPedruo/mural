@@ -52,10 +52,7 @@ interface Props {
   /** O menu de "…" do cabeçalho. Só as colunas suas têm: renomear e excluir não
    *  fazem sentido em coluna que é regra do Teams. */
   menu?: ItemDeMenu[];
-  pessoaAtual: string | null;
   aoAbrir: (task: Task) => void;
-  aoAssumir: (task: Task) => void;
-  aoDeixarDeAssumir: (task: Task) => void;
   aoMarcarComoMeu: (task: Task) => void;
   aoCreditarOutro: (task: Task) => void;
   aoTirarCredito: (task: Task) => void;
@@ -92,10 +89,7 @@ export function Coluna({
   aoColapsar,
   selecionando,
   selecionados,
-  pessoaAtual,
   aoAbrir,
-  aoAssumir,
-  aoDeixarDeAssumir,
   aoMarcarComoMeu,
   aoCreditarOutro,
   aoTirarCredito,
@@ -240,10 +234,7 @@ export function Coluna({
                           recemJuntado={recemJuntado === t.id}
                           selecionando={selecionando}
                           selecionado={selecionados.has(t.id)}
-                          pessoaAtual={pessoaAtual}
                           aoAbrir={aoAbrir}
-                          aoAssumir={aoAssumir}
-                          aoDeixarDeAssumir={aoDeixarDeAssumir}
                           aoMarcarComoMeu={aoMarcarComoMeu}
                           aoCreditarOutro={aoCreditarOutro}
                           aoTirarCredito={aoTirarCredito}

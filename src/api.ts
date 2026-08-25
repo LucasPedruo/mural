@@ -194,12 +194,6 @@ export const api = {
   mover: (muralId: string, id: string, status: Status) =>
     pedir<RespostaTasks>(`/api/mover?mural=${muralId}`, json({ id, status })),
 
-  assumir: (muralId: string, id: string, quem: string) =>
-    pedir<RespostaTasks>(`/api/assumir?mural=${muralId}`, json({ id, quem })),
-
-  deixarDeAssumir: (muralId: string, id: string) =>
-    pedir<RespostaTasks>(`/api/assumir?mural=${muralId}`, json({ id, marcar: false })),
-
   // A marca pessoal vale para qualquer card, inclusive os que o Teams ainda
   // acompanha: ela não mexe no status, então não há o que o sync desfazer.
   marcarComoMeu: (muralId: string, id: string, solucao: string) =>

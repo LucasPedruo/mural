@@ -308,25 +308,3 @@
 .mensagem-da-rajada .reacoes {
   font-size: 13px;
 }
-
-.modal-pessoa {
-  max-width: 520px;
-}
-
-.grade-pessoas {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.grade-pessoas button {
-  justify-content: center;
-  min-height: 44px;
-}
-
-.grade-pessoas button.selecionada {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-surface);
-}
