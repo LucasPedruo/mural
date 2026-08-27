@@ -97,22 +97,6 @@ function estaNaSprintAtual(em: string, sprint: RespostaSprint | null): boolean {
   return dia >= sprint.atual.inicio && dia <= sprint.atual.fim;
 }
 
-function idDaMensagemMaisAntiga(tasks: Task[]): string | null {
-  let maisAntiga: { id: string; em: string } | null = null;
-  for (const task of tasks) {
-    const mensagens = task.mensagens?.length
-      ? task.mensagens
-      : [{ id: task.id, createdDateTime: task.createdDateTime }];
-    for (const mensagem of mensagens) {
-      if (!mensagem.id || !mensagem.createdDateTime) continue;
-      if (!maisAntiga || mensagem.createdDateTime < maisAntiga.em) {
-        maisAntiga = { id: mensagem.id, em: mensagem.createdDateTime };
-      }
-    }
-  }
-  return maisAntiga?.id ?? null;
-}
-
 type ResultadoDeBusca = {
   task: Task;
   score: number;
@@ -279,7 +263,7 @@ export function Quadro() {
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [termoBusca, setTermoBusca] = useState('');
   const [opcoesAbertas, setOpcoesAbertas] = useState(false);
-  const chaveUltimaMensagem = `mural:mensagem-mais-antiga-da-ultima-leitura:${muralId}`;
+  const chaveUltimaMensagem = `mural:mensagem-mais-antiga-do-ultimo-sync:${muralId}`;
   const [ultimaMensagemTeams, setUltimaMensagemTeams] = useState<string | null>(() =>
     localStorage.getItem(chaveUltimaMensagem),
   );
@@ -657,13 +641,13 @@ export function Quadro() {
 
   // ---- marca da daily --------------------------------------------------
 
-  async function salvarSolucao(solucao: string) {
+  async function salvarSolucao(solucao: string, prUrl: string) {
     const task = anotando;
     setAnotando(null);
     if (!task) return;
     setErro(null);
     try {
-      const r = await api.marcarComoMeu(muralId, task.id, solucao);
+      const r = await api.marcarComoMeu(muralId, task.id, solucao, prUrl);
       setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
@@ -1190,11 +1174,8 @@ export function Quadro() {
   }
 
   function abrirUltimaMensagem() {
-    const alvo = ultimaMensagemTeams ?? idDaMensagemMaisAntiga(tasks);
-    if (!alvo) return;
-    localStorage.setItem(chaveUltimaMensagem, alvo);
-    setUltimaMensagemTeams(alvo);
-    void abrirNoTeams(alvo);
+    if (!ultimaMensagemTeams) return;
+    void abrirNoTeams(ultimaMensagemTeams);
   }
 
   // ---- render ----------------------------------------------------------
@@ -1273,7 +1254,7 @@ export function Quadro() {
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
   const escopoDoKanban = sprint?.atual ? sprint.atual.nome : 'este mural';
-  const mensagemMaisAntigaDisponivel = ultimaMensagemTeams ?? idDaMensagemMaisAntiga(tasks);
+  const mensagemMaisAntigaDisponivel = ultimaMensagemTeams;
   const resultadosBusca = useMemo(
     () => resultadosDaBusca(tasks, colunasSuas, termoBusca),
     [tasks, colunasSuas, termoBusca],
@@ -1576,7 +1557,7 @@ export function Quadro() {
       {anotando && (
         <DialogoDeSolucao
           task={anotando}
-          aoSalvar={(s) => void salvarSolucao(s)}
+          aoSalvar={(s, prUrl) => void salvarSolucao(s, prUrl)}
           aoCancelar={() => setAnotando(null)}
         />
       )}

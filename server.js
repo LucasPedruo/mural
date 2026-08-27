@@ -747,15 +747,116 @@ function tagsDoHistorico(tasks) {
   return [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag));
 }
 
+function resumoCurto(texto, limite = 220) {
+  const limpo = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (limpo.length <= limite) return limpo;
+  return limpo.slice(0, limite - 1).trimEnd() + '…';
+}
+
+function parsePrUrl(link) {
+  let u;
+  try { u = new URL(String(link || '').trim()); } catch { return null; }
+  const partes = u.pathname.split('/').filter(Boolean);
+
+  if (u.hostname === 'github.com' && partes.length >= 4 && partes[2] === 'pull') {
+    return {
+      tipo: 'github',
+      owner: partes[0],
+      repo: partes[1],
+      numero: partes[3],
+      url: u.toString(),
+    };
+  }
+
+  const ixGit = partes.indexOf('_git');
+  const ixPr = partes.indexOf('pullrequest');
+  if (u.hostname.endsWith('dev.azure.com') && ixGit >= 1 && ixPr > ixGit + 1) {
+    return {
+      tipo: 'azure',
+      org: partes[0],
+      project: partes.slice(1, ixGit).join('/'),
+      repo: partes[ixGit + 1],
+      numero: partes[ixPr + 1],
+      url: u.toString(),
+    };
+  }
+
+  if (u.hostname.endsWith('.visualstudio.com') && ixGit >= 0 && ixPr > ixGit + 1) {
+    return {
+      tipo: 'azure',
+      org: u.hostname.split('.')[0],
+      project: partes.slice(0, ixGit).join('/'),
+      repo: partes[ixGit + 1],
+      numero: partes[ixPr + 1],
+      url: u.toString(),
+    };
+  }
+
+  return null;
+}
+
+async function resumoDePr(link) {
+  const pr = parsePrUrl(link);
+  if (!pr) throw new Error('Cole um link de PR do GitHub ou Azure DevOps.');
+
+  if (pr.tipo === 'github') {
+    const r = await fetch(`https://api.github.com/repos/${pr.owner}/${pr.repo}/pulls/${pr.numero}`, {
+      headers: { 'User-Agent': 'mural-local' },
+    });
+    if (!r.ok) throw new Error(`Nao consegui ler o PR no GitHub (HTTP ${r.status}).`);
+    const d = await r.json();
+    return {
+      url: d.html_url || pr.url,
+      titulo: d.title || `PR #${pr.numero}`,
+      resumo: resumoCurto(d.body) || resumoCurto(d.title) || `PR #${pr.numero}`,
+      estado: d.merged_at ? 'merged' : d.state,
+      autor: d.user && d.user.login ? d.user.login : '',
+    };
+  }
+
+  const api = `https://dev.azure.com/${pr.org}/${encodeURIComponent(pr.project)}` +
+    `/_apis/git/repositories/${encodeURIComponent(pr.repo)}/pullrequests/${pr.numero}?api-version=7.1`;
+  const r = await fetch(api);
+  if (!r.ok) throw new Error(`Nao consegui ler o PR no Azure DevOps (HTTP ${r.status}).`);
+  const d = await r.json();
+  return {
+    url: pr.url,
+    titulo: d.title || `PR ${pr.numero}`,
+    resumo: resumoCurto(d.description) || resumoCurto(d.title) || `PR ${pr.numero}`,
+    estado: d.status || '',
+    autor: d.createdBy && d.createdBy.displayName ? d.createdBy.displayName : '',
+  };
+}
+
 function painelDoMural(muralId) {
   const { sprints, tasks } = historicoCompleto(muralId);
   const { linhas, soltas } = linhasDeSprint(sprints, tasks);
+  const colunas = lerColunas(muralId).colunas;
+  const nomeDaColuna = (id) =>
+    id === 'fazendo' ? 'In progress' : (colunas.find((c) => c.id === id) || {}).nome || id;
 
   // A daily le por dia da MARCA, nao da mensagem: o que importa na reuniao e o
   // dia em que voce fez, nao o dia em que o pedido chegou.
   const feitas = tasks
     .filter((t) => t.meu && t.meu.em)
     .sort((a, b) => String(b.meu.em).localeCompare(String(a.meu.em)));
+  const emAndamento = tasks
+    .filter((t) => !t.arquivada && colunaDaTask(t) === 'fazendo')
+    .sort((a, b) => String(b.statusChangedAt).localeCompare(String(a.statusChangedAt)))
+    .map((t) => {
+      const coluna = colunaDaTask(t);
+      return {
+        id: t.id,
+        summary: t.summary,
+        kind: t.kind === 'bug' ? 'bug' : 'sugestao',
+        autor: t.author,
+        coluna: nomeDaColuna(coluna),
+        solucao: (t.meu && t.meu.solucao) || (t.feitoPor && t.feitoPor.solucao) || '',
+        prUrl: (t.meu && t.meu.prUrl) || '',
+        mensagens: mensagensDaTask(t).length,
+        webUrl: t.webUrl || '',
+      };
+    });
 
   const porDia = [];
   for (const t of feitas) {
@@ -770,6 +871,7 @@ function painelDoMural(muralId) {
       summary: t.summary,
       kind: t.kind === 'bug' ? 'bug' : 'sugestao',
       solucao: t.meu.solucao || '',
+      prUrl: t.meu.prUrl || '',
       em: t.meu.em,
       via: t.meu.via,
       status: t.status,
@@ -794,6 +896,7 @@ function painelDoMural(muralId) {
       : null,
     daily: {
       porDia,
+      emAndamento,
       total: feitas.length,
       bugs: feitas.filter((t) => t.kind === 'bug').length,
       diasAtivos: porDia.length,
@@ -1347,7 +1450,7 @@ function tagsDoMural(muralId) {
 // "Done by me" NAO e um status do Teams — e uma marca pessoal, e por isso
 // mora num campo separado. Assim a reacao continua mandando no status real e o
 // proximo sync nao apaga o que voce anotou para contar na daily.
-function marcarComoMeu(muralId, id, solucao) {
+function marcarComoMeu(muralId, id, solucao, prUrl = '') {
   const db = lerTasks(muralId);
   const t = db.tasks[String(id || '')];
   if (!t) throw new Error('Task desconhecida.');
@@ -1356,6 +1459,7 @@ function marcarComoMeu(muralId, id, solucao) {
     // corrigir uma virgula jogaria o card de ontem para o grupo de hoje.
     em: (t.meu && t.meu.em) || new Date().toISOString(),
     solucao: String(solucao || '').trim().slice(0, 2000),
+    prUrl: String(prUrl || '').trim().slice(0, 1000),
     // Escrever a anotacao num card que a reacao trouxe nao o torna manual: se
     // voce tirar o 🟢 la, ele sai daqui — a nao ser pela regra da anotacao.
     via: (t.meu && t.meu.via) || 'mao',
@@ -2668,8 +2772,17 @@ async function rotear(req, res) {
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
       const corpo = await lerCorpoJson(req);
       if (corpo.marcar === false) desmarcarComoMeu(muralId, corpo.id);
-      else marcarComoMeu(muralId, corpo.id, corpo.solucao);
+      else marcarComoMeu(muralId, corpo.id, corpo.solucao, corpo.prUrl);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/resumo-pr' && req.method === 'POST') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      return json(res, 200, { ok: true, ...(await resumoDePr(corpo.url)) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }

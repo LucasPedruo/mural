@@ -40,6 +40,7 @@ export interface MuralNaLista extends Mural {
 export interface MeuFeito {
   em: string;
   solucao: string;
+  prUrl?: string;
   /** `emoji` = veio da sua reação no Teams; `mao` = você marcou aqui. */
   via: 'emoji' | 'mao';
 }
@@ -314,6 +315,7 @@ export interface ItemDaDaily {
   summary: string;
   kind: 'bug' | 'sugestao';
   solucao: string;
+  prUrl?: string;
   em: string;
   via: 'emoji' | 'mao';
   status: Status;
@@ -329,6 +331,18 @@ export interface DiaDaDaily {
   /** Dia local, no formato ano-mês-dia. */
   dia: string;
   itens: ItemDaDaily[];
+}
+
+export interface ItemEmAndamentoDaDaily {
+  id: string;
+  summary: string;
+  kind: 'bug' | 'sugestao';
+  autor: string;
+  coluna: string;
+  solucao: string;
+  prUrl?: string;
+  mensagens: number;
+  webUrl: string;
 }
 
 export interface LinhaDeTag {
@@ -347,6 +361,7 @@ export interface RespostaPainel {
   foraDeSprint: { chegaram: number; bugs: number; concluidas: number } | null;
   daily: {
     porDia: DiaDaDaily[];
+    emAndamento: ItemEmAndamentoDaDaily[];
     total: number;
     bugs: number;
     diasAtivos: number;
