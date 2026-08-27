@@ -218,6 +218,7 @@ export interface ResultadoSync extends RespostaTasks {
   /** Cards que ganharam mensagens novas da mesma rajada — o autor continuou
    *  escrevendo depois da última leitura. */
   cresceram: string[];
+  mensagemMaisAntigaDoSync: string | null;
   total: number;
   consumo: Consumo | null;
   totaisDoUsuario: TotaisDeConsumo;

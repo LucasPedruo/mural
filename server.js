@@ -1106,11 +1106,33 @@ function somarConsumo(execucoes) {
   );
 }
 
-// O total e de tudo que foi cobrado; a quebra por operacao mostra quanto do
-// gasto foi quadro e quanto foi onboarding.
-function totaisDoUsuario(usuario) {
+// Dentro de um mural, o total visivel e o da sprint atual: o custo que interessa
+// ao kanban e o que este ciclo consumiu, nao o acumulado historico da conta.
+function execucoesNoEscopoDoMural(usuario, muralId) {
   const doUsuario = lerConsumo().porUsuario[usuario];
   const todas = doUsuario ? doUsuario.execucoes : [];
+  const doMural = todas.filter((e) => e.muralId === muralId);
+
+  let sprint = null;
+  try {
+    sprint = muralId ? lerSprints(muralId).atual : null;
+  } catch {
+    sprint = null;
+  }
+
+  if (!sprint) return doMural;
+  return doMural.filter((e) => {
+    if (!e.quando) return false;
+    const dia = diaLocalDe(e.quando);
+    return dia >= sprint.inicio && dia <= sprint.fim;
+  });
+}
+
+function totaisDoUsuario(usuario, muralId = null) {
+  const doUsuario = lerConsumo().porUsuario[usuario];
+  const todas = muralId
+    ? execucoesNoEscopoDoMural(usuario, muralId)
+    : doUsuario ? doUsuario.execucoes : [];
   const porOperacao = {};
   for (const op of OPERACOES) {
     porOperacao[op] = somarConsumo(todas.filter((e) => operacaoDe(e) === op));
@@ -1809,6 +1831,17 @@ function aplicarAssinatura(t, agora, assinatura, marcados) {
   }
 }
 
+function idMaisAntigoDoSnapshot(snapshot) {
+  let maisAntiga = null;
+  for (const mensagem of snapshot) {
+    if (!mensagem || !mensagem.id || !mensagem.createdDateTime) continue;
+    if (!maisAntiga || mensagem.createdDateTime < maisAntiga.em) {
+      maisAntiga = { id: mensagem.id, em: mensagem.createdDateTime };
+    }
+  }
+  return maisAntiga ? maisAntiga.id : null;
+}
+
 function merge(db, snapshot, agora, assinatura, emojiFazendo) {
   const novos = [];
   const mudaram = [];
@@ -2173,8 +2206,9 @@ function rodarSync(muralId) {
 
         resolve({
           ...r,
+          mensagemMaisAntigaDoSync: idMaisAntigoDoSnapshot(snapshot),
           consumo: consumoDaExecucao,
-          totaisDoUsuario: totaisDoUsuario(usuario),
+          totaisDoUsuario: totaisDoUsuario(usuario, muralId),
         });
       } catch (e) {
         reject(e); // historico ilegivel: aborta sem gravar por cima
@@ -2472,7 +2506,7 @@ async function rotear(req, res) {
     return json(res, 200, {
       usuario,
       estimativa: estimarProximaAtualizacao(usuario, muralId),
-      totais: totaisDoUsuario(usuario),
+      totais: totaisDoUsuario(usuario, muralId),
       preferencias: prefsDoUsuario(usuario),
       // Agente que nao informa custo nao pode ter preco na tela: a interface
       // esconde o total e a confirmacao de gasto em vez de mostrar zero.
