@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api';
@@ -29,6 +29,14 @@ export function Home() {
   const [daily, setDaily] = useState<RespostaPainel | null>(null);
   const [tasksDaily, setTasksDaily] = useState<Task[]>([]);
   const [anotando, setAnotando] = useState<Task | null>(null);
+  const [novaFeita, setNovaFeita] = useState('');
+  const [dataNovaFeita, setDataNovaFeita] = useState(() => {
+    const data = new Date();
+    data.setDate(data.getDate() - 1);
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+  });
+  const [salvandoFeita, setSalvandoFeita] = useState(false);
+  const [menuUsuario, setMenuUsuario] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   // A sprint se define e se encerra daqui, não de dentro do quadro: no quadro
   // ela é contexto do que está na tela, e mexer no ciclo é organizar o mural —
@@ -43,7 +51,6 @@ export function Home() {
     try {
       const d = await api.listarMurais();
       setMurais(d.murais);
-      setMuralDailyId((atual) => atual ?? d.murais[0]?.id ?? null);
       // Sem nenhum mural, a lista vazia nao ajuda: manda direto para a criacao.
       if (d.murais.length === 0) navegar('/onboarding', { replace: true });
     } catch (e) {
@@ -185,14 +192,37 @@ export function Home() {
     }
   }
 
-  async function abrirItemDaDaily(id: string) {
+  async function abrirItemDaDaily(id: string, origem: Task['origem'] = 'teams') {
     const muralId = muralDaily?.id;
     if (!muralId) return;
+    if (origem === 'manual') {
+      setErro('Esta tarefa foi adicionada manualmente e nao tem mensagem no Teams.');
+      return;
+    }
     try {
       await api.abrirNoTeams(muralId, id);
       setErro(null);
     } catch (e) {
       setErro((e as Error).message);
+    }
+  }
+
+  async function salvarTarefaFeita(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const muralId = muralDaily?.id;
+    if (!muralId || !novaFeita.trim()) return;
+    setSalvandoFeita(true);
+    setErro(null);
+    try {
+      const r = await api.criarTarefaManual(muralId, novaFeita, dataNovaFeita);
+      setTasksDaily(r.tasks);
+      setDaily(await api.painel(muralId));
+      setNovaFeita('');
+      await carregar();
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setSalvandoFeita(false);
     }
   }
 
@@ -210,7 +240,12 @@ export function Home() {
     }
   }
 
-  const muralDaily = murais?.find((m) => m.id === muralDailyId) ?? murais?.[0] ?? null;
+  const muralDaily = murais?.find((m) => m.id === muralDailyId) ?? null;
+  const tituloHome = secao === 'daily'
+    ? muralDaily
+      ? `Daily - ${muralDaily.nome}`
+      : 'Daily'
+    : 'Murais';
   const itensEmAndamento = tasksDaily
     .filter((t) => !t.ignorada && !t.coluna && !t.meu && !t.feitoPor && t.status === 'fazendo')
     .sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt))
@@ -245,41 +280,66 @@ export function Home() {
         >
           Murais
         </button>
-        <div className="grupo-sidebar">
-          <span>Daily</span>
-          {murais?.map((m) => (
-            <button
-              key={m.id}
-              className={secao === 'daily' && muralDailyId === m.id ? 'ativo' : ''}
-              onClick={() => {
-                setSecao('daily');
-                setMuralDailyId(m.id);
-                setDaily(null);
-                setTasksDaily([]);
-              }}
-            >
-              {m.nome}
-            </button>
-          ))}
+        <button
+          className={secao === 'daily' ? 'ativo' : ''}
+          onClick={() => {
+            setSecao('daily');
+            setMuralDailyId(null);
+            setDaily(null);
+            setTasksDaily([]);
+          }}
+        >
+          Daily
+        </button>
+        <div className="usuario-sidebar">
+          {menuUsuario && (
+            <div className="menu-usuario" role="menu">
+              <button type="button" disabled title="O login sera ativado futuramente">
+                Sair
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuUsuario(false);
+                  resetarOnboarding();
+                }}
+              >
+                Refazer configuração
+              </button>
+            </div>
+          )}
+          <button
+            className="perfil-sidebar"
+            type="button"
+            aria-expanded={menuUsuario}
+            aria-haspopup="menu"
+            onClick={() => setMenuUsuario((aberto) => !aberto)}
+          >
+            <span className="avatar-sidebar">V</span>
+            <span className="dados-perfil-sidebar">
+              <strong>Usuário local</strong>
+              <small>Ambiente local</small>
+            </span>
+            <span className="chevron-sidebar">...</span>
+          </button>
         </div>
       </aside>
 
       <main className="conteudo-home">
       <div className="topo">
-        <h1>{secao === 'daily' ? `Daily · ${muralDaily?.nome ?? 'Mural'}` : 'Murais'}</h1>
+        <div className="identidade-topo">
+          <h1>{tituloHome}</h1>
+          <p>
+            {secao === 'daily'
+              ? 'Cola simples para a daily: o que esta em andamento e o que ja foi entregue.'
+              : 'Cada quadro acompanha uma conversa do Teams.'}
+          </p>
+        </div>
         <span className="espaco" />
-        <button onClick={resetarOnboarding} title="Recomeçar a configuração">
-          Refazer configuração
-        </button>
         <button className="primario" onClick={() => navegar('/onboarding')}>
           Novo mural
         </button>
       </div>
-      <p className="sub">
-        {secao === 'daily'
-          ? 'Cola simples para a daily: o que esta em andamento e o que ja foi entregue.'
-          : 'Cada quadro acompanha uma conversa do Teams.'}
-      </p>
 
       {erro && <p className="aviso erro">{erro}</p>}
 
@@ -390,7 +450,35 @@ export function Home() {
         ))}
       </div>}
 
-      {secao === 'daily' && (
+      {secao === 'daily' && !muralDailyId && (
+        <div className="lista-dailys">
+          {murais?.filter((m) => m.sprint).map((m) => (
+            <button
+              className="cartao-daily"
+              key={m.id}
+              onClick={() => {
+                setMuralDailyId(m.id);
+                setDaily(null);
+                setTasksDaily([]);
+              }}
+            >
+              <span className="nome">{m.nome}</span>
+              <span className="meta">
+                {m.sprint?.nome} · ate {m.sprint ? dataDoDiaISO(m.sprint.fim) : ''}
+              </span>
+              <span className="numeros-daily">
+                <span>{m.totais.fazendo} em andamento</span>
+                <span>{m.totais.meu} feitas por voce</span>
+              </span>
+            </button>
+          ))}
+          {murais?.every((m) => !m.sprint) && (
+            <p className="vazio">Nenhuma daily ativa. Defina uma sprint em um mural.</p>
+          )}
+        </div>
+      )}
+
+      {secao === 'daily' && muralDailyId && (
         <div className="daily-home">
           <section className="bloco-daily-home">
             <div className="cabeca-daily-home">
@@ -446,6 +534,25 @@ export function Home() {
               <h2>Entregas recentes</h2>
               <span>{diaAnteriorDaDaily?.itens.length ?? 0}</span>
             </div>
+            <form className="adicionar-feita" onSubmit={(e) => void salvarTarefaFeita(e)}>
+              <input
+                type="text"
+                value={novaFeita}
+                maxLength={2000}
+                placeholder="Tarefa feita fora do Teams"
+                aria-label="Tarefa feita fora do Teams"
+                onChange={(e) => setNovaFeita(e.target.value)}
+              />
+              <input
+                type="date"
+                value={dataNovaFeita}
+                aria-label="Data da entrega"
+                onChange={(e) => setDataNovaFeita(e.target.value)}
+              />
+              <button className="primario" type="submit" disabled={salvandoFeita || !novaFeita.trim()}>
+                {salvandoFeita ? 'salvando' : 'adicionar'}
+              </button>
+            </form>
             {!diaAnteriorDaDaily ? (
               <p className="vazio">Nada marcado como feito ontem.</p>
             ) : (
@@ -456,7 +563,7 @@ export function Home() {
                     <li
                       key={item.id}
                       className="clicavel"
-                      onClick={() => void abrirItemDaDaily(item.id)}
+                      onClick={() => void abrirItemDaDaily(item.id, item.origem)}
                       title="Abrir no Teams"
                     >
                       <p className="titulo">{item.summary}</p>

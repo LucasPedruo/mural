@@ -147,6 +147,9 @@ export const api = {
   anotar: (muralId: string, id: string, nota: string) =>
     pedir<RespostaTasks>(`/api/nota?mural=${muralId}`, json({ id, nota })),
 
+  criarTarefaManual: (muralId: string, summary: string, em: string) =>
+    pedir<RespostaTasks>(`/api/tarefa-manual?mural=${muralId}`, json({ summary, em })),
+
   // --- colunas suas ---
   // Elas não têm regra: quem põe card ali é você, arrastando. Por isso a coluna
   // mora no servidor (é do quadro, não da sua tela) e o card guarda em qual

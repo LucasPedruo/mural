@@ -1524,6 +1524,45 @@ function anotarTask(muralId, id, nota) {
   gravarTasks(muralId, db);
 }
 
+// Uma entrega que aconteceu fora do Teams. Ela entra como "Done by me" para
+// participar da daily, mas sem mensagem falsa e sem tentar escrever no canal.
+function criarTarefaManual(muralId, summary, em) {
+  const db = lerTasks(muralId);
+  const texto = String(summary || '').trim().slice(0, 2000);
+  if (!texto) throw new Error('Descreva a tarefa concluida.');
+  const data = String(em || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Informe uma data valida.');
+  const marcadaEm = new Date(`${data}T12:00:00`).toISOString();
+  const agora = new Date().toISOString();
+  const id = `manual-${crypto.randomUUID()}`;
+  db.tasks[id] = {
+    id,
+    origem: 'manual',
+    author: 'Voce',
+    createdDateTime: marcadaEm,
+    summary: texto,
+    kind: 'sugestao',
+    reactions: [],
+    webUrl: '',
+    status: 'feito',
+    firstSeen: agora,
+    statusChangedAt: marcadaEm,
+    statusAnterior: null,
+    lastSeen: agora,
+    movidoAMao: true,
+    meu: { em: marcadaEm, solucao: '', via: 'mao' },
+    feitoPor: null,
+    coluna: null,
+    nota: null,
+    ignorada: null,
+    tags: [],
+    deOutraConversa: false,
+    conflito: null,
+    agrupamento: null,
+  };
+  gravarTasks(muralId, db);
+}
+
 function desmarcarFeitoPorOutro(muralId, id) {
   const db = lerTasks(muralId);
   const t = db.tasks[String(id || '')];
@@ -2859,6 +2898,18 @@ async function rotear(req, res) {
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
       const corpo = await lerCorpoJson(req);
       anotarTask(muralId, corpo.id, corpo.nota);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/tarefa-manual' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      criarTarefaManual(muralId, corpo.summary, corpo.em);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
