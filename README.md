@@ -1,5 +1,7 @@
 # Mural
 
+<img width="1919" height="994" alt="image" src="https://github.com/user-attachments/assets/cbeabed3-65de-4f0e-81bf-152ba614e889" />
+
 Seu canal do Teams vira um kanban. O emoji é o status.
 
 ## Por que existe
