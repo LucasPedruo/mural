@@ -22,11 +22,19 @@ import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeLink } from '../componentes/DialogoDeLink';
 import { DialogoDeNota } from '../componentes/DialogoDeNota';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
-import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
 import { Notificacoes } from '../componentes/Notificacoes';
 import { Toasts } from '../componentes/Toasts';
-import { IconeApagar, IconeEditar, IconeMais, IconeVoltar } from '../componentes/icones';
+import {
+  IconeAbrirFora,
+  IconeApagar,
+  IconeAtualizar,
+  IconeBusca,
+  IconeEditar,
+  IconeFeito,
+  IconeMais,
+  IconeVoltar,
+} from '../componentes/icones';
 import {
   COLUNAS,
   CORES_DE_STATUS,
@@ -45,7 +53,6 @@ import type {
   RespostaConsumo,
   RespostaSprint,
   Status,
-  TagComContagem,
   Task,
 } from '../tipos';
 import './quadro.css';
@@ -72,6 +79,110 @@ function vazioDaColuna(coluna: ColunaId, emojiMeu: string, emojiFazendo: string)
     case 'ignorada':
       return 'Nada descartado';
   }
+}
+
+function diaLocalDaNotificacao(iso: string): string {
+  const d = new Date(iso);
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function estaNaSprintAtual(em: string, sprint: RespostaSprint | null): boolean {
+  if (!sprint?.atual) return true;
+  const dia = diaLocalDaNotificacao(em);
+  return dia >= sprint.atual.inicio && dia <= sprint.atual.fim;
+}
+
+type ResultadoDeBusca = {
+  task: Task;
+  score: number;
+  trecho: string;
+};
+
+function normalizarBusca(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function textoDaColuna(task: Task, colunas: ColunaPersonalizada[]): string {
+  if (task.ignorada) return 'Ignored';
+  if (task.coluna) return colunas.find((c) => c.id === task.coluna)?.nome ?? 'Coluna sua';
+  if (task.meu) return 'Done by me';
+  if (task.feitoPor) return 'Done';
+  return rotuloDaColuna(task.status);
+}
+
+function textoPesquisavel(task: Task, colunas: ColunaPersonalizada[]): string[] {
+  const mensagens = task.mensagens?.length ? task.mensagens : [];
+  return [
+    task.summary,
+    task.author,
+    task.kind,
+    textoDaColuna(task, colunas),
+    task.status,
+    task.meu?.solucao ?? '',
+    task.feitoPor?.quem ?? '',
+    task.feitoPor?.solucao ?? '',
+    task.nota ?? '',
+    ...task.emojis,
+    ...task.reactions,
+    ...mensagens.flatMap((m) => [m.summary, m.author, m.kind, ...m.reactions]),
+  ].filter(Boolean);
+}
+
+function trechoDaBusca(task: Task, termo: string): string {
+  const candidatos = [
+    task.summary,
+    task.nota ?? '',
+    task.meu?.solucao ?? '',
+    task.feitoPor?.solucao ?? '',
+    ...(task.mensagens ?? []).map((m) => m.summary),
+  ].filter(Boolean);
+  const normalizado = normalizarBusca(termo);
+  return candidatos.find((c) => normalizarBusca(c).includes(normalizado)) ?? task.summary;
+}
+
+function resultadosDaBusca(
+  tasks: Task[],
+  colunas: ColunaPersonalizada[],
+  termo: string,
+): ResultadoDeBusca[] {
+  const busca = normalizarBusca(termo);
+  if (busca.length < 2) return [];
+  const palavras = busca.split(/\s+/).filter(Boolean);
+
+  return tasks
+    .map((task) => {
+      const titulo = normalizarBusca(task.summary);
+      const campos = textoPesquisavel(task, colunas).map(normalizarBusca);
+      let score = 0;
+
+      if (titulo.includes(busca)) score += 24;
+      for (const palavra of palavras) {
+        if (titulo.includes(palavra)) score += 8;
+      }
+      for (const campo of campos) {
+        if (campo.includes(busca)) score += 5;
+        for (const palavra of palavras) {
+          if (campo.includes(palavra)) score += 1;
+        }
+      }
+
+      return score > 0 ? { task, score, trecho: trechoDaBusca(task, termo) } : null;
+    })
+    .filter((r): r is ResultadoDeBusca => r !== null)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.task.statusChangedAt.localeCompare(a.task.statusChangedAt) ||
+        b.task.createdDateTime.localeCompare(a.task.createdDateTime),
+    )
+    .slice(0, 20);
 }
 
 export function Quadro() {
@@ -103,13 +214,6 @@ export function Quadro() {
   const [sincronizando, setSincronizando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
 
-  // "Novo" e "mudou" são relativos à sua última visita a este mural. O valor é
-  // lido uma vez, na montagem, e não muda enquanto a aba está aberta: os selos
-  // precisam ficar de pé durante a visita inteira, senão desapareceriam no meio
-  // da leitura. Quem grava a visita nova é o efeito abaixo, na saída.
-  const chaveVisto = `mural:ultima-visita:${muralId}`;
-  const [ultimaVisita] = useState<string | null>(() => localStorage.getItem(chaveVisto));
-
   const [consumo, setConsumo] = useState<RespostaConsumo | null>(null);
   const [confirmando, setConfirmando] = useState(false);
 
@@ -135,10 +239,6 @@ export function Quadro() {
   const [checks, setChecks] = useState<string[]>([]);
 
 
-  // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
-  // está sendo etiquetada e o filtro ligado.
-  const [tags, setTags] = useState<TagComContagem[]>([]);
-  const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
   const [vendoRajada, setVendoRajada] = useState<Task | null>(null);
   // O card que acabou de ser juntado, para o realce achá-lo. Juntar faz um card
@@ -146,12 +246,18 @@ export function Quadro() {
   // ter fundido dois.
   const [recemJuntado, setRecemJuntado] = useState<string | null>(null);
   const [incluindoLink, setIncluindoLink] = useState(false);
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  const [termoBusca, setTermoBusca] = useState('');
+  const [opcoesAbertas, setOpcoesAbertas] = useState(false);
+  const chaveUltimaMensagem = `mural:mensagem-mais-antiga-do-ultimo-sync:${muralId}`;
+  const [ultimaMensagemTeams, setUltimaMensagemTeams] = useState<string | null>(() =>
+    localStorage.getItem(chaveUltimaMensagem),
+  );
+  const menuOpcoes = useRef<HTMLDivElement>(null);
   // Os cards em que o seu gesto e a reação no canal discordam. A leitura abre o
   // diálogo; "decidir depois" fecha, e o selo no card é como reencontrar.
   const [verConflitos, setVerConflitos] = useState(false);
   const [lendoLink, setLendoLink] = useState(false);
-  const [tagFiltro, setTagFiltro] = useState<string | null>(null);
-
   // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
   // vem em cada card, e uma volta ao servidor para descobrir o que está na tela
   // seria trabalho para saber o que já se sabe.
@@ -221,18 +327,16 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, etiquetas, suas, prefs] = await Promise.all([
+      const [tarefas, info, custo, ciclo, suas, prefs] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
-        api.tags(muralId),
         api.colunas(muralId),
         api.preferencias(),
       ]);
       setChecks(prefs.checks);
       setColunasSuas(suas.colunas);
-      setTags(etiquetas.tags);
       setMural(info.mural);
       setTasks(tarefas.tasks);
       setLastSync(tarefas.lastSync);
@@ -248,17 +352,31 @@ export function Quadro() {
     void carregar();
   }, [carregar]);
 
-  // Sair do mural é o que marca como visto. Antes havia um botão para isso, mas
-  // pedir um clique para dizer "eu li" é trabalho que o próprio ato de sair já
-  // informa. O evento pagehide cobre fechar a aba; o cleanup cobre voltar para a home.
   useEffect(() => {
-    const marcarVisto = () => localStorage.setItem(chaveVisto, new Date().toISOString());
-    window.addEventListener('pagehide', marcarVisto);
-    return () => {
-      marcarVisto();
-      window.removeEventListener('pagehide', marcarVisto);
+    const abrirBuscaPeloAtalho = (e: globalThis.KeyboardEvent) => {
+      if (!e.ctrlKey || e.key !== ' ') return;
+      e.preventDefault();
+      setBuscaAberta(true);
     };
-  }, [chaveVisto]);
+    document.addEventListener('keydown', abrirBuscaPeloAtalho);
+    return () => document.removeEventListener('keydown', abrirBuscaPeloAtalho);
+  }, []);
+
+  useEffect(() => {
+    if (!opcoesAbertas) return;
+    const foraDoMenu = (e: Event) => {
+      if (!menuOpcoes.current?.contains(e.target as Node)) setOpcoesAbertas(false);
+    };
+    const noEscape = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setOpcoesAbertas(false);
+    };
+    document.addEventListener('mousedown', foraDoMenu);
+    document.addEventListener('keydown', noEscape);
+    return () => {
+      document.removeEventListener('mousedown', foraDoMenu);
+      document.removeEventListener('keydown', noEscape);
+    };
+  }, [opcoesAbertas]);
 
   // ---- notificações ----------------------------------------------------
 
@@ -329,10 +447,19 @@ export function Quadro() {
   // chamado "limpar" não pode descartar trabalho por tabela — o que tem nota
   // sai uma a uma, pelo ícone do item.
   function limparNotificacoes() {
-    setNotificacoes((atuais) => gravarNotificacoes(atuais.filter((n) => n.nota)));
+    setNotificacoes((atuais) =>
+      gravarNotificacoes(
+        atuais.filter((n) => n.nota || !estaNaSprintAtual(n.em, sprint)),
+      ),
+    );
   }
 
-  const naoLidas = notificacoes.filter((n) => n.em > lidasEm).length;
+  const notificacoesDaSprint = useMemo(
+    () => notificacoes.filter((n) => estaNaSprintAtual(n.em, sprint)),
+    [notificacoes, sprint],
+  );
+
+  const naoLidas = notificacoesDaSprint.filter((n) => n.em > lidasEm).length;
 
   // ---- progresso ao vivo -----------------------------------------------
 
@@ -421,6 +548,11 @@ export function Quadro() {
       const r = await api.sincronizar(muralId);
       setTasks(r.tasks);
       setLastSync(r.lastSync);
+      const mensagemMaisAntiga = r.mensagemMaisAntigaDoSync;
+      if (mensagemMaisAntiga) {
+        localStorage.setItem(chaveUltimaMensagem, mensagemMaisAntiga);
+        setUltimaMensagemTeams(mensagemMaisAntiga);
+      }
 
       const partes: string[] = [];
       if (r.novos.length) partes.push(`${r.novos.length} nova(s)`);
@@ -479,13 +611,13 @@ export function Quadro() {
 
   // ---- marca da daily --------------------------------------------------
 
-  async function salvarSolucao(solucao: string) {
+  async function salvarSolucao(solucao: string, prUrl: string) {
     const task = anotando;
     setAnotando(null);
     if (!task) return;
     setErro(null);
     try {
-      const r = await api.marcarComoMeu(muralId, task.id, solucao);
+      const r = await api.marcarComoMeu(muralId, task.id, solucao, prUrl);
       setTasks(r.tasks);
     } catch (e) {
       setErro((e as Error).message);
@@ -555,21 +687,7 @@ export function Quadro() {
     }
   }
 
-  // ---- marcas pessoais: etiquetar, ignorar, apagar ---------------------
-
-  async function salvarTags(novas: string[]) {
-    const task = etiquetando;
-    setEtiquetando(null);
-    if (!task) return;
-    setErro(null);
-    try {
-      const r = await api.salvarTags(muralId, task.id, novas);
-      setTasks(r.tasks);
-      setTags(r.tags);
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
+  // ---- marcas pessoais: ignorar e apagar -------------------------------
 
   // Traz uma mensagem para o quadro pelo link dela. Serve para a que já saiu das
   // ~20 e para a que está em outra conversa — a que alguém te mandou por fora e
@@ -619,6 +737,46 @@ export function Quadro() {
       // Ignorar com a coluna fechada faria o card desaparecer sem explicação: ela
       // abre uma vez, para você ver onde ele foi.
       if (marcar) colapsar('ignorada', false);
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  function pedirEncerrarSprint() {
+    if (!sprint?.atual) return;
+    const terminadas = tasks.filter(
+      (t) => !t.ignorada && !t.coluna && (t.status === 'feito' || t.meu || t.feitoPor),
+    ).length;
+    setPedido({
+      titulo: `Encerrar a ${sprint.atual.nome}?`,
+      rotulo: 'Encerrar a sprint',
+      corpo: (
+        <>
+          <p>
+            <strong>{terminadas}</strong> card(s) de <em>Done</em> e de <em>Done by me</em> saem
+            do quadro e vão para o arquivo desta sprint.
+          </p>
+          <p>Nada é apagado. A sprint seguinte começa hoje.</p>
+        </>
+      ),
+      aoConfirmar: () => void encerrarSprintMesmo(),
+    });
+  }
+
+  async function encerrarSprintMesmo() {
+    if (!sprint?.atual) return;
+    const nome = sprint.atual.nome;
+    setErro(null);
+    try {
+      const r = await api.encerrarSprint(muralId);
+      setTasks(r.tasks);
+      setSprint(r.sprints);
+      void api.consumo(muralId).then(setConsumo).catch(() => {});
+      avisar(
+        r.arquivadas === 0
+          ? `${nome} encerrada — não havia nada concluído para arquivar.`
+          : `${nome} encerrada — ${r.arquivadas} card(s) arquivados.`,
+      );
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -971,6 +1129,11 @@ export function Quadro() {
     }
   }
 
+  function abrirUltimaMensagem() {
+    if (!ultimaMensagemTeams) return;
+    void abrirNoTeams(ultimaMensagemTeams);
+  }
+
   // ---- render ----------------------------------------------------------
 
   // Card marcado como seu sai da coluna do Teams: o status real continua no
@@ -990,41 +1153,27 @@ export function Quadro() {
       aberto: [], fazendo: [], interagido: [], feito: [], meu: [], ignorada: [],
     };
     for (const c of colunasSuas) porColuna[c.id] = [];
-    // Os filtros cortam o quadro inteiro: as perguntas que eles respondem — "o
-    // que existe de Financeiro", "o que o Bernardo pediu" — não têm coluna.
+
     const visiveis = tasks.filter(
       (t) =>
-        (!tagFiltro || t.tags.some((x) => x.toLowerCase() === tagFiltro)) &&
         (!autorFiltro || t.author === autorFiltro),
     );
 
     for (const t of visiveis) {
-      // Ignorada vence a marca de "fiz": se você decidiu que não é sua, ela não
-      // aparece na daily por causa de um clique antigo.
       if (t.ignorada) porColuna.ignorada.push(t);
-      // Preso numa coluna sua: vence a regra do Teams, porque foi um gesto seu e
-      // mais recente que qualquer reação. Se a coluna não existe mais — excluída
-      // noutra aba — o card volta a valer pelo status, em vez de sumir da tela.
       else if (t.coluna && porColuna[t.coluna]) porColuna[t.coluna].push(t);
       else if (t.meu) porColuna.meu.push(t);
-      // Creditada a outra pessoa mora em "Concluído" mesmo que o
-      // check ainda não tenha aparecido no Teams: alguém disse aqui que está
-      // feita, e é isso que a coluna significa. O `status` real continua no
-      // dado — a marca move o card, não reescreve o que o canal disse.
       else if (t.feitoPor) porColuna.feito.push(t);
       else (porColuna[t.status] ?? porColuna.aberto).push(t);
     }
-    porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
 
-    // Abertas: mais antigas primeiro — o que está parado há mais tempo sobe.
+    porColuna.ignorada.sort((a, b) => (b.ignorada ?? '').localeCompare(a.ignorada ?? ''));
     porColuna.aberto.sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
     for (const k of ['fazendo', 'interagido', 'feito'] as const) {
       porColuna[k].sort((a, b) => b.statusChangedAt.localeCompare(a.statusChangedAt));
     }
-    // Na daily o mais recente é o que você conta primeiro.
     porColuna.meu.sort((a, b) => (b.meu?.em ?? '').localeCompare(a.meu?.em ?? ''));
 
-    // Nas suas, o mais recente em cima: você acabou de pôr o card ali.
     for (const c of colunasSuas) {
       porColuna[c.id].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
     }
@@ -1034,8 +1183,6 @@ export function Quadro() {
       resultado[c] = [{ chave: c, rotulo: '', tasks: porColuna[c] }];
     }
 
-    // A coluna da daily é a única quebrada por dia: na reunião você conta o de
-    // ontem e o de hoje, e uma lista corrida obrigaria a ler data por data.
     const porDia: GrupoDaColuna[] = [];
     for (const t of porColuna.meu) {
       const chave = diaLocal(t.meu!.em);
@@ -1046,8 +1193,7 @@ export function Quadro() {
     resultado.meu = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro, autorFiltro, colunasSuas]);
-
+  }, [tasks, autorFiltro, colunasSuas]);
   // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
   // quem manda mais demanda é quem você procura primeiro.
   const autores = useMemo(() => {
@@ -1062,6 +1208,12 @@ export function Quadro() {
   const foraDeAlcance = tasks.filter((t) => !t.ignorada && t.foraDeAlcance).length;
   const emojiMeu = consumo?.preferencias.emojiMeu ?? '';
   const emojiFazendo = consumo?.preferencias.emojiFazendo ?? '';
+  const escopoDoKanban = sprint?.atual ? sprint.atual.nome : 'este mural';
+  const mensagemMaisAntigaDisponivel = ultimaMensagemTeams;
+  const resultadosBusca = useMemo(
+    () => resultadosDaBusca(tasks, colunasSuas, termoBusca),
+    [tasks, colunasSuas, termoBusca],
+  );
 
   return (
     <>
@@ -1083,6 +1235,17 @@ export function Quadro() {
             ? 'última leitura: ' + new Date(lastSync).toLocaleString('pt-BR')
             : 'nunca sincronizado — clique em Atualizar'}
         </span>
+        <button
+          className="gatilho-busca"
+          type="button"
+          onClick={() => setBuscaAberta(true)}
+          aria-label="Pesquisa avancada"
+          title="Pesquisa avancada"
+        >
+          <IconeBusca tamanho={15} />
+          <span className="placeholder-busca">Pesquisar...</span>
+          <kbd>Ctrl+Espaço</kbd>
+        </button>
         <span className="espaco" />
         {consumo && !consumo.agente.reportaCusto && (
           <span
@@ -1099,7 +1262,8 @@ export function Quadro() {
           <span
             className="gasto"
             title={
-              `${consumo.usuario} · ${formatarTokens(consumo.totais.tokensTotal)} tokens em ` +
+              `${escopoDoKanban} · ${consumo.usuario} · ` +
+              `${formatarTokens(consumo.totais.tokensTotal)} tokens em ` +
               `${consumo.totais.execucoes} leituras do Claude Code\n` +
               `atualizações do quadro: ${consumo.totais.porOperacao.sync.execucoes} · ` +
               `${formatarUsd(consumo.totais.porOperacao.sync.custoUsd)}\n` +
@@ -1109,7 +1273,7 @@ export function Quadro() {
               `${formatarUsd(consumo.totais.porOperacao.conta.custoUsd)}`
             }
           >
-            {formatarUsd(consumo.totais.custoUsd)} gastos
+            {formatarUsd(consumo.totais.custoUsd)} na sprint
           </span>
         )}
         {/* A sprint aparece, mas não se mexe daqui: definir e encerrar são
@@ -1126,22 +1290,10 @@ export function Quadro() {
             {sprint.atual.nome} · até {dataDoDiaISO(sprint.atual.fim)}
           </span>
         )}
-        {/* Filtro e sino juntos, à direita: um diz o que a tela está te
-            escondendo, o outro o que ela tem a te contar. A barra de selects que
-            morava acima das colunas custava uma faixa de altura o tempo todo por
-            uma escolha que se faz de vez em quando. */}
-        <FiltroDoQuadro
-          autores={autores}
-          tags={tags}
-          autorFiltro={autorFiltro}
-          tagFiltro={tagFiltro}
-          aoFiltrarAutor={setAutorFiltro}
-          aoFiltrarTag={setTagFiltro}
-        />
         {/* O sino fica ao lado de Atualizar porque é dela que quase tudo aqui
             dentro vem: o resumo de uma leitura se lê logo depois de pedir uma. */}
         <Notificacoes
-          itens={notificacoes}
+          itens={notificacoesDaSprint}
           naoLidas={naoLidas}
           fixado={
             foraDeAlcance > foraCiente
@@ -1164,19 +1316,75 @@ export function Quadro() {
           aoRemover={removerNotificacao}
           aoLimpar={limparNotificacoes}
         />
-        <button
-          className="acao-topo"
-          onClick={() => setIncluindoLink(true)}
-          disabled={sincronizando}
-          title="Trazer uma mensagem do Teams pelo link dela"
-        >
-          Incluir por link
-        </button>
-        {/* Atualizar não ganha destaque de cor: fazer o quadro sugerir que ler o
-            Teams é o que você veio fazer aqui seria mentir sobre o uso normal. */}
-        <button className="acao-topo" onClick={pedirAtualizacao} disabled={sincronizando}>
-          {sincronizando ? 'Lendo o Teams…' : 'Atualizar'}
-        </button>
+        <div className="opcoes-kanban" ref={menuOpcoes}>
+          <button
+            className={'gatilho-opcoes' + (opcoesAbertas ? ' aberto' : '')}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={opcoesAbertas}
+            aria-label="Opções do Kanban"
+            title="Opções do Kanban"
+            onClick={() => setOpcoesAbertas((v) => !v)}
+          >
+            <IconeMais tamanho={16} />
+          </button>
+
+          {opcoesAbertas && (
+            <div className="painel-opcoes" role="dialog" aria-label="Opções do Kanban">
+              <div className="acoes-opcoes">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpcoesAbertas(false);
+                    void pedirAtualizacao();
+                  }}
+                  disabled={sincronizando}
+                >
+                  <IconeAtualizar tamanho={14} />
+                  {sincronizando ? 'Lendo o Teams' : 'Atualizar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpcoesAbertas(false);
+                    setIncluindoLink(true);
+                  }}
+                  disabled={sincronizando}
+                >
+                  <IconeAbrirFora tamanho={14} />
+                  Incluir item por link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpcoesAbertas(false);
+                    abrirUltimaMensagem();
+                  }}
+                  disabled={!mensagemMaisAntigaDisponivel}
+                >
+                  <IconeAbrirFora tamanho={14} />
+                  Abrir mensagem mais antiga
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpcoesAbertas(false);
+                    pedirEncerrarSprint();
+                  }}
+                  disabled={!sprint?.atual || sincronizando}
+                >
+                  <IconeFeito tamanho={14} />
+                  Encerrar sprint
+                </button>
+              </div>
+              <FiltroDoQuadro
+                autores={autores}
+                autorFiltro={autorFiltro}
+                aoFiltrarAutor={setAutorFiltro}
+              />
+            </div>
+          )}
+        </div>
       </header>
 
       {confirmando && consumo && (
@@ -1207,11 +1415,73 @@ export function Quadro() {
         />
       )}
 
+      {buscaAberta && (
+        <div className="fundo-modal" onClick={() => setBuscaAberta(false)} role="presentation">
+          <div
+            className="modal largo modal-busca"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-busca"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="titulo-busca">Pesquisa avancada</h2>
+            <label className="campo campo-busca">
+              <span className="rotulo">Palavra ou trecho</span>
+              <span className="entrada-busca">
+                <IconeBusca tamanho={15} />
+                <input
+                  autoFocus
+                  type="text"
+                  value={termoBusca}
+                  onChange={(e) => setTermoBusca(e.target.value)}
+                  placeholder="Buscar em cards, mensagens, notas e autores"
+                />
+              </span>
+            </label>
+
+            <div className="resultados-busca" aria-live="polite">
+              {normalizarBusca(termoBusca).length < 2 ? (
+                <p className="vazio-busca">Digite pelo menos 2 caracteres.</p>
+              ) : resultadosBusca.length === 0 ? (
+                <p className="vazio-busca">Nenhum card parecido encontrado.</p>
+              ) : (
+                resultadosBusca.map(({ task, trecho }) => (
+                  <button
+                    className="resultado-busca"
+                    type="button"
+                    key={task.id}
+                    onClick={() => {
+                      setBuscaAberta(false);
+                      abrir(task);
+                    }}
+                    title="Abrir este card"
+                  >
+                    <span className="linha-resultado">
+                      <span className="titulo-resultado">{task.summary}</span>
+                      <span className="coluna-resultado">
+                        {textoDaColuna(task, colunasSuas)}
+                      </span>
+                    </span>
+                    <span className="trecho-resultado">{trecho}</span>
+                    <span className="meta-resultado">
+                      {task.author} · {dataDoDiaISO(task.createdDateTime)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="acoes-modal">
+              <button onClick={() => setBuscaAberta(false)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {vendoRajada && (
         <DialogoDaRajada
           task={vendoRajada}
           aoAbrirMensagem={(m) => {
-            setVendoRajada(null);
             void abrirNoTeams(m.id);
           }}
           aoFechar={() => setVendoRajada(null)}
@@ -1226,19 +1496,10 @@ export function Quadro() {
         />
       )}
 
-      {etiquetando && (
-        <DialogoDeTags
-          task={etiquetando}
-          existentes={tags}
-          aoSalvar={(t) => void salvarTags(t)}
-          aoCancelar={() => setEtiquetando(null)}
-        />
-      )}
-
       {anotando && (
         <DialogoDeSolucao
           task={anotando}
-          aoSalvar={(s) => void salvarSolucao(s)}
+          aoSalvar={(s, prUrl) => void salvarSolucao(s, prUrl)}
           aoCancelar={() => setAnotando(null)}
         />
       )}
@@ -1311,6 +1572,7 @@ export function Quadro() {
                   rotulo={sua ? sua.nome : rotuloDaColuna(coluna as ColunaId)}
                   cor={sua ? `var(--coluna-${sua.cor})` : CORES_DE_STATUS[coluna as ColunaId]}
                   grupos={grupos[coluna] ?? []}
+                  naColunaDaDaily={coluna === 'meu'}
                   vazio={
                     sua
                       ? 'Arraste um card para cá'
@@ -1372,7 +1634,6 @@ export function Quadro() {
                       </button>
                     ) : undefined
                   }
-                  ultimaVisita={ultimaVisita}
                   selecionando={selecionados.size > 0}
                   selecionados={selecionados}
                   aoAbrir={(t) => void abrir(t)}
@@ -1382,7 +1643,6 @@ export function Quadro() {
                   aoDesmarcarComoMeu={(t) => void desmarcar(t)}
                   aoSelecionar={alternarSelecao}
                   aoSeparar={(t) => void separar(t)}
-                  aoEtiquetar={setEtiquetando}
                   aoAnotar={setAnotandoNota}
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
                   aoApagar={apagar}
@@ -1412,3 +1672,4 @@ export function Quadro() {
     </>
   );
 }
+

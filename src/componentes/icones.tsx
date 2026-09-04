@@ -57,6 +57,26 @@ export function IconeFeito(p: Props) {
   );
 }
 
+/** lucide `rotate-cw` */
+export function IconeAtualizar(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </Icone>
+  );
+}
+
+/** lucide `search` */
+export function IconeBusca(p: Props) {
+  return (
+    <Icone {...p}>
+      <path d="m21 21-4.34-4.34" />
+      <circle cx="11" cy="11" r="8" />
+    </Icone>
+  );
+}
+
 /** lucide `pencil` */
 export function IconeEditar(p: Props) {
   return (

@@ -215,19 +215,6 @@ export function Dashboard() {
               />
             </Cartao>
 
-            <Cartao
-              titulo="Por etiqueta"
-              explicacao="As etiquetas atravessam sprint."
-            >
-              <BarrasRanqueadas
-                linhas={dados.tags.map((tag) => ({
-                  rotulo: tag.tag,
-                  total: tag.total,
-                  concluidas: tag.concluidas,
-                }))}
-                vazio="Nenhuma etiqueta ainda."
-              />
-            </Cartao>
           </div>
         </>
       )}

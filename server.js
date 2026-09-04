@@ -50,6 +50,7 @@ const PREFS_FILE = path.join(DATA_DIR, 'preferencias.json');
 const AGENTES_FILE = path.join(DATA_DIR, 'agentes.json');
 
 const PORT = Number(process.env.MURAL_PORT) || 4317;
+const HOST = process.env.MURAL_HOST || '0.0.0.0';
 
 fs.mkdirSync(MURAIS_DIR, { recursive: true });
 
@@ -729,32 +730,116 @@ function linhasDeSprint(sprints, tasks) {
   return { linhas, soltas };
 }
 
-// As tags atravessam sprint: a pergunta "quanto de Financeiro chegou este mes"
-// nao se responde olhando uma coluna do quadro.
-function tagsDoHistorico(tasks) {
-  const porTag = new Map();
-  for (const t of tasks) {
-    for (const tag of t.tags || []) {
-      const chave = tag.toLowerCase();
-      const atual = porTag.get(chave) || { tag, total: 0, concluidas: 0, abertas: 0 };
-      atual.total++;
-      if (tarefaConcluida(t)) atual.concluidas++;
-      else if (!t.ignorada) atual.abertas++;
-      porTag.set(chave, atual);
-    }
+function resumoCurto(texto, limite = 220) {
+  const limpo = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (limpo.length <= limite) return limpo;
+  return limpo.slice(0, limite - 1).trimEnd() + '…';
+}
+
+function parsePrUrl(link) {
+  let u;
+  try { u = new URL(String(link || '').trim()); } catch { return null; }
+  const partes = u.pathname.split('/').filter(Boolean);
+
+  if (u.hostname === 'github.com' && partes.length >= 4 && partes[2] === 'pull') {
+    return {
+      tipo: 'github',
+      owner: partes[0],
+      repo: partes[1],
+      numero: partes[3],
+      url: u.toString(),
+    };
   }
-  return [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag));
+
+  const ixGit = partes.indexOf('_git');
+  const ixPr = partes.indexOf('pullrequest');
+  if (u.hostname.endsWith('dev.azure.com') && ixGit >= 1 && ixPr > ixGit + 1) {
+    return {
+      tipo: 'azure',
+      org: partes[0],
+      project: partes.slice(1, ixGit).join('/'),
+      repo: partes[ixGit + 1],
+      numero: partes[ixPr + 1],
+      url: u.toString(),
+    };
+  }
+
+  if (u.hostname.endsWith('.visualstudio.com') && ixGit >= 0 && ixPr > ixGit + 1) {
+    return {
+      tipo: 'azure',
+      org: u.hostname.split('.')[0],
+      project: partes.slice(0, ixGit).join('/'),
+      repo: partes[ixGit + 1],
+      numero: partes[ixPr + 1],
+      url: u.toString(),
+    };
+  }
+
+  return null;
+}
+
+async function resumoDePr(link) {
+  const pr = parsePrUrl(link);
+  if (!pr) throw new Error('Cole um link de PR do GitHub ou Azure DevOps.');
+
+  if (pr.tipo === 'github') {
+    const r = await fetch(`https://api.github.com/repos/${pr.owner}/${pr.repo}/pulls/${pr.numero}`, {
+      headers: { 'User-Agent': 'mural-local' },
+    });
+    if (!r.ok) throw new Error(`Nao consegui ler o PR no GitHub (HTTP ${r.status}).`);
+    const d = await r.json();
+    return {
+      url: d.html_url || pr.url,
+      titulo: d.title || `PR #${pr.numero}`,
+      resumo: resumoCurto(d.body) || resumoCurto(d.title) || `PR #${pr.numero}`,
+      estado: d.merged_at ? 'merged' : d.state,
+      autor: d.user && d.user.login ? d.user.login : '',
+    };
+  }
+
+  const api = `https://dev.azure.com/${pr.org}/${encodeURIComponent(pr.project)}` +
+    `/_apis/git/repositories/${encodeURIComponent(pr.repo)}/pullrequests/${pr.numero}?api-version=7.1`;
+  const r = await fetch(api);
+  if (!r.ok) throw new Error(`Nao consegui ler o PR no Azure DevOps (HTTP ${r.status}).`);
+  const d = await r.json();
+  return {
+    url: pr.url,
+    titulo: d.title || `PR ${pr.numero}`,
+    resumo: resumoCurto(d.description) || resumoCurto(d.title) || `PR ${pr.numero}`,
+    estado: d.status || '',
+    autor: d.createdBy && d.createdBy.displayName ? d.createdBy.displayName : '',
+  };
 }
 
 function painelDoMural(muralId) {
   const { sprints, tasks } = historicoCompleto(muralId);
   const { linhas, soltas } = linhasDeSprint(sprints, tasks);
+  const colunas = lerColunas(muralId).colunas;
+  const nomeDaColuna = (id) =>
+    id === 'fazendo' ? 'In progress' : (colunas.find((c) => c.id === id) || {}).nome || id;
 
   // A daily le por dia da MARCA, nao da mensagem: o que importa na reuniao e o
   // dia em que voce fez, nao o dia em que o pedido chegou.
   const feitas = tasks
     .filter((t) => t.meu && t.meu.em)
     .sort((a, b) => String(b.meu.em).localeCompare(String(a.meu.em)));
+  const emAndamento = tasks
+    .filter((t) => !t.arquivada && colunaDaTask(t) === 'fazendo')
+    .sort((a, b) => String(b.statusChangedAt).localeCompare(String(a.statusChangedAt)))
+    .map((t) => {
+      const coluna = colunaDaTask(t);
+      return {
+        id: t.id,
+        summary: t.summary,
+        kind: t.kind === 'bug' ? 'bug' : 'sugestao',
+        autor: t.author,
+        coluna: nomeDaColuna(coluna),
+        solucao: (t.meu && t.meu.solucao) || (t.feitoPor && t.feitoPor.solucao) || '',
+        prUrl: (t.meu && t.meu.prUrl) || '',
+        mensagens: mensagensDaTask(t).length,
+        webUrl: t.webUrl || '',
+      };
+    });
 
   const porDia = [];
   for (const t of feitas) {
@@ -769,6 +854,7 @@ function painelDoMural(muralId) {
       summary: t.summary,
       kind: t.kind === 'bug' ? 'bug' : 'sugestao',
       solucao: t.meu.solucao || '',
+      prUrl: t.meu.prUrl || '',
       em: t.meu.em,
       via: t.meu.via,
       status: t.status,
@@ -782,7 +868,6 @@ function painelDoMural(muralId) {
   }
 
   return {
-    tags: tagsDoHistorico(tasks),
     sprints: linhas,
     foraDeSprint: soltas.length
       ? {
@@ -793,6 +878,7 @@ function painelDoMural(muralId) {
       : null,
     daily: {
       porDia,
+      emAndamento,
       total: feitas.length,
       bugs: feitas.filter((t) => t.kind === 'bug').length,
       diasAtivos: porDia.length,
@@ -931,7 +1017,6 @@ function dashboardDoMural(muralId) {
     porColuna,
     porDia,
     sprints: linhasDeSprint(sprints, tasks).linhas,
-    tags: tagsDoHistorico(tasks),
     porPessoa: [...porPessoa.values()].sort(
       (a, b) => b.total - a.total || a.pessoa.localeCompare(b.pessoa),
     ),
@@ -1105,11 +1190,33 @@ function somarConsumo(execucoes) {
   );
 }
 
-// O total e de tudo que foi cobrado; a quebra por operacao mostra quanto do
-// gasto foi quadro e quanto foi onboarding.
-function totaisDoUsuario(usuario) {
+// Dentro de um mural, o total visivel e o da sprint atual: o custo que interessa
+// ao kanban e o que este ciclo consumiu, nao o acumulado historico da conta.
+function execucoesNoEscopoDoMural(usuario, muralId) {
   const doUsuario = lerConsumo().porUsuario[usuario];
   const todas = doUsuario ? doUsuario.execucoes : [];
+  const doMural = todas.filter((e) => e.muralId === muralId);
+
+  let sprint = null;
+  try {
+    sprint = muralId ? lerSprints(muralId).atual : null;
+  } catch {
+    sprint = null;
+  }
+
+  if (!sprint) return doMural;
+  return doMural.filter((e) => {
+    if (!e.quando) return false;
+    const dia = diaLocalDe(e.quando);
+    return dia >= sprint.inicio && dia <= sprint.fim;
+  });
+}
+
+function totaisDoUsuario(usuario, muralId = null) {
+  const doUsuario = lerConsumo().porUsuario[usuario];
+  const todas = muralId
+    ? execucoesNoEscopoDoMural(usuario, muralId)
+    : doUsuario ? doUsuario.execucoes : [];
   const porOperacao = {};
   for (const op of OPERACOES) {
     porOperacao[op] = somarConsumo(todas.filter((e) => operacaoDe(e) === op));
@@ -1240,14 +1347,11 @@ function tasksParaTela(muralId) {
   return { lastSync: db.lastSync, tasks: lista };
 }
 
-// ---------------------------------------------------- ignorar, apagar e tags
+// ------------------------------------------------------------ ignorar e apagar
 
 // Tres marcas pessoais, e nenhuma delas e status do Teams: elas moram em campos
 // proprios justamente para o sync nao as apagar. A mesma escolha do "feito por
 // mim" — o que voce escreveu no quadro nao pode sumir porque alguem reagiu.
-
-const MAX_TAGS = 6;
-const MAX_LETRAS_DA_TAG = 24;
 
 /** "Nao e pra mim" e uma decisao sua sobre uma mensagem do time: ela nao pode
  *  virar reacao no Teams (ignorar em publico seria outra coisa) nem apagar o
@@ -1276,55 +1380,10 @@ function apagarTask(muralId, id) {
   gravarTasks(muralId, db);
 }
 
-/** As tags sao suas, escritas aqui — o Teams nao tem esse campo. Normalizar na
- *  entrada e o que impede "Financeiro", "financeiro" e "financeiro " de virarem
- *  tres colunas diferentes na hora de filtrar. */
-function normalizarTags(valor) {
-  if (!Array.isArray(valor)) throw new Error('Mande uma lista de tags.');
-  const vistas = new Set();
-  const tags = [];
-  for (const bruta of valor) {
-    const tag = String(bruta || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LETRAS_DA_TAG);
-    if (!tag) continue;
-    const chave = tag.toLowerCase();
-    if (vistas.has(chave)) continue;
-    vistas.add(chave);
-    tags.push(tag);
-    if (tags.length >= MAX_TAGS) break;
-  }
-  return tags;
-}
-
-function definirTags(muralId, id, valor) {
-  const db = lerTasks(muralId);
-  const t = db.tasks[String(id)];
-  if (!t) throw new Error('Task desconhecida.');
-  t.tags = normalizarTags(valor);
-  gravarTasks(muralId, db);
-  return t.tags;
-}
-
-/** Todas as tags que existem neste mural, com quantas tasks cada uma tem. E o
- *  que a barra de filtro mostra, e o que faz uma tag ser reaproveitada em vez de
- *  redigitada com outra grafia. */
-function tagsDoMural(muralId) {
-  const db = lerTasks(muralId);
-  const por = new Map();
-  for (const t of Object.values(db.tasks)) {
-    for (const tag of t.tags || []) {
-      const chave = tag.toLowerCase();
-      const atual = por.get(chave) || { tag, quantas: 0 };
-      atual.quantas++;
-      por.set(chave, atual);
-    }
-  }
-  return [...por.values()].sort((a, b) => b.quantas - a.quantas || a.tag.localeCompare(b.tag));
-}
-
 // "Done by me" NAO e um status do Teams — e uma marca pessoal, e por isso
 // mora num campo separado. Assim a reacao continua mandando no status real e o
 // proximo sync nao apaga o que voce anotou para contar na daily.
-function marcarComoMeu(muralId, id, solucao) {
+function marcarComoMeu(muralId, id, solucao, prUrl = '') {
   const db = lerTasks(muralId);
   const t = db.tasks[String(id || '')];
   if (!t) throw new Error('Task desconhecida.');
@@ -1333,6 +1392,7 @@ function marcarComoMeu(muralId, id, solucao) {
     // corrigir uma virgula jogaria o card de ontem para o grupo de hoje.
     em: (t.meu && t.meu.em) || new Date().toISOString(),
     solucao: String(solucao || '').trim().slice(0, 2000),
+    prUrl: String(prUrl || '').trim().slice(0, 1000),
     // Escrever a anotacao num card que a reacao trouxe nao o torna manual: se
     // voce tirar o 🟢 la, ele sai daqui — a nao ser pela regra da anotacao.
     via: (t.meu && t.meu.via) || 'mao',
@@ -1394,6 +1454,45 @@ function anotarTask(muralId, id, nota) {
   if (!t) throw new Error('Task desconhecida.');
   const limpa = String(nota || '').trim().slice(0, 2000);
   t.nota = limpa || null;
+  gravarTasks(muralId, db);
+}
+
+// Uma entrega que aconteceu fora do Teams. Ela entra como "Done by me" para
+// participar da daily, mas sem mensagem falsa e sem tentar escrever no canal.
+function criarTarefaManual(muralId, summary, em) {
+  const db = lerTasks(muralId);
+  const texto = String(summary || '').trim().slice(0, 2000);
+  if (!texto) throw new Error('Descreva a tarefa concluida.');
+  const data = String(em || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Informe uma data valida.');
+  const marcadaEm = new Date(`${data}T12:00:00`).toISOString();
+  const agora = new Date().toISOString();
+  const id = `manual-${crypto.randomUUID()}`;
+  db.tasks[id] = {
+    id,
+    origem: 'manual',
+    author: 'Voce',
+    createdDateTime: marcadaEm,
+    summary: texto,
+    kind: 'sugestao',
+    reactions: [],
+    webUrl: '',
+    status: 'feito',
+    firstSeen: agora,
+    statusChangedAt: marcadaEm,
+    statusAnterior: null,
+    lastSeen: agora,
+    movidoAMao: true,
+    meu: { em: marcadaEm, solucao: '', via: 'mao' },
+    feitoPor: null,
+    coluna: null,
+    nota: null,
+    ignorada: null,
+    tags: [],
+    deOutraConversa: false,
+    conflito: null,
+    agrupamento: null,
+  };
   gravarTasks(muralId, db);
 }
 
@@ -1808,6 +1907,17 @@ function aplicarAssinatura(t, agora, assinatura, marcados) {
   }
 }
 
+function idMaisAntigoDoSnapshot(snapshot) {
+  let maisAntiga = null;
+  for (const mensagem of snapshot) {
+    if (!mensagem || !mensagem.id || !mensagem.createdDateTime) continue;
+    if (!maisAntiga || mensagem.createdDateTime < maisAntiga.em) {
+      maisAntiga = { id: mensagem.id, em: mensagem.createdDateTime };
+    }
+  }
+  return maisAntiga ? maisAntiga.id : null;
+}
+
 function merge(db, snapshot, agora, assinatura, emojiFazendo) {
   const novos = [];
   const mudaram = [];
@@ -2172,8 +2282,9 @@ function rodarSync(muralId) {
 
         resolve({
           ...r,
+          mensagemMaisAntigaDoSync: idMaisAntigoDoSnapshot(snapshot),
           consumo: consumoDaExecucao,
-          totaisDoUsuario: totaisDoUsuario(usuario),
+          totaisDoUsuario: totaisDoUsuario(usuario, muralId),
         });
       } catch (e) {
         reject(e); // historico ilegivel: aborta sem gravar por cima
@@ -2471,7 +2582,7 @@ async function rotear(req, res) {
     return json(res, 200, {
       usuario,
       estimativa: estimarProximaAtualizacao(usuario, muralId),
-      totais: totaisDoUsuario(usuario),
+      totais: totaisDoUsuario(usuario, muralId),
       preferencias: prefsDoUsuario(usuario),
       // Agente que nao informa custo nao pode ter preco na tela: a interface
       // esconde o total e a confirmacao de gasto em vez de mostrar zero.
@@ -2606,24 +2717,6 @@ async function rotear(req, res) {
     }
   }
 
-  if (p === '/api/tags' && req.method === 'GET') {
-    const muralId = url.searchParams.get('mural') || '';
-    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
-    return json(res, 200, { ok: true, tags: tagsDoMural(muralId) });
-  }
-
-  if (p === '/api/tags' && req.method === 'POST') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      const corpo = await lerCorpoJson(req);
-      definirTags(muralId, corpo.id, corpo.tags);
-      return json(res, 200, { ok: true, tags: tagsDoMural(muralId), ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
   // Marca pessoal "fiz isso", com a anotacao que voce le na daily. Vale para
   // qualquer card — inclusive os que o Teams ainda acompanha — porque nao mexe
   // no status: nao ha o que o proximo sync possa desfazer.
@@ -2633,8 +2726,17 @@ async function rotear(req, res) {
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
       const corpo = await lerCorpoJson(req);
       if (corpo.marcar === false) desmarcarComoMeu(muralId, corpo.id);
-      else marcarComoMeu(muralId, corpo.id, corpo.solucao);
+      else marcarComoMeu(muralId, corpo.id, corpo.solucao, corpo.prUrl);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/resumo-pr' && req.method === 'POST') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      return json(res, 200, { ok: true, ...(await resumoDePr(corpo.url)) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }
@@ -2711,6 +2813,18 @@ async function rotear(req, res) {
       if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
       const corpo = await lerCorpoJson(req);
       anotarTask(muralId, corpo.id, corpo.nota);
+      return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/tarefa-manual' && req.method === 'POST') {
+    try {
+      const muralId = url.searchParams.get('mural') || '';
+      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
+      const corpo = await lerCorpoJson(req);
+      criarTarefaManual(muralId, corpo.summary, corpo.em);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
@@ -3005,8 +3119,8 @@ function foraDeAlcance_(t, lastSync) {
   return foraDeAlcance(t, lastSync);
 }
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, HOST, () => {
   const n = lerIndice().murais.length;
-  console.log(`\n  Mural em  http://localhost:${PORT}`);
+  console.log(`\n  Mural em  http://${HOST}:${PORT}`);
   console.log(`  ${n} mural(is) configurado(s). Ctrl+C para parar.\n`);
 });

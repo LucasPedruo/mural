@@ -20,6 +20,7 @@ interface Props {
 export function DialogoDeFeitoPorOutro({ task, pessoas, aoSalvar, aoCancelar }: Props) {
   const [quem, setQuem] = useState(task.feitoPor?.quem ?? '');
   const [solucao, setSolucao] = useState(task.feitoPor?.solucao ?? '');
+  const sugestoes = [...new Set(pessoas.filter(Boolean))];
 
   const valido = !!quem.trim();
   const salvar = () => {
@@ -55,7 +56,7 @@ export function DialogoDeFeitoPorOutro({ task, pessoas, aoSalvar, aoCancelar }: 
             }}
           />
           <datalist id="pessoas-do-mural">
-            {pessoas.map((p) => (
+            {sugestoes.map((p) => (
               <option value={p} key={p} />
             ))}
           </datalist>

@@ -17,7 +17,6 @@ import type {
   RespostaPainel,
   RespostaSprint,
   RespostaTasks,
-  TagComContagem,
   ResultadoEncerramento,
   ResultadoSync,
   SomaDeConsumo,
@@ -111,7 +110,7 @@ export const api = {
   separar: (muralId: string, id: string) =>
     pedir<RespostaTasks & { quantas: number }>(`/api/separar?mural=${muralId}`, json({ id })),
 
-  // --- marcas pessoais: ignorar, apagar, etiquetar ---
+  // --- marcas pessoais: ignorar e apagar ---
   // Nenhuma delas toca no Teams: são opiniões suas sobre a mensagem, guardadas
   // em campo próprio para o sync não as apagar.
 
@@ -122,14 +121,6 @@ export const api = {
   // arquivados, para a próxima leitura não a trazer de volta.
   apagar: (muralId: string, id: string) =>
     pedir<RespostaTasks>(`/api/apagar?mural=${muralId}`, json({ id })),
-
-  tags: (muralId: string) => pedir<{ tags: TagComContagem[] }>(`/api/tags?mural=${muralId}`),
-
-  salvarTags: (muralId: string, id: string, tags: string[]) =>
-    pedir<RespostaTasks & { tags: TagComContagem[] }>(
-      `/api/tags?mural=${muralId}`,
-      json({ id, tags }),
-    ),
 
   // Você decide o desacordo entre o seu gesto e a reação no canal.
   decidirConflito: (muralId: string, id: string, decisao: 'teams' | 'meu') =>
@@ -146,6 +137,9 @@ export const api = {
   // A nota livre de um card. Nota vazia apaga.
   anotar: (muralId: string, id: string, nota: string) =>
     pedir<RespostaTasks>(`/api/nota?mural=${muralId}`, json({ id, nota })),
+
+  criarTarefaManual: (muralId: string, summary: string, em: string) =>
+    pedir<RespostaTasks>(`/api/tarefa-manual?mural=${muralId}`, json({ summary, em })),
 
   // --- colunas suas ---
   // Elas não têm regra: quem põe card ali é você, arrastando. Por isso a coluna
@@ -196,8 +190,14 @@ export const api = {
 
   // A marca pessoal vale para qualquer card, inclusive os que o Teams ainda
   // acompanha: ela não mexe no status, então não há o que o sync desfazer.
-  marcarComoMeu: (muralId: string, id: string, solucao: string) =>
-    pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, solucao })),
+  marcarComoMeu: (muralId: string, id: string, solucao: string, prUrl = '') =>
+    pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, solucao, prUrl })),
+
+  resumirPr: (url: string) =>
+    pedir<{ url: string; titulo: string; resumo: string; estado: string; autor: string }>(
+      '/api/resumo-pr',
+      json({ url }),
+    ),
 
   desmarcarComoMeu: (muralId: string, id: string) =>
     pedir<RespostaTasks>(`/api/meu?mural=${muralId}`, json({ id, marcar: false })),

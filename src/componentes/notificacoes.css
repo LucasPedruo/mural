@@ -156,8 +156,10 @@
    à esquerda, e não numa caixa própria — caixa faria parecer outro aviso. */
 .notificacoes .notificacao .nota {
   margin: 6px 0 0;
-  padding-left: 9px;
-  border-left: 2px solid var(--border-strong);
+  padding: 7px 9px;
+  background: var(--bg-note);
+  border-left: 2px solid var(--marca-meu);
+  border-radius: 7px;
   color: var(--text-primary);
   font-size: 12px;
   line-height: 1.5;

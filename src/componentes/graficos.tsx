@@ -260,7 +260,7 @@ export interface LinhaRanqueada {
   destaque?: boolean;
 }
 
-/** Listas ordenadas — tags, quem resolveu, quem pede. Barra em CSS e não em SVG
+/** Listas ordenadas — quem resolveu, quem pede. Barra em CSS e não em SVG
  *  porque aqui o rótulo é texto de tamanho imprevisível: nome de pessoa quebra
  *  linha, e texto dentro de SVG não quebra sozinho. */
 export function BarrasRanqueadas({

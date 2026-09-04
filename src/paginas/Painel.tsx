@@ -51,7 +51,6 @@ export function Painel() {
 
   const sprints = dados?.sprints ?? [];
   const maior = Math.max(1, ...sprints.map((s) => s.chegaram));
-  const maiorTag = Math.max(1, ...(dados?.tags ?? []).map((t) => t.total));
   const daily = dados?.daily;
   const mediaPorDia = daily && daily.diasAtivos ? daily.total / daily.diasAtivos : 0;
 
@@ -215,51 +214,6 @@ export function Painel() {
                 </div>
               )}
             </div>
-          )}
-          {dados.tags.length > 0 && (
-            <section className="bloco-tags">
-              <h2>Por etiqueta</h2>
-              <p className="explicacao">
-                As etiquetas atravessam sprint: são suas, escritas no card, e não existem no Teams.
-                Aqui elas somam todo o histórico do mural, inclusive o que já foi arquivado.
-              </p>
-              <div className="tabela">
-                <div className="linha cabecalho tags" role="row">
-                  <span role="columnheader">Etiqueta</span>
-                  <span role="columnheader" className="num">
-                    Total
-                  </span>
-                  <span role="columnheader" className="num">
-                    Concluídas
-                  </span>
-                  <span role="columnheader" className="num">
-                    Em aberto
-                  </span>
-                </div>
-                {dados.tags.map((t) => (
-                  <div className="linha tags" role="row" key={t.tag}>
-                    <span role="cell" className="nome">
-                      <span className="badge etiqueta">{t.tag}</span>
-                    </span>
-                    <span role="cell" className="num barra-celula">
-                      <span className="barra" aria-hidden="true">
-                        <span
-                          className="preenchida"
-                          style={{ width: `${Math.round((t.total / maiorTag) * 100)}%` }}
-                        />
-                      </span>
-                      <b>{t.total}</b>
-                    </span>
-                    <span role="cell" className="num">
-                      {t.concluidas}
-                    </span>
-                    <span role="cell" className="num">
-                      {t.abertas}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
           )}
         </main>
       )}
