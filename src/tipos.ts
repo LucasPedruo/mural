@@ -47,8 +47,8 @@ export interface MeuFeito {
 
 /** O espelho do `MeuFeito` para quando quem resolveu não foi você. O Teams
  *  conta que ALGUÉM reagiu com o check, nunca quem — o Graph devolve
- *  `reactions[].users` vazio. Então o nome de quem fez é uma anotação sua, do
- *  mesmo naipe da etiqueta, e mora em campo próprio para o sync não a apagar.
+ *  `reactions[].users` vazio. Então o nome de quem fez é uma anotação sua em
+ *  campo próprio para o sync não a apagar.
  *
  *  Não é status: o card muda de coluna na tela, e o que o canal diz continua em
  *  `status`. Escrever 'feito' ali seria inventar uma reação que ninguém deu. */
@@ -126,8 +126,6 @@ export interface Task {
    *  colunas de trabalho e nada é escrito no Teams: ignorar é uma opinião sua
    *  sobre a mensagem, não um recado para o time. */
   ignorada: string | null;
-  /** Suas etiquetas. O Teams não tem esse campo: quem escreve é você, aqui. */
-  tags: string[];
   /** As mensagens que formam este card, da mais antiga para a mais nova. A
    *  primeira é a âncora: o id do card é o dela, e é ela que o clique abre. */
   mensagens: MensagemDaTask[];
@@ -286,11 +284,6 @@ export interface ResultadoEncerramento extends RespostaTasks {
 
 // ------------------------------------------------------------------- painéis
 
-export interface TagComContagem {
-  tag: string;
-  quantas: number;
-}
-
 export interface LinhaDeSprint {
   nome: string;
   inicio: string;
@@ -345,17 +338,7 @@ export interface ItemEmAndamentoDaDaily {
   webUrl: string;
 }
 
-export interface LinhaDeTag {
-  tag: string;
-  total: number;
-  concluidas: number;
-  abertas: number;
-}
-
 export interface RespostaPainel {
-  /** As tags atravessam sprint: a pergunta "quanto de Financeiro chegou" não se
-   *  responde olhando uma coluna do quadro. */
-  tags: LinhaDeTag[];
   sprints: LinhaDeSprint[];
   /** O que chegou fora de qualquer sprint — histórico anterior ao ciclo. */
   foraDeSprint: { chegaram: number; bugs: number; concluidas: number } | null;
@@ -477,7 +460,6 @@ export interface RespostaDashboard {
   porColuna: Record<ColunaId, number>;
   porDia: DiaDoDashboard[];
   sprints: LinhaDeSprint[];
-  tags: LinhaDeTag[];
   porPessoa: CreditoDePessoa[];
   porAutor: LinhaDeAutor[];
 }

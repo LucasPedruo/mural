@@ -112,7 +112,7 @@ export function Home() {
       perigo: true,
       corpo: (
         <p>
-          O histórico deste mural é apagado — anotações, etiquetas e sprints arquivadas. A conversa
+          O histórico deste mural é apagado — anotações e sprints arquivadas. A conversa
           no Teams não é tocada.
         </p>
       ),

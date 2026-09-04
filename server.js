@@ -730,23 +730,6 @@ function linhasDeSprint(sprints, tasks) {
   return { linhas, soltas };
 }
 
-// As tags atravessam sprint: a pergunta "quanto de Financeiro chegou este mes"
-// nao se responde olhando uma coluna do quadro.
-function tagsDoHistorico(tasks) {
-  const porTag = new Map();
-  for (const t of tasks) {
-    for (const tag of t.tags || []) {
-      const chave = tag.toLowerCase();
-      const atual = porTag.get(chave) || { tag, total: 0, concluidas: 0, abertas: 0 };
-      atual.total++;
-      if (tarefaConcluida(t)) atual.concluidas++;
-      else if (!t.ignorada) atual.abertas++;
-      porTag.set(chave, atual);
-    }
-  }
-  return [...porTag.values()].sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag));
-}
-
 function resumoCurto(texto, limite = 220) {
   const limpo = String(texto || '').replace(/\s+/g, ' ').trim();
   if (limpo.length <= limite) return limpo;
@@ -885,7 +868,6 @@ function painelDoMural(muralId) {
   }
 
   return {
-    tags: tagsDoHistorico(tasks),
     sprints: linhas,
     foraDeSprint: soltas.length
       ? {
@@ -1035,7 +1017,6 @@ function dashboardDoMural(muralId) {
     porColuna,
     porDia,
     sprints: linhasDeSprint(sprints, tasks).linhas,
-    tags: tagsDoHistorico(tasks),
     porPessoa: [...porPessoa.values()].sort(
       (a, b) => b.total - a.total || a.pessoa.localeCompare(b.pessoa),
     ),
@@ -1366,14 +1347,11 @@ function tasksParaTela(muralId) {
   return { lastSync: db.lastSync, tasks: lista };
 }
 
-// ---------------------------------------------------- ignorar, apagar e tags
+// ------------------------------------------------------------ ignorar e apagar
 
 // Tres marcas pessoais, e nenhuma delas e status do Teams: elas moram em campos
 // proprios justamente para o sync nao as apagar. A mesma escolha do "feito por
 // mim" — o que voce escreveu no quadro nao pode sumir porque alguem reagiu.
-
-const MAX_TAGS = 6;
-const MAX_LETRAS_DA_TAG = 24;
 
 /** "Nao e pra mim" e uma decisao sua sobre uma mensagem do time: ela nao pode
  *  virar reacao no Teams (ignorar em publico seria outra coisa) nem apagar o
@@ -1400,51 +1378,6 @@ function apagarTask(muralId, id) {
   }
   delete db.tasks[String(id)];
   gravarTasks(muralId, db);
-}
-
-/** As tags sao suas, escritas aqui — o Teams nao tem esse campo. Normalizar na
- *  entrada e o que impede "Financeiro", "financeiro" e "financeiro " de virarem
- *  tres colunas diferentes na hora de filtrar. */
-function normalizarTags(valor) {
-  if (!Array.isArray(valor)) throw new Error('Mande uma lista de tags.');
-  const vistas = new Set();
-  const tags = [];
-  for (const bruta of valor) {
-    const tag = String(bruta || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LETRAS_DA_TAG);
-    if (!tag) continue;
-    const chave = tag.toLowerCase();
-    if (vistas.has(chave)) continue;
-    vistas.add(chave);
-    tags.push(tag);
-    if (tags.length >= MAX_TAGS) break;
-  }
-  return tags;
-}
-
-function definirTags(muralId, id, valor) {
-  const db = lerTasks(muralId);
-  const t = db.tasks[String(id)];
-  if (!t) throw new Error('Task desconhecida.');
-  t.tags = normalizarTags(valor);
-  gravarTasks(muralId, db);
-  return t.tags;
-}
-
-/** Todas as tags que existem neste mural, com quantas tasks cada uma tem. E o
- *  que a barra de filtro mostra, e o que faz uma tag ser reaproveitada em vez de
- *  redigitada com outra grafia. */
-function tagsDoMural(muralId) {
-  const db = lerTasks(muralId);
-  const por = new Map();
-  for (const t of Object.values(db.tasks)) {
-    for (const tag of t.tags || []) {
-      const chave = tag.toLowerCase();
-      const atual = por.get(chave) || { tag, quantas: 0 };
-      atual.quantas++;
-      por.set(chave, atual);
-    }
-  }
-  return [...por.values()].sort((a, b) => b.quantas - a.quantas || a.tag.localeCompare(b.tag));
 }
 
 // "Done by me" NAO e um status do Teams — e uma marca pessoal, e por isso
@@ -2779,24 +2712,6 @@ async function rotear(req, res) {
       const corpo = await lerCorpoJson(req);
       apagarTask(muralId, corpo.id);
       return json(res, 200, { ok: true, ...tasksParaTela(muralId) });
-    } catch (e) {
-      return json(res, 400, { ok: false, erro: e.message });
-    }
-  }
-
-  if (p === '/api/tags' && req.method === 'GET') {
-    const muralId = url.searchParams.get('mural') || '';
-    if (!acharMural(muralId)) return json(res, 404, { ok: false, erro: 'Mural nao encontrado.' });
-    return json(res, 200, { ok: true, tags: tagsDoMural(muralId) });
-  }
-
-  if (p === '/api/tags' && req.method === 'POST') {
-    try {
-      const muralId = url.searchParams.get('mural') || '';
-      if (!acharMural(muralId)) throw new Error('Mural nao encontrado.');
-      const corpo = await lerCorpoJson(req);
-      definirTags(muralId, corpo.id, corpo.tags);
-      return json(res, 200, { ok: true, tags: tagsDoMural(muralId), ...tasksParaTela(muralId) });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
     }

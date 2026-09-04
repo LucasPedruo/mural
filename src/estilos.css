@@ -308,19 +308,6 @@ button.perigoso:hover:not(:disabled) {
 .badge.warning { background: var(--bg-warning); color: var(--text-warning); }
 .badge.neutral { background: var(--bg-surface-3); color: var(--text-secondary); }
 .badge.marca { background: var(--bg-brand-subtle); color: var(--marca-meu); }
-.badge.reacao { background: var(--bg-surface-3); font-size: 11px; padding: 1px 7px; }
-/* Fora de alcance nao e erro nem aviso passageiro: e um estado permanente do
-   card, e o card ja se distingue pelo relevo. O badge so nomeia o estado — sem
-   cor propria, que aqui significaria status. */
-/* O selo "sem sinal do Teams". Mesma cor do contorno do card e do aviso no
-   sino: os tres falam da mesma coisa, e reconhece-los juntos e o que faz a
-   pessoa parar de reaprender o que cada um significa. */
-.badge.alerta {
-  background: var(--bg-warning);
-  color: var(--text-warning);
-  border: 1px dashed var(--marca-sem-sinal);
-}
-
 /* ---- avisos ---- */
 .aviso {
   border-radius: 9px;

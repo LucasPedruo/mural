@@ -1,14 +1,13 @@
 import { Draggable } from '@hello-pangea/dnd';
 import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 
-import { CORES_DE_STATUS, dataCurta, diasDesde, horaCurta } from '../rotulos';
+import { CORES_DE_STATUS, dataCurta, diasDesde } from '../rotulos';
 import type { Task } from '../tipos';
 import {
   IconeAbrirFora,
   IconeApagar,
   IconeDesfazer,
   IconeEditar,
-  IconeEtiqueta,
   IconeFeito,
   IconeIgnorar,
   IconeImagem,
@@ -34,7 +33,6 @@ interface Props {
   /** Na coluna das ignoradas o card troca as ações por "desfazer" e "apagar":
    *  ali não há trabalho a fazer, só decisão a rever. */
   naColunaDeIgnoradas: boolean;
-  ultimaVisita: string | null;
   /** Recolhido: uma linha do texto e o rodapé. Prints, continuação da rajada e a
    *  anotação da daily somem — é o que faz uma coluna cheia caber na tela.
    *
@@ -58,7 +56,6 @@ interface Props {
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
-  aoEtiquetar: (task: Task) => void;
   aoAnotar: (task: Task) => void;
   aoIgnorar: (task: Task, ignorar: boolean) => void;
   aoApagar: (task: Task) => void;
@@ -69,7 +66,6 @@ export function CartaoDeTask({
   indice,
   naColunaDaDaily,
   naColunaDeIgnoradas,
-  ultimaVisita,
   colapsado,
   recemJuntado,
   selecionando,
@@ -82,13 +78,10 @@ export function CartaoDeTask({
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
-  aoEtiquetar,
   aoAnotar,
   aoIgnorar,
   aoApagar,
 }: Props) {
-  const ehNovo = !!ultimaVisita && task.firstSeen > ultimaVisita;
-  const mudou = !!ultimaVisita && task.statusChangedAt > ultimaVisita && !ehNovo;
   const dias = diasDesde(task.createdDateTime);
   const parado = task.status === 'aberto' && dias >= 3 ? ` · parada há ${dias}d` : '';
   const propria = task.origem === 'manual';
@@ -195,12 +188,6 @@ export function CartaoDeTask({
     icone: <IconeNota />,
     aoEscolher: () => aoAnotar(task),
     dica: task.nota ? undefined : 'Algo que você queira lembrar',
-  });
-
-  acoes.push({
-    rotulo: 'Etiquetas',
-    icone: <IconeEtiqueta />,
-    aoEscolher: () => aoEtiquetar(task),
   });
 
   if (!propria) {
@@ -352,119 +339,6 @@ export function CartaoDeTask({
             )}
 
             <div className="rodape">
-              {ehNovo && <span className="badge info">novo</span>}
-              {mudou && <span className="badge warning">mudou</span>}
-              {task.kind === 'bug' && <span className="badge danger">bug</span>}
-              {/* Resquício de quando dava para criar task aqui dentro. O selo
-                  fica para o card do histórico antigo continuar legível — o
-                  Mural não cria mais task nenhuma. */}
-              {propria && (
-                <span
-                  className="badge marca"
-                  title="Criada à mão numa versão anterior — não veio do Teams"
-                >
-                  à mão
-                </span>
-              )}
-              {/* Quantas mensagens do Teams este card representa. Sem isso o
-                  agrupamento seria invisível, e um card que esconde quatro
-                  mensagens não pode parecer igual a um que tem uma. */}
-              {agrupado && (
-                <span
-                  className="badge neutral"
-                  title={mensagens
-                    .map((m) => `${horaCurta(m.createdDateTime)} ${m.soPrint ? 'print' : m.summary}`)
-                    .join('\n')}
-                >
-                  {mensagens.length} mensagens
-                  {task.agrupamento === 'mao' ? ' · à mão' : ''}
-                </span>
-              )}
-              {/* Recolhido, o card precisa avisar que esconde algo — senão a
-                  faixa de print desaparecida parece card sem print. */}
-
-              {/* Na coluna da daily o status real do Teams continua visível: a
-                  marca pessoal move o card de lugar, não muda o que o canal diz. */}
-              {naColunaDaDaily && !propria && (
-                <span className="badge neutral" title="Status da mensagem no Teams">
-                  no Teams: {task.status === 'feito' ? 'concluído' : task.status}
-                </span>
-              )}
-              {/* Quem resolveu. É a única forma de saber: o check do Teams diz
-                  que a task acabou, nunca por obra de quem. */}
-              {task.feitoPor && (
-                <span
-                  className="badge marca"
-                  title={`Creditado a ${task.feitoPor.quem} em ${dataCurta(task.feitoPor.em)}`}
-                >
-                  feito por {task.feitoPor.quem}
-                </span>
-              )}
-              {task.meu?.via === 'emoji' && (
-                <span
-                  className="badge marca"
-                  title="Está aqui pela sua reação na mensagem"
-                >
-                  pela reação
-                </span>
-              )}
-              {/* Preso à mão: o quadro deixou de refletir o canal neste card, e
-                  isso precisa estar escrito nele — senão a coluna mente sobre o
-                  que o Teams diz. O status real vai no title. */}
-              {task.coluna && (
-                <span
-                  className="badge marca"
-                  title={`Preso por você. No Teams está como "${task.status}".`}
-                >
-                  fora do fluxo
-                </span>
-              )}
-              {/* De outra conversa: o sync deste mural nunca vai alcançá-lo, e
-                  isso é diferente de "saiu da janela das ~20". */}
-              {task.deOutraConversa && (
-                <span
-                  className="badge alerta"
-                  title="Trazida por link, de outra conversa — as leituras deste mural não a alcançam"
-                >
-                  de outra conversa
-                </span>
-              )}
-              {task.foraDeAlcance && !propria && !task.deOutraConversa && (
-                <span
-                  className="badge alerta"
-                  title="O Teams não atualiza mais este card — quem move é você, arrastando"
-                >
-                  sem sinal do Teams
-                </span>
-              )}
-              {/* O desacordo fica no card, não só no diálogo: quem fechou em
-                  "decidir depois" precisa reencontrá-lo. */}
-              {task.conflito && (
-                <span
-                  className="badge warning"
-                  title="Você moveu este card à mão e a reação no Teams diz outra coisa — atualize o quadro para decidir"
-                >
-                  discorda do Teams
-                </span>
-              )}
-              {task.movidoAMao && !task.conflito && (
-                <span className="badge neutral">movido à mão</span>
-              )}
-              {/* Etiquetas suas. Ficam antes das reações porque são o que você
-                  escreveu, e as reações são o que o Teams contou. */}
-              {task.tags.map((tag) => (
-                <span className="badge etiqueta" key={tag}>
-                  {tag}
-                </span>
-              ))}
-              {/* Sem emoji fixo para "peguei", ver a reação usada é a única
-                  forma de saber o que aconteceu na mensagem. */}
-              {task.emojis.map((emoji, i) => (
-                <span className="badge reacao" key={`${emoji}-${i}`}>
-                  {emoji}
-                </span>
-              ))}
-
               <span className="autor">
                 {task.author} · {dataCurta(task.createdDateTime)}
                 {parado}

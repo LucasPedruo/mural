@@ -144,13 +144,12 @@ canto do rodapé, todos escondidos atrás de hover e sem nome; agora cada ação
 ícone e rótulo, e o gatilho está sempre visível. Custa um clique a mais e para de
 exigir que você decore o que cada símbolo faz.
 
-**Os filtros** ficam no **funil**, ao lado do sino: por **quem pediu** e por
-**etiqueta**, com a contagem em cada opção. Antes eram dois selects numa barra
-acima das colunas, e a barra custava uma faixa de altura o tempo todo por uma
-escolha que se faz de vez em quando. O que não some no repouso é o *fato* de
-haver filtro ligado: o funil fica aceso e o `title` diz por quê — filtro
-escondido que corta o quadro em silêncio faria a contagem das colunas parecer
-errada.
+**Os filtros** ficam no **funil**, ao lado do sino: por **quem pediu**, com a
+contagem em cada opção. Antes era uma barra acima das colunas, e a barra custava
+uma faixa de altura o tempo todo por uma escolha que se faz de vez em quando. O
+que não some no repouso é o *fato* de haver filtro ligado: o funil fica aceso e o
+`title` diz por quê — filtro escondido que corta o quadro em silêncio faria a
+contagem das colunas parecer errada.
 
 Eles cortam o quadro inteiro — enquanto um filtro está ligado, as contagens das
 colunas são as dele, não as do quadro todo.
@@ -420,8 +419,7 @@ por causa da tela que se abre menos:
   outra pessoa*. O que sobra aparece como **concluídas sem dono conhecido**, e
   esse número fica à vista: escondê-lo faria o gráfico parecer mais completo do
   que é.
-- **Quem pede** e **por etiqueta** — de onde vem a demanda, e quanto de cada
-  assunto já fechou.
+- **Quem pede** — de onde vem a demanda, e quanto cada origem já fechou.
 
 Em cima, seis números que o quadro não dá de relance — entre eles a **mediana**
 de dias entre o pedido e a conclusão (mediana, não média: uma task esquecida há
@@ -465,9 +463,9 @@ Como as outras marcas suas, mora em campo próprio: nada é escrito no Teams e
 nenhuma leitura a apaga. Juntar dois cards junta as duas notas em vez de escolher
 uma. Nota vazia apaga em vez de gravar vazio.
 
-## Ignorar, apagar e etiquetar
+## Ignorar e apagar
 
-Três marcas suas, e nenhuma delas é status do Teams. Como o *feito por mim*, elas
+Duas marcas suas, e nenhuma delas é status do Teams. Como o *feito por mim*, elas
 moram em campos próprios justamente para nenhuma leitura as apagar.
 
 **Ignorar** ("Não é pra mim", no menu ⋯ do card) é para o que não é pra você: chegou no canal, alguém vai
@@ -481,12 +479,6 @@ em público seria outra coisa, e não é essa.
 do Mural**: o card sai do histórico e a mensagem entra na lista de arquivados,
 para nenhuma atualização trazê-la de volta — mesmo que ela continue no Teams. É a
 mesma máquina que o encerramento de sprint usa.
-
-**Etiquetas** (no menu ⋯ do card) são suas: o Teams não tem esse campo. Até seis por task,
-normalizadas na entrada — "Financeiro", "financeiro" e "financeiro " são a mesma
-etiqueta, senão o filtro se quebraria sozinho em três. A barra acima das colunas
-lista as que existem com a contagem de cada uma; clicar filtra o quadro inteiro, e
-o painel soma por etiqueta atravessando as sprints.
 
 Ao encerrar a sprint, as ignoradas são arquivadas junto com o que terminou: elas
 já foram decididas, e arrastar a mesma lista de descartes de sprint em sprint não
@@ -560,12 +552,11 @@ check naquela mensagem antiga, o Mural nunca fica sabendo, e o card ficaria
 Esses cards têm aparência própria e são os **únicos que você pode arrastar**
 entre as colunas do Teams. A distinção é de **relevo, não de cor**: eles perdem a
 superfície e a sombra, então afundam na coluna em vez de flutuar sobre ela — que
-é exatamente o que são, cards que ninguém alimenta mais. Somam a borda
-tracejada, a alça de arraste no canto e o selo *sem sinal do Teams*, e voltam à
-superfície no hover, onde a mão manda.
+é exatamente o que são, cards que ninguém alimenta mais. Somam a borda tracejada
+e a alça de arraste no canto, e voltam à superfície no hover, onde a mão manda.
 
-O contorno é **âmbar**, e é a mesma cor do aviso no sino e do selo *sem sinal do
-Teams* — os três falam da mesma coisa, e reconhecê-los juntos é o que faz parar
+O contorno é **âmbar**, e é a mesma cor do aviso no sino: os dois falam da mesma
+coisa, e reconhecê-los juntos é o que faz parar
 de reaprender o que cada um significa. Um **fundo** colorido continua fora de
 questão: era ele que competia com a faixa lateral, onde cor significa status. O
 contorno não compete, porque fala de outra coisa — não do estado da demanda, mas
@@ -636,18 +627,15 @@ escreveu não pode sumir por causa de um clique numa reação.
 reagir no Teams.
 
 Marcar como seu **não muda o status no Teams**. É uma marca pessoal, guardada
-num campo separado justamente para o sync não a apagar — o status real continua
-lá embaixo e aparece como badge no card ("no Teams: interagido"). O card sai da
-coluna do Teams porque estar em duas ao mesmo tempo confundiria a contagem, mas
-o dado não é reescrito. Por isso essa marca vale para **qualquer** card,
-inclusive os que o Teams ainda acompanha: não há o que a próxima leitura possa
-desfazer.
+num campo separado justamente para o sync não a apagar. O card sai da coluna do
+Teams porque estar em duas ao mesmo tempo confundiria a contagem, mas o dado não
+é reescrito. Por isso essa marca vale para **qualquer** card, inclusive os que o
+Teams ainda acompanha: não há o que a próxima leitura possa desfazer.
 
 O **↩** tira a marca e devolve o card para a coluna que a reação manda — mas só
 aparece nos cards que você marcou à mão. Se foi a sua reação que trouxe o card,
-desmarcar aqui duraria até o próximo sync repor; a saída é tirar a reação lá, e
-o card diz isso no selo **pela reação**. Fora de alcance a mão volta a mandar,
-como no resto do quadro.
+desmarcar aqui duraria até o próximo sync repor; a saída é tirar a reação lá.
+Fora de alcance a mão volta a mandar, como no resto do quadro.
 
 Editar a anotação depois não muda o dia do agrupamento — corrigir uma vírgula
 não pode jogar o que você fez ontem para o grupo de hoje.
@@ -755,7 +743,7 @@ Vale saber antes de adotar:
   cada mensagem. A barra de progresso mostra a etapa real.
 - **Listar chats no onboarding leva 2 a 3 minutos**, porque o Teams entrega os
   chats em páginas de 25 e cada página é uma ida à API. Só acontece uma vez.
-- **A etiqueta `bug` é um palpite do modelo**, inferido do texto da mensagem —
+- **A classificação `bug` é um palpite do modelo**, inferido do texto da mensagem —
   não é um campo do Teams. Autor, data, link, reações **e o texto do card**, esses
   são literais.
 - **Cards lidos por uma versão anterior mostram um resumo, não o texto.** Até

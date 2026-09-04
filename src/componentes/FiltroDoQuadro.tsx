@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { TagComContagem } from '../tipos';
-import { IconeEtiqueta, IconeFiltro, IconePessoa } from './icones';
+import { IconeFiltro, IconePessoa } from './icones';
 import './filtro.css';
 
 export interface AutorComContagem {
@@ -11,11 +10,8 @@ export interface AutorComContagem {
 
 interface Props {
   autores: AutorComContagem[];
-  tags: TagComContagem[];
   autorFiltro: string | null;
-  tagFiltro: string | null;
   aoFiltrarAutor: (autor: string | null) => void;
-  aoFiltrarTag: (tag: string | null) => void;
 }
 
 /** Os filtros do quadro, atrás de um funil no cabeçalho.
@@ -30,11 +26,8 @@ interface Props {
  *  contagem das colunas parecer errada. */
 export function FiltroDoQuadro({
   autores,
-  tags,
   autorFiltro,
-  tagFiltro,
   aoFiltrarAutor,
-  aoFiltrarTag,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
@@ -55,17 +48,11 @@ export function FiltroDoQuadro({
     };
   }, [aberto]);
 
-  const ligados = (autorFiltro ? 1 : 0) + (tagFiltro ? 1 : 0);
-  const resumo = [
-    autorFiltro ? `de ${autorFiltro}` : '',
-    tagFiltro ? `com a etiqueta ${tagFiltro}` : '',
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const ligados = autorFiltro ? 1 : 0;
+  const resumo = autorFiltro ? `de ${autorFiltro}` : '';
 
   function limpar() {
     aoFiltrarAutor(null);
-    aoFiltrarTag(null);
   }
 
   return (
@@ -121,39 +108,6 @@ export function FiltroDoQuadro({
                     <span className="quantas">{a.quantas}</span>
                   </button>
                 ))}
-              </div>
-            )}
-          </div>
-
-          <div className="grupo">
-            <span className="titulo-do-grupo">
-              <IconeEtiqueta tamanho={13} /> etiqueta
-            </span>
-            {tags.length === 0 ? (
-              <p className="vazio-filtro">Nenhuma etiqueta ainda</p>
-            ) : (
-              <div className="opcoes-de-filtro">
-                <button
-                  type="button"
-                  className={!tagFiltro ? 'escolhida' : ''}
-                  onClick={() => aoFiltrarTag(null)}
-                >
-                  todas
-                </button>
-                {tags.map((t) => {
-                  const chave = t.tag.toLowerCase();
-                  return (
-                    <button
-                      key={t.tag}
-                      type="button"
-                      className={tagFiltro === chave ? 'escolhida' : ''}
-                      onClick={() => aoFiltrarTag(tagFiltro === chave ? null : chave)}
-                    >
-                      <span className="nome">{t.tag}</span>
-                      <span className="quantas">{t.quantas}</span>
-                    </button>
-                  );
-                })}
               </div>
             )}
           </div>

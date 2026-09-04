@@ -241,16 +241,6 @@
   gap: 5px;
 }
 
-
-/* Etiqueta: e texto seu, nao dado do Teams. Por isso tem a cor da marca e nao a
-   de status — e por isso vem antes das reacoes no rodape. */
-.cartao .badge.etiqueta {
-  background: var(--bg-brand-subtle);
-  color: var(--marca-meu);
-  border: 1px solid transparent;
-  font-weight: 500;
-}
-
 /* Apagar e o unico gesto irreversivel do quadro: ele nao pode parecer com os
    outros. */
 .cartao .acao.perigo:hover {

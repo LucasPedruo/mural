@@ -313,25 +313,3 @@
     text-align: left;
   }
 }
-
-/* O bloco das etiquetas tem quatro colunas, nao oito: reaproveita .tabela mas
-   com grade propria. */
-.pagina-painel .bloco-tags {
-  margin-top: 28px;
-}
-
-.pagina-painel .bloco-tags h2 {
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.pagina-painel .linha.tags {
-  grid-template-columns: minmax(140px, 1.4fr) 1.4fr 0.8fr 0.8fr;
-}
-
-.pagina-painel .badge.etiqueta {
-  background: var(--bg-brand-subtle);
-  color: var(--marca-meu);
-  font-weight: 500;
-}

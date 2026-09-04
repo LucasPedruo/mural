@@ -22,7 +22,6 @@ import { DialogoDeFeitoPorOutro } from '../componentes/DialogoDeFeitoPorOutro';
 import { DialogoDeLink } from '../componentes/DialogoDeLink';
 import { DialogoDeNota } from '../componentes/DialogoDeNota';
 import { DialogoDeSolucao } from '../componentes/DialogoDeSolucao';
-import { DialogoDeTags } from '../componentes/DialogoDeTags';
 import { FiltroDoQuadro } from '../componentes/FiltroDoQuadro';
 import { Notificacoes } from '../componentes/Notificacoes';
 import { Toasts } from '../componentes/Toasts';
@@ -54,7 +53,6 @@ import type {
   RespostaConsumo,
   RespostaSprint,
   Status,
-  TagComContagem,
   Task,
 } from '../tipos';
 import './quadro.css';
@@ -131,7 +129,6 @@ function textoPesquisavel(task: Task, colunas: ColunaPersonalizada[]): string[] 
     task.feitoPor?.quem ?? '',
     task.feitoPor?.solucao ?? '',
     task.nota ?? '',
-    ...task.tags,
     ...task.emojis,
     ...task.reactions,
     ...mensagens.flatMap((m) => [m.summary, m.author, m.kind, ...m.reactions]),
@@ -217,13 +214,6 @@ export function Quadro() {
   const [sincronizando, setSincronizando] = useState(false);
   const [progresso, setProgresso] = useState<Progresso | null>(null);
 
-  // "Novo" e "mudou" são relativos à sua última visita a este mural. O valor é
-  // lido uma vez, na montagem, e não muda enquanto a aba está aberta: os selos
-  // precisam ficar de pé durante a visita inteira, senão desapareceriam no meio
-  // da leitura. Quem grava a visita nova é o efeito abaixo, na saída.
-  const chaveVisto = `mural:ultima-visita:${muralId}`;
-  const [ultimaVisita] = useState<string | null>(() => localStorage.getItem(chaveVisto));
-
   const [consumo, setConsumo] = useState<RespostaConsumo | null>(null);
   const [confirmando, setConfirmando] = useState(false);
 
@@ -249,10 +239,6 @@ export function Quadro() {
   const [checks, setChecks] = useState<string[]>([]);
 
 
-  // Etiquetas: as do mural (para reaproveitar em vez de redigitar), a task que
-  // está sendo etiquetada e o filtro ligado.
-  const [tags, setTags] = useState<TagComContagem[]>([]);
-  const [etiquetando, setEtiquetando] = useState<Task | null>(null);
   const [anotandoNota, setAnotandoNota] = useState<Task | null>(null);
   const [vendoRajada, setVendoRajada] = useState<Task | null>(null);
   // O card que acabou de ser juntado, para o realce achá-lo. Juntar faz um card
@@ -272,8 +258,6 @@ export function Quadro() {
   // diálogo; "decidir depois" fecha, e o selo no card é como reencontrar.
   const [verConflitos, setVerConflitos] = useState(false);
   const [lendoLink, setLendoLink] = useState(false);
-  const [tagFiltro, setTagFiltro] = useState<string | null>(null);
-
   // Filtro por quem pediu. Sai das tasks carregadas, não de uma rota: o autor já
   // vem em cada card, e uma volta ao servidor para descobrir o que está na tela
   // seria trabalho para saber o que já se sabe.
@@ -343,18 +327,16 @@ export function Quadro() {
 
   const carregar = useCallback(async () => {
     try {
-      const [tarefas, info, custo, ciclo, etiquetas, suas, prefs] = await Promise.all([
+      const [tarefas, info, custo, ciclo, suas, prefs] = await Promise.all([
         api.tasks(muralId),
         api.lerMural(muralId),
         api.consumo(muralId),
         api.sprint(muralId),
-        api.tags(muralId),
         api.colunas(muralId),
         api.preferencias(),
       ]);
       setChecks(prefs.checks);
       setColunasSuas(suas.colunas);
-      setTags(etiquetas.tags);
       setMural(info.mural);
       setTasks(tarefas.tasks);
       setLastSync(tarefas.lastSync);
@@ -395,18 +377,6 @@ export function Quadro() {
       document.removeEventListener('keydown', noEscape);
     };
   }, [opcoesAbertas]);
-
-  // Sair do mural é o que marca como visto. Antes havia um botão para isso, mas
-  // pedir um clique para dizer "eu li" é trabalho que o próprio ato de sair já
-  // informa. O evento pagehide cobre fechar a aba; o cleanup cobre voltar para a home.
-  useEffect(() => {
-    const marcarVisto = () => localStorage.setItem(chaveVisto, new Date().toISOString());
-    window.addEventListener('pagehide', marcarVisto);
-    return () => {
-      marcarVisto();
-      window.removeEventListener('pagehide', marcarVisto);
-    };
-  }, [chaveVisto]);
 
   // ---- notificações ----------------------------------------------------
 
@@ -717,21 +687,7 @@ export function Quadro() {
     }
   }
 
-  // ---- marcas pessoais: etiquetar, ignorar, apagar ---------------------
-
-  async function salvarTags(novas: string[]) {
-    const task = etiquetando;
-    setEtiquetando(null);
-    if (!task) return;
-    setErro(null);
-    try {
-      const r = await api.salvarTags(muralId, task.id, novas);
-      setTasks(r.tasks);
-      setTags(r.tags);
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
+  // ---- marcas pessoais: ignorar e apagar -------------------------------
 
   // Traz uma mensagem para o quadro pelo link dela. Serve para a que já saiu das
   // ~20 e para a que está em outra conversa — a que alguém te mandou por fora e
@@ -1200,7 +1156,6 @@ export function Quadro() {
 
     const visiveis = tasks.filter(
       (t) =>
-        (!tagFiltro || t.tags.some((x) => x.toLowerCase() === tagFiltro)) &&
         (!autorFiltro || t.author === autorFiltro),
     );
 
@@ -1238,7 +1193,7 @@ export function Quadro() {
     resultado.meu = porDia;
 
     return resultado;
-  }, [tasks, tagFiltro, autorFiltro, colunasSuas]);
+  }, [tasks, autorFiltro, colunasSuas]);
   // Quem pediu, e quantas. Ordenado por quantidade: numa lista de dez pessoas,
   // quem manda mais demanda é quem você procura primeiro.
   const autores = useMemo(() => {
@@ -1424,11 +1379,8 @@ export function Quadro() {
               </div>
               <FiltroDoQuadro
                 autores={autores}
-                tags={tags}
                 autorFiltro={autorFiltro}
-                tagFiltro={tagFiltro}
                 aoFiltrarAutor={setAutorFiltro}
-                aoFiltrarTag={setTagFiltro}
               />
             </div>
           )}
@@ -1482,7 +1434,7 @@ export function Quadro() {
                   type="text"
                   value={termoBusca}
                   onChange={(e) => setTermoBusca(e.target.value)}
-                  placeholder="Buscar em cards, mensagens, tags, notas e autores"
+                  placeholder="Buscar em cards, mensagens, notas e autores"
                 />
               </span>
             </label>
@@ -1513,7 +1465,6 @@ export function Quadro() {
                     <span className="trecho-resultado">{trecho}</span>
                     <span className="meta-resultado">
                       {task.author} · {dataDoDiaISO(task.createdDateTime)}
-                      {task.tags.length > 0 ? ` · ${task.tags.join(', ')}` : ''}
                     </span>
                   </button>
                 ))
@@ -1542,15 +1493,6 @@ export function Quadro() {
           task={anotandoNota}
           aoSalvar={(nota) => void salvarNota(nota)}
           aoCancelar={() => setAnotandoNota(null)}
-        />
-      )}
-
-      {etiquetando && (
-        <DialogoDeTags
-          task={etiquetando}
-          existentes={tags}
-          aoSalvar={(t) => void salvarTags(t)}
-          aoCancelar={() => setEtiquetando(null)}
         />
       )}
 
@@ -1692,7 +1634,6 @@ export function Quadro() {
                       </button>
                     ) : undefined
                   }
-                  ultimaVisita={ultimaVisita}
                   selecionando={selecionados.size > 0}
                   selecionados={selecionados}
                   aoAbrir={(t) => void abrir(t)}
@@ -1702,7 +1643,6 @@ export function Quadro() {
                   aoDesmarcarComoMeu={(t) => void desmarcar(t)}
                   aoSelecionar={alternarSelecao}
                   aoSeparar={(t) => void separar(t)}
-                  aoEtiquetar={setEtiquetando}
                   aoAnotar={setAnotandoNota}
                   aoIgnorar={(t, marcar) => void ignorar(t, marcar)}
                   aoApagar={apagar}

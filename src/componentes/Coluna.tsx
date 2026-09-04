@@ -35,7 +35,6 @@ interface Props {
   /** Posição na fila de colunas. É o que o dnd usa para saber onde ela está
    *  quando você a arrasta para outro lugar. */
   indiceDaColuna: number;
-  ultimaVisita: string | null;
   vazio?: string;
   naColunaDaDaily: boolean;
   /** Colapsada: a coluna vira uma faixa fina com o rótulo de pé e a contagem.
@@ -60,7 +59,6 @@ interface Props {
   aoDesmarcarComoMeu: (task: Task) => void;
   aoSelecionar: (task: Task) => void;
   aoSeparar: (task: Task) => void;
-  aoEtiquetar: (task: Task) => void;
   aoAnotar: (task: Task) => void;
   aoIgnorar: (task: Task, ignorar: boolean) => void;
   aoApagar: (task: Task) => void;
@@ -80,7 +78,6 @@ export function Coluna({
   cor,
   grupos,
   indiceDaColuna,
-  ultimaVisita,
   naColunaDaDaily,
   acessorio,
   menu,
@@ -97,7 +94,6 @@ export function Coluna({
   aoDesmarcarComoMeu,
   aoSelecionar,
   aoSeparar,
-  aoEtiquetar,
   aoAnotar,
   aoIgnorar,
   aoApagar,
@@ -229,7 +225,6 @@ export function Coluna({
                           indice={indice++}
                           naColunaDaDaily={naColunaDaDaily}
                           naColunaDeIgnoradas={status === 'ignorada'}
-                          ultimaVisita={ultimaVisita}
                           colapsado={cardsRecolhidos}
                           recemJuntado={recemJuntado === t.id}
                           selecionando={selecionando}
@@ -242,7 +237,6 @@ export function Coluna({
                           aoDesmarcarComoMeu={aoDesmarcarComoMeu}
                           aoSelecionar={aoSelecionar}
                           aoSeparar={aoSeparar}
-                          aoEtiquetar={aoEtiquetar}
                           aoAnotar={aoAnotar}
                           aoIgnorar={aoIgnorar}
                           aoApagar={aoApagar}
