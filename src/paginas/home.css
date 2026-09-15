@@ -1,14 +1,158 @@
 .pagina-home {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 44px 24px 64px;
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  min-height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-app);
+}
+
+.sidebar-home {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 100vh;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border-default);
+  background: var(--bg-surface-2);
+}
+
+.marca-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 8px 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.marca-sidebar strong {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-home button {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-home button:hover,
+.sidebar-home button.ativo {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.usuario-sidebar {
+  position: relative;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.perfil-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 6px 8px;
+}
+
+.avatar-sidebar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--bg-brand);
+  color: var(--text-on-brand, #08110d);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dados-perfil-sidebar {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.dados-perfil-sidebar strong,
+.dados-perfil-sidebar small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dados-perfil-sidebar strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.dados-perfil-sidebar small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.grupo-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.grupo-sidebar > span {
+  padding: 0 10px 6px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.conteudo-home {
+  min-width: 0;
+  padding: 24px 26px 56px;
 }
 
 .pagina-home .topo {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 4px;
+  min-height: 66px;
+  margin: -24px -26px 20px;
+  padding: 12px 26px 14px;
+  border: 1px solid var(--border-default);
+  border-left: 0;
+  border-radius: 0;
+  background: var(--bg-surface-2);
+}
+
+.identidade-topo {
+  min-width: 0;
 }
 
 .pagina-home h1 {
@@ -18,10 +162,11 @@
   letter-spacing: -0.02em;
 }
 
-.pagina-home .sub {
+.identidade-topo p {
+  margin: 3px 0 0;
   color: var(--text-tertiary);
-  font-size: 13.5px;
-  margin: 0 0 28px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .pagina-home .espaco {
@@ -32,7 +177,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .cartao-mural {
@@ -95,9 +240,6 @@
   flex: none;
 }
 
-/* Botão que se lê como texto. A sprint mora na linha de meta, junto do tipo e
-   da última leitura: é a mesma classe de informação, e desenhá-la como botão
-   de verdade faria um ajuste raro parecer a ação principal do cartão. */
 .cartao-mural .ligacao {
   border: none;
   background: none;
@@ -114,9 +256,6 @@
   color: var(--text-primary);
 }
 
-/* As duas leituras do histórico, à direita das contagens. Sempre visíveis: no
-   quadro elas viviam num cabeçalho cheio, e o que se perde num cabeçalho cheio
-   é justamente o que não se usa todo dia. */
 .cartao-mural .acessos {
   display: flex;
   gap: 6px;
@@ -128,9 +267,37 @@
   border-radius: 999px;
 }
 
-/* Num cartão estreito as contagens e os acessos empilham em vez de espremer o
-   nome do mural, que é o que se lê primeiro. */
 @media (max-width: 720px) {
+  .pagina-home {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-home {
+    position: static;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .conteudo-home {
+    padding: 20px 16px 40px;
+  }
+
+  .pagina-home .topo {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin: -20px -16px 20px;
+    padding: 12px 16px 14px;
+  }
+
+  .identidade-topo {
+    flex: 1 1 220px;
+  }
+
+  .pagina-home .topo .espaco {
+    display: none;
+  }
+
   .cartao-mural {
     flex-wrap: wrap;
   }

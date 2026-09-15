@@ -23,55 +23,22 @@ export function Home() {
   const navegar = useNavigate();
   const [murais, setMurais] = useState<MuralNaLista[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  // A sprint se define e se encerra daqui, não de dentro do quadro: no quadro
-  // ela é contexto do que está na tela, e mexer no ciclo é organizar o mural —
-  // o mesmo assunto de criar e remover, que já mora nesta página.
   const [editandoSprint, setEditandoSprint] = useState<MuralNaLista | null>(null);
-  // O que se pergunta antes de um gesto que não volta. Um estado só para os
-  // três: eles nunca acontecem ao mesmo tempo, e um diálogo por gesto seria três
-  // cópias da mesma caixa.
   const [pedido, setPedido] = useState<PedidoDeConfirmacao | null>(null);
 
   const carregar = useCallback(async () => {
     try {
       const d = await api.listarMurais();
       setMurais(d.murais);
-      // Sem nenhum mural, a lista vazia nao ajuda: manda direto para a criacao.
-      if (d.murais.length === 0) navegar('/onboarding', { replace: true });
     } catch (e) {
       setErro((e as Error).message);
     }
-  }, [navegar]);
+  }, []);
 
   useEffect(() => {
     void carregar();
     document.title = 'Mural';
   }, [carregar]);
-
-  function resetarOnboarding() {
-    setPedido({
-      titulo: 'Refazer a configuração?',
-      rotulo: 'Refazer a configuração',
-      corpo: (
-        <>
-          <p>Apaga o agente escolhido, a conta verificada e a lista de chats.</p>
-          <p>
-            Seus murais e o histórico <strong>não</strong> são tocados.
-          </p>
-        </>
-      ),
-      aoConfirmar: () => void refazerConfiguracao(),
-    });
-  }
-
-  async function refazerConfiguracao() {
-    try {
-      await api.resetarOnboarding();
-      navegar('/onboarding');
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
 
   function remover(m: MuralNaLista) {
     setPedido({
@@ -80,8 +47,8 @@ export function Home() {
       perigo: true,
       corpo: (
         <p>
-          O histórico deste mural é apagado — anotações, etiquetas e sprints arquivadas. A conversa
-          no Teams não é tocada.
+          O historico deste mural e apagado: anotacoes e sprints arquivadas. A conversa no
+          Teams nao e tocada.
         </p>
       ),
       aoConfirmar: () => void removerMesmo(m),
@@ -110,8 +77,6 @@ export function Home() {
     }
   }
 
-  // Encerrar tira do quadro o que já terminou e guarda no arquivo da sprint.
-  // Nada é apagado — é de lá que o dashboard e os painéis leem o histórico.
   function encerrarSprint(m: MuralNaLista) {
     if (!m.sprint) return;
     const terminadas = m.totais.feito + m.totais.meu;
@@ -121,10 +86,10 @@ export function Home() {
       corpo: (
         <>
           <p>
-            <strong>{terminadas}</strong> card(s) de <em>Done</em> e de <em>Done by me</em> saem
-            do quadro e vão para o arquivo desta sprint.
+            <strong>{terminadas}</strong> card(s) de <em>Done</em> e de{' '}
+            <em>Done by me</em> saem do quadro e vao para o arquivo desta sprint.
           </p>
-          <p>Nada é apagado. A sprint seguinte começa hoje.</p>
+          <p>Nada e apagado. A sprint seguinte comeca hoje.</p>
         </>
       ),
       aoConfirmar: () => void encerrarMesmo(m),
@@ -138,7 +103,7 @@ export function Home() {
       const r = await api.encerrarSprint(m.id);
       await carregar();
       if (r.arquivadas === 0) {
-        setErro(`${m.sprint.nome} encerrada — não havia nada concluído para arquivar.`);
+        setErro(`${m.sprint.nome} encerrada: nao havia nada concluido para arquivar.`);
       }
     } catch (e) {
       setErro((e as Error).message);
@@ -147,127 +112,151 @@ export function Home() {
 
   return (
     <div className="pagina-home">
-      <div className="topo">
-        <span className="ponto-marca" />
-        <h1>Mural</h1>
-        <span className="espaco" />
-        <button onClick={resetarOnboarding} title="Recomeçar a configuração">
-          Refazer configuração
-        </button>
-        <button className="primario" onClick={() => navegar('/onboarding')}>
-          Novo mural
-        </button>
-      </div>
-      <p className="sub">Cada quadro acompanha uma conversa do Teams.</p>
+      <aside className="sidebar-home">
+        <div className="marca-sidebar">
+          <span className="ponto-marca" />
+          <strong>Mural</strong>
+        </div>
 
-      {erro && <p className="aviso erro">{erro}</p>}
+        <button className="ativo" type="button">
+          Murais
+        </button>
 
-      <div className="lista-murais">
-        {murais?.map((m) => (
-          <Link className="cartao-mural" to={`/m/${m.id}`} key={m.id}>
-            <div className="info">
-              <div className="nome">{m.nome}</div>
-              <div className="meta">
-                <span className="badge neutral">{rotuloDoTipo(m.tipo, m.subtipo)}</span>
-                {' · '}
-                {tempoRelativo(m.ultimoSync)}
-                {m.foraDeAlcance > 0 && (
-                  <>
-                    {' · '}
-                    <span className="badge warning">{m.foraDeAlcance} fora de alcance</span>
-                  </>
-                )}
-                {' · '}
-                {/* O ciclo do mural. Fica na linha de baixo, em texto, porque é
-                    ajuste raro — mexer nele não pode competir com abrir o
-                    quadro, que é o que se vem fazer aqui. */}
+        <div className="grupo-sidebar">
+          <span>Pessoal</span>
+          <button type="button" onClick={() => navegar('/p/diarias')}>
+            Tarefas diarias
+          </button>
+          <button type="button" onClick={() => navegar('/p/publicidade')}>
+            Publicidade
+          </button>
+        </div>
+
+        <div className="usuario-sidebar">
+          <div className="perfil-sidebar" aria-label="Usuario atual">
+            <span className="avatar-sidebar">LP</span>
+            <span className="dados-perfil-sidebar">
+              <strong>Lucas Pedro</strong>
+              <small>Agente pessoal</small>
+            </span>
+          </div>
+        </div>
+      </aside>
+
+      <main className="conteudo-home">
+        <div className="topo">
+          <div className="identidade-topo">
+            <h1>Murais</h1>
+            <p>Cada quadro acompanha uma conversa do Teams.</p>
+          </div>
+          <span className="espaco" />
+          <button className="primario" onClick={() => navegar('/onboarding')}>
+            Novo mural
+          </button>
+        </div>
+
+        {erro && <p className="aviso erro">{erro}</p>}
+
+        <div className="lista-murais">
+          {murais?.map((m) => (
+            <Link className="cartao-mural" to={`/m/${m.id}`} key={m.id}>
+              <div className="info">
+                <div className="nome">{m.nome}</div>
+                <div className="meta">
+                  <span className="badge neutral">{rotuloDoTipo(m.tipo, m.subtipo)}</span>
+                  {' - '}
+                  {tempoRelativo(m.ultimoSync)}
+                  {m.foraDeAlcance > 0 && (
+                    <>
+                      {' - '}
+                      <span className="badge warning">{m.foraDeAlcance} fora de alcance</span>
+                    </>
+                  )}
+                  {' - '}
+                  <button
+                    className="ligacao"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setEditandoSprint(m);
+                    }}
+                    title={
+                      m.sprint
+                        ? `${m.sprint.nome}: ${dataDoDiaISO(m.sprint.inicio)} a ${dataDoDiaISO(m.sprint.fim)}. Clique para corrigir.`
+                        : 'Definir o ciclo que voce fecha de vez em quando'
+                    }
+                  >
+                    {m.sprint
+                      ? `${m.sprint.nome} - ate ${dataDoDiaISO(m.sprint.fim)}`
+                      : 'definir sprint'}
+                  </button>
+                  {m.sprint && (
+                    <>
+                      {' - '}
+                      <button
+                        className="ligacao"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void encerrarSprint(m);
+                        }}
+                        title="Arquiva o que esta concluido e abre a sprint seguinte"
+                      >
+                        encerrar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="numeros">
+                {COLUNAS.map((s) => (
+                  <span className="pilula" key={s} title={rotuloDaColuna(s)}>
+                    <span className="ponto" style={{ background: CORES_DE_STATUS[s] }} />
+                    {m.totais[s]}
+                  </span>
+                ))}
+              </div>
+
+              <div className="acessos">
                 <button
-                  className="ligacao"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setEditandoSprint(m);
+                    navegar(`/m/${m.id}/dashboard`);
                   }}
-                  title={
-                    m.sprint
-                      ? `${m.sprint.nome}: ${dataDoDiaISO(m.sprint.inicio)} a ${dataDoDiaISO(m.sprint.fim)}. Clique para corrigir.`
-                      : 'Definir o ciclo que você fecha de vez em quando'
-                  }
+                  title="Ritmo e distribuicao, em graficos"
                 >
-                  {m.sprint
-                    ? `${m.sprint.nome} · até ${dataDoDiaISO(m.sprint.fim)}`
-                    : 'definir sprint'}
+                  Dashboard
                 </button>
-                {m.sprint && (
-                  <>
-                    {' · '}
-                    <button
-                      className="ligacao"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void encerrarSprint(m);
-                      }}
-                      title="Arquiva o que está concluído e abre a sprint seguinte"
-                    >
-                      encerrar
-                    </button>
-                  </>
-                )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navegar(`/m/${m.id}/painel`);
+                  }}
+                  title="Sprints e daily, item a item"
+                >
+                  Paineis
+                </button>
               </div>
-            </div>
 
-            <div className="numeros">
-              {/* Inclui "Done by me": um card marcado sai da coluna do
-                  Teams, então sem essa pílula a soma da linha não fecharia. */}
-              {COLUNAS.map((s) => (
-                <span className="pilula" key={s} title={rotuloDaColuna(s)}>
-                  <span className="ponto" style={{ background: CORES_DE_STATUS[s] }} />
-                  {m.totais[s]}
-                </span>
-              ))}
-            </div>
-
-            {/* As duas leituras do histórico. Saíram do quadro: lá elas
-                disputavam o cabeçalho com Atualizar, e nenhuma das duas é algo
-                que se faz no meio de mexer nos cards. */}
-            <div className="acessos">
               <button
+                className="icone perigo"
+                title="Remover este mural"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  navegar(`/m/${m.id}/dashboard`);
+                  void remover(m);
                 }}
-                title="Ritmo e distribuição, em gráficos"
               >
-                Dashboard
+                <IconeFechar />
               </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  navegar(`/m/${m.id}/painel`);
-                }}
-                title="Sprints e daily, item a item"
-              >
-                Painéis
-              </button>
-            </div>
-
-            <button
-              className="icone perigo"
-              title="Remover este mural"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void remover(m);
-              }}
-            >
-              <IconeFechar />
-            </button>
-          </Link>
-        ))}
-      </div>
+            </Link>
+          ))}
+          {murais?.length === 0 && <p className="vazio">Nenhum mural do Teams configurado.</p>}
+        </div>
+      </main>
 
       <DialogoDeConfirmacao pedido={pedido} aoCancelar={() => setPedido(null)} />
 

@@ -8,6 +8,7 @@ import { Home } from './paginas/Home';
 import { Onboarding } from './paginas/Onboarding';
 import { Painel } from './paginas/Painel';
 import { Quadro } from './paginas/Quadro';
+import { QuadroPessoal } from './paginas/QuadroPessoal';
 
 // Tema segue o sistema operacional, sem controle na tela. O CSS depende do
 // atributo data-color-mode, entao ele e mantido em dia aqui — inclusive se o
@@ -27,6 +28,7 @@ const rotas = createBrowserRouter([
   { path: '/m/:muralId', element: <Quadro /> },
   { path: '/m/:muralId/painel', element: <Painel /> },
   { path: '/m/:muralId/dashboard', element: <Dashboard /> },
+  { path: '/p/:tipo', element: <QuadroPessoal /> },
 ]);
 
 createRoot(document.getElementById('raiz')!).render(

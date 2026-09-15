@@ -7,6 +7,8 @@ import type {
   Mural,
   MuralNaLista,
   Preferencias,
+  DadosItemPessoal,
+  QuadroPessoal,
   RespostaAgentes,
   ColunaPersonalizada,
   ResultadoExclusaoDeColuna,
@@ -23,6 +25,7 @@ import type {
   SomaDeConsumo,
   Status,
   TotaisDeConsumo,
+  TipoQuadroPessoal,
 } from './tipos';
 
 // Corpo que não é JSON quase nunca vem do Mural: vem de quem está NA FRENTE
@@ -274,8 +277,26 @@ export const api = {
       json({ nome }),
     ),
 
-  resetarOnboarding: () =>
-    pedir<{ apagados: string[] }>('/api/setup/reset', { method: 'POST' }),
+  quadroPessoal: (tipo: TipoQuadroPessoal) =>
+    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal?tipo=${tipo}`),
+
+  criarItemPessoal: (tipo: TipoQuadroPessoal, dados: DadosItemPessoal) =>
+    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/item?tipo=${tipo}`, json(dados)),
+
+  atualizarItemPessoal: (tipo: TipoQuadroPessoal, id: string, dados: DadosItemPessoal) =>
+    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/item?tipo=${tipo}`, {
+      ...json({ id, ...dados }),
+      method: 'PUT',
+    }),
+
+  moverItemPessoal: (tipo: TipoQuadroPessoal, id: string, coluna: string) =>
+    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/mover?tipo=${tipo}`, json({ id, coluna })),
+
+  apagarItemPessoal: (tipo: TipoQuadroPessoal, id: string) =>
+    pedir<{ quadro: QuadroPessoal }>(
+      `/api/pessoal/item?tipo=${tipo}&id=${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    ),
 };
 
 async function pedirBruto<T>(url: string, init?: RequestInit): Promise<T> {

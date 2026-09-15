@@ -37,6 +37,7 @@ import {
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(ROOT, 'data');
 const MURAIS_DIR = path.join(DATA_DIR, 'murais');
+const PESSOAIS_DIR = path.join(DATA_DIR, 'pessoais');
 const PROMPTS_DIR = path.join(ROOT, 'prompts');
 // A interface e um app React compilado pelo Vite. Em producao o proprio
 // server.js serve o dist/; em desenvolvimento o Vite serve e repassa /api aqui.
@@ -52,6 +53,7 @@ const AGENTES_FILE = path.join(DATA_DIR, 'agentes.json');
 const PORT = Number(process.env.MURAL_PORT) || 4317;
 
 fs.mkdirSync(MURAIS_DIR, { recursive: true });
+fs.mkdirSync(PESSOAIS_DIR, { recursive: true });
 
 // ---------------------------------------------------------------- classificacao
 
@@ -107,6 +109,162 @@ function emojisDoCard(reactions, emojiFazendo) {
 }
 
 const STATUS_VALIDOS = ['aberto', 'fazendo', 'interagido', 'feito'];
+
+// ------------------------------------------------------------ quadros pessoais
+
+const QUADROS_PESSOAIS = {
+  diarias: {
+    id: 'diarias',
+    titulo: 'Tarefas diarias',
+    subtitulo: 'Seu fluxo pessoal do dia a dia',
+    arquivo: 'tarefas-diarias.json',
+    colunas: [
+      { id: 'entrada', nome: 'Entrada', cor: 'var(--marca-interagido)' },
+      { id: 'hoje', nome: 'Hoje', cor: 'var(--marca-fazendo)' },
+      { id: 'fazendo', nome: 'Fazendo', cor: 'var(--marca-meu)' },
+      { id: 'feito', nome: 'Feito', cor: 'var(--marca-feito)' },
+    ],
+  },
+  publicidade: {
+    id: 'publicidade',
+    titulo: 'Parcerias de publicidade',
+    subtitulo: 'Prospecção, negociação e entregas de mídia',
+    arquivo: 'parcerias-publicidade.json',
+    colunas: [
+      { id: 'prospectar', nome: 'Prospectar', cor: 'var(--marca-interagido)' },
+      { id: 'contato', nome: 'Contato feito', cor: 'var(--coluna-ciano)' },
+      { id: 'negociando', nome: 'Negociando', cor: 'var(--marca-fazendo)' },
+      { id: 'ativo', nome: 'Ativo', cor: 'var(--marca-meu)' },
+      { id: 'encerrado', nome: 'Encerrado', cor: 'var(--marca-feito)' },
+    ],
+  },
+};
+
+function configQuadroPessoal(tipo) {
+  const id = String(tipo || '').trim();
+  const config = QUADROS_PESSOAIS[id];
+  if (!config) throw new Error('Quadro pessoal desconhecido.');
+  return config;
+}
+
+function arquivoQuadroPessoal(tipo) {
+  return path.join(PESSOAIS_DIR, configQuadroPessoal(tipo).arquivo);
+}
+
+function novoQuadroPessoal(config) {
+  return {
+    id: config.id,
+    titulo: config.titulo,
+    subtitulo: config.subtitulo,
+    colunas: config.colunas,
+    itens: [],
+    atualizadoEm: null,
+  };
+}
+
+function lerQuadroPessoal(tipo) {
+  const config = configQuadroPessoal(tipo);
+  const db = lerJson(arquivoQuadroPessoal(tipo), novoQuadroPessoal(config));
+  const colunasValidas = new Set(config.colunas.map((c) => c.id));
+  const primeira = config.colunas[0].id;
+  return {
+    ...novoQuadroPessoal(config),
+    atualizadoEm: db.atualizadoEm || null,
+    itens: Array.isArray(db.itens)
+      ? db.itens.map((item) => ({
+          id: String(item.id || ''),
+          titulo: String(item.titulo || '').trim(),
+          descricao: String(item.descricao || '').trim(),
+          coluna: colunasValidas.has(item.coluna) ? item.coluna : primeira,
+          prioridade: ['baixa', 'media', 'alta'].includes(item.prioridade) ? item.prioridade : 'media',
+          prazo: /^\d{4}-\d{2}-\d{2}$/.test(String(item.prazo || '')) ? item.prazo : '',
+          parceiro: String(item.parceiro || '').trim(),
+          valor: String(item.valor || '').trim(),
+          canal: String(item.canal || '').trim(),
+          criadoEm: item.criadoEm || new Date().toISOString(),
+          atualizadoEm: item.atualizadoEm || item.criadoEm || new Date().toISOString(),
+        })).filter((item) => item.id && item.titulo)
+      : [],
+  };
+}
+
+function gravarQuadroPessoal(tipo, db) {
+  const config = configQuadroPessoal(tipo);
+  gravarJsonAtomico(arquivoQuadroPessoal(tipo), {
+    id: config.id,
+    titulo: config.titulo,
+    subtitulo: config.subtitulo,
+    colunas: config.colunas,
+    itens: db.itens,
+    atualizadoEm: new Date().toISOString(),
+  });
+}
+
+function validarItemPessoal(corpo, atual = {}) {
+  const titulo = String(corpo.titulo ?? atual.titulo ?? '').trim().slice(0, 180);
+  if (!titulo) throw new Error('Dê um título para o card.');
+  const prioridade = ['baixa', 'media', 'alta'].includes(corpo.prioridade)
+    ? corpo.prioridade
+    : atual.prioridade || 'media';
+  const prazo = String(corpo.prazo ?? atual.prazo ?? '').trim();
+  if (prazo && !/^\d{4}-\d{2}-\d{2}$/.test(prazo)) throw new Error('Informe uma data valida.');
+  return {
+    titulo,
+    descricao: String(corpo.descricao ?? atual.descricao ?? '').trim().slice(0, 2000),
+    prioridade,
+    prazo,
+    parceiro: String(corpo.parceiro ?? atual.parceiro ?? '').trim().slice(0, 120),
+    valor: String(corpo.valor ?? atual.valor ?? '').trim().slice(0, 80),
+    canal: String(corpo.canal ?? atual.canal ?? '').trim().slice(0, 120),
+  };
+}
+
+function criarItemPessoal(tipo, corpo) {
+  const config = configQuadroPessoal(tipo);
+  const db = lerQuadroPessoal(tipo);
+  const agora = new Date().toISOString();
+  const item = {
+    id: `pessoal-${crypto.randomUUID()}`,
+    coluna: config.colunas[0].id,
+    criadoEm: agora,
+    atualizadoEm: agora,
+    ...validarItemPessoal(corpo),
+  };
+  db.itens.unshift(item);
+  gravarQuadroPessoal(tipo, db);
+  return lerQuadroPessoal(tipo);
+}
+
+function atualizarItemPessoal(tipo, corpo) {
+  const db = lerQuadroPessoal(tipo);
+  const item = db.itens.find((i) => i.id === String(corpo.id || ''));
+  if (!item) throw new Error('Card desconhecido.');
+  Object.assign(item, validarItemPessoal(corpo, item), { atualizadoEm: new Date().toISOString() });
+  gravarQuadroPessoal(tipo, db);
+  return lerQuadroPessoal(tipo);
+}
+
+function moverItemPessoal(tipo, corpo) {
+  const config = configQuadroPessoal(tipo);
+  const db = lerQuadroPessoal(tipo);
+  const item = db.itens.find((i) => i.id === String(corpo.id || ''));
+  if (!item) throw new Error('Card desconhecido.');
+  const coluna = String(corpo.coluna || '');
+  if (!config.colunas.some((c) => c.id === coluna)) throw new Error('Coluna desconhecida.');
+  item.coluna = coluna;
+  item.atualizadoEm = new Date().toISOString();
+  gravarQuadroPessoal(tipo, db);
+  return lerQuadroPessoal(tipo);
+}
+
+function apagarItemPessoal(tipo, id) {
+  const db = lerQuadroPessoal(tipo);
+  const antes = db.itens.length;
+  db.itens = db.itens.filter((i) => i.id !== String(id || ''));
+  if (db.itens.length === antes) throw new Error('Card desconhecido.');
+  gravarQuadroPessoal(tipo, db);
+  return lerQuadroPessoal(tipo);
+}
 
 // ------------------------------------------------------------------ indice
 
@@ -996,8 +1154,7 @@ function agenteEmUso() {
 }
 
 function usuarioAtual() {
-  const conta = lerJson(CONTA_FILE, {});
-  return conta.mail || conta.displayName || 'desconhecido';
+  return 'Lucas Pedro';
 }
 
 function lerConsumo() {
@@ -2378,6 +2535,55 @@ async function rotear(req, res) {
       return servirArquivo(res, alvo);
     }
     return servirIndex(res);
+  }
+
+  // ---- quadros pessoais ----
+
+  if (p === '/api/pessoal' && req.method === 'GET') {
+    try {
+      return json(res, 200, { ok: true, quadro: lerQuadroPessoal(url.searchParams.get('tipo')) });
+    } catch (e) {
+      return json(res, 404, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/pessoal/item' && req.method === 'POST') {
+    try {
+      const quadro = criarItemPessoal(url.searchParams.get('tipo'), await lerCorpoJson(req));
+      return json(res, 200, { ok: true, quadro });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/pessoal/item' && req.method === 'PUT') {
+    try {
+      const quadro = atualizarItemPessoal(url.searchParams.get('tipo'), await lerCorpoJson(req));
+      return json(res, 200, { ok: true, quadro });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/pessoal/item' && req.method === 'DELETE') {
+    try {
+      const quadro = apagarItemPessoal(
+        url.searchParams.get('tipo'),
+        url.searchParams.get('id') || '',
+      );
+      return json(res, 200, { ok: true, quadro });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
+  }
+
+  if (p === '/api/pessoal/mover' && req.method === 'POST') {
+    try {
+      const quadro = moverItemPessoal(url.searchParams.get('tipo'), await lerCorpoJson(req));
+      return json(res, 200, { ok: true, quadro });
+    } catch (e) {
+      return json(res, 400, { ok: false, erro: e.message });
+    }
   }
 
   // ---- murais ----
