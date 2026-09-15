@@ -29,6 +29,7 @@ const rotas = createBrowserRouter([
   { path: '/m/:muralId/painel', element: <Painel /> },
   { path: '/m/:muralId/dashboard', element: <Dashboard /> },
   { path: '/p/:tipo', element: <QuadroPessoal /> },
+  { path: '/p/:tipo/:periodo', element: <QuadroPessoal /> },
 ]);
 
 createRoot(document.getElementById('raiz')!).render(

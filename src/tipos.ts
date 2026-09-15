@@ -554,7 +554,9 @@ export interface AjustesDoAgente {
 
 // ---------------------------------------------------------- quadros pessoais
 
-export type TipoQuadroPessoal = 'diarias' | 'publicidade';
+export type TipoQuadroPessoal = 'diarias' | 'publicidade' | 'financas';
+
+export type TipoPeriodoPessoal = 'semanal' | 'mensal';
 
 export type PrioridadePessoal = 'baixa' | 'media' | 'alta';
 
@@ -574,15 +576,32 @@ export interface ItemPessoal {
   parceiro: string;
   valor: string;
   canal: string;
+  categoria: string;
+  parcelas: string;
+  recorrencia: string;
   criadoEm: string;
   atualizadoEm: string;
+}
+
+export interface PeriodoPessoal {
+  id: string;
+  nome: string;
+  inicio: string;
+  fim: string;
+  tipo: TipoPeriodoPessoal;
+  aberto: boolean;
+  total: number;
+  pendentes: number;
 }
 
 export interface QuadroPessoal {
   id: TipoQuadroPessoal;
   titulo: string;
   subtitulo: string;
+  tipoPeriodo: TipoPeriodoPessoal;
   colunas: ColunaPessoal[];
+  periodoAtual: PeriodoPessoal | null;
+  periodos: PeriodoPessoal[];
   itens: ItemPessoal[];
   atualizadoEm: string | null;
 }
@@ -595,6 +614,9 @@ export interface DadosItemPessoal {
   parceiro: string;
   valor: string;
   canal: string;
+  categoria: string;
+  parcelas: string;
+  recorrencia: string;
 }
 
 export interface AgenteEmUso {

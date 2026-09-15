@@ -85,6 +85,10 @@ function json(corpo: unknown): RequestInit {
   };
 }
 
+function consultaPeriodo(periodo?: string): string {
+  return periodo ? `&periodo=${encodeURIComponent(periodo)}` : '';
+}
+
 export const api = {
   listarMurais: () => pedir<{ murais: MuralNaLista[] }>('/api/murais'),
 
@@ -277,24 +281,30 @@ export const api = {
       json({ nome }),
     ),
 
-  quadroPessoal: (tipo: TipoQuadroPessoal) =>
-    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal?tipo=${tipo}`),
+  quadroPessoal: (tipo: TipoQuadroPessoal, periodo?: string) =>
+    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal?tipo=${tipo}${consultaPeriodo(periodo)}`),
 
-  criarItemPessoal: (tipo: TipoQuadroPessoal, dados: DadosItemPessoal) =>
-    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/item?tipo=${tipo}`, json(dados)),
+  criarItemPessoal: (tipo: TipoQuadroPessoal, dados: DadosItemPessoal, periodo?: string) =>
+    pedir<{ quadro: QuadroPessoal }>(
+      `/api/pessoal/item?tipo=${tipo}${consultaPeriodo(periodo)}`,
+      json(dados),
+    ),
 
-  atualizarItemPessoal: (tipo: TipoQuadroPessoal, id: string, dados: DadosItemPessoal) =>
-    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/item?tipo=${tipo}`, {
+  atualizarItemPessoal: (tipo: TipoQuadroPessoal, id: string, dados: DadosItemPessoal, periodo?: string) =>
+    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/item?tipo=${tipo}${consultaPeriodo(periodo)}`, {
       ...json({ id, ...dados }),
       method: 'PUT',
     }),
 
-  moverItemPessoal: (tipo: TipoQuadroPessoal, id: string, coluna: string) =>
-    pedir<{ quadro: QuadroPessoal }>(`/api/pessoal/mover?tipo=${tipo}`, json({ id, coluna })),
-
-  apagarItemPessoal: (tipo: TipoQuadroPessoal, id: string) =>
+  moverItemPessoal: (tipo: TipoQuadroPessoal, id: string, coluna: string, periodo?: string) =>
     pedir<{ quadro: QuadroPessoal }>(
-      `/api/pessoal/item?tipo=${tipo}&id=${encodeURIComponent(id)}`,
+      `/api/pessoal/mover?tipo=${tipo}${consultaPeriodo(periodo)}`,
+      json({ id, coluna }),
+    ),
+
+  apagarItemPessoal: (tipo: TipoQuadroPessoal, id: string, periodo?: string) =>
+    pedir<{ quadro: QuadroPessoal }>(
+      `/api/pessoal/item?tipo=${tipo}${consultaPeriodo(periodo)}&id=${encodeURIComponent(id)}`,
       { method: 'DELETE' },
     ),
 };

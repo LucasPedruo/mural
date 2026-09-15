@@ -218,6 +218,32 @@ No Windows, `start.cmd` faz tudo isso: instala, compila se preciso, sobe o
 servidor e abre o navegador. Para trocar a porta:
 `MURAL_PORT=5000 node server.js`.
 
+## WhatsApp pessoal
+
+O bot roda separado da interface e usa Baileys, no mesmo estilo do
+`D:\Repo\bot-fulldev`.
+
+```bash
+npm run start     # API do site
+npm run whatsapp  # bot do WhatsApp
+```
+
+Variaveis principais:
+
+- `MURAL_API_URL`: URL da API local, por padrao `http://127.0.0.1:4317`.
+- `WHATSAPP_AUTH_DIR`: pasta da sessao Baileys, por padrao `data/whatsapp`.
+- `WHATSAPP_PERSONAL_GROUPS`: JIDs dos grupos liberados, separados por virgula.
+- `WHATSAPP_PAIRING_PHONE_NUMBER`: telefone para codigo de pareamento, sem sinais.
+- `DATABASE_URL`: mesmo formato usado no `bot-fulldev`, por padrao
+  `postgres://fulldev:fulldev@localhost:5432/fulldev_bot`.
+
+Comandos no grupo:
+
+- `!todo titulo: Revisar propostas; prazo: 2026-09-18`
+- `!pub parceiro: Marca X; valor: R$ 1200; canal: Instagram; tempo: 3 meses`
+- `!fin titulo: Cartao; valor: R$ 850; categoria: divida; parcelas: 2/6`
+- `!resumo`
+
 Não existe login próprio. A autenticação com a Microsoft é a do agente e do MCP
 dele — **este servidor nunca vê nem guarda credencial nenhuma**. Quando o token
 expira, o Mural para de atualizar até você reautorizar no agente (no Claude Code,

@@ -37,7 +37,7 @@ export function Home() {
 
   useEffect(() => {
     void carregar();
-    document.title = 'Mural';
+    document.title = 'Tarefas de trabalho';
   }, [carregar]);
 
   function remover(m: MuralNaLista) {
@@ -115,11 +115,11 @@ export function Home() {
       <aside className="sidebar-home">
         <div className="marca-sidebar">
           <span className="ponto-marca" />
-          <strong>Mural</strong>
+          <strong>Agente Lucas</strong>
         </div>
 
         <button className="ativo" type="button">
-          Murais
+          Tarefas de trabalho
         </button>
 
         <div className="grupo-sidebar">
@@ -129,6 +129,9 @@ export function Home() {
           </button>
           <button type="button" onClick={() => navegar('/p/publicidade')}>
             Publicidade
+          </button>
+          <button type="button" onClick={() => navegar('/p/financas')}>
+            Financas
           </button>
         </div>
 
@@ -146,12 +149,12 @@ export function Home() {
       <main className="conteudo-home">
         <div className="topo">
           <div className="identidade-topo">
-            <h1>Murais</h1>
-            <p>Cada quadro acompanha uma conversa do Teams.</p>
+            <h1>Tarefas de trabalho</h1>
+            <p>Cada quadro acompanha uma conversa de trabalho do Teams.</p>
           </div>
           <span className="espaco" />
           <button className="primario" onClick={() => navegar('/onboarding')}>
-            Novo mural
+            Novo quadro
           </button>
         </div>
 

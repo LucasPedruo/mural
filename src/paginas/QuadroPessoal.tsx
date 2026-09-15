@@ -1,6 +1,6 @@
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api';
 import {
@@ -13,13 +13,14 @@ import {
 import type {
   DadosItemPessoal,
   ItemPessoal,
+  PeriodoPessoal,
   PrioridadePessoal,
   QuadroPessoal as QuadroPessoalTipo,
   TipoQuadroPessoal,
 } from '../tipos';
 import './pessoal.css';
 
-const TIPOS_VALIDOS: TipoQuadroPessoal[] = ['diarias', 'publicidade'];
+const TIPOS_VALIDOS: TipoQuadroPessoal[] = ['diarias', 'publicidade', 'financas'];
 
 const VAZIO: DadosItemPessoal = {
   titulo: '',
@@ -29,6 +30,9 @@ const VAZIO: DadosItemPessoal = {
   parceiro: '',
   valor: '',
   canal: '',
+  categoria: '',
+  parcelas: '',
+  recorrencia: '',
 };
 
 function tipoValido(valor: string | undefined): TipoQuadroPessoal {
@@ -47,6 +51,9 @@ function dadosDoItem(item: ItemPessoal | null): DadosItemPessoal {
     parceiro: item.parceiro,
     valor: item.valor,
     canal: item.canal,
+    categoria: item.categoria,
+    parcelas: item.parcelas,
+    recorrencia: item.recorrencia,
   };
 }
 
@@ -62,6 +69,16 @@ function dataCurta(iso: string): string {
   return ano && mes && dia ? `${dia}/${mes}` : iso;
 }
 
+function periodoOrdenado(periodos: PeriodoPessoal[]): PeriodoPessoal[] {
+  return [...periodos].sort((a, b) => b.inicio.localeCompare(a.inicio));
+}
+
+function moedaParaNumero(valor: string): number {
+  const limpo = valor.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  const numero = Number(limpo);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
 interface EditorProps {
   tipo: TipoQuadroPessoal;
   item: ItemPessoal | null;
@@ -72,6 +89,7 @@ interface EditorProps {
 function EditorDeItem({ tipo, item, aoSalvar, aoFechar }: EditorProps) {
   const [dados, setDados] = useState<DadosItemPessoal>(() => dadosDoItem(item));
   const publicidade = tipo === 'publicidade';
+  const financas = tipo === 'financas';
 
   function atualizar<K extends keyof DadosItemPessoal>(campo: K, valor: DadosItemPessoal[K]) {
     setDados((atuais) => ({ ...atuais, [campo]: valor }));
@@ -157,6 +175,51 @@ function EditorDeItem({ tipo, item, aoSalvar, aoFechar }: EditorProps) {
                 onChange={(e) => atualizar('canal', e.target.value)}
               />
             </label>
+            <label className="campo-pessoal">
+              <span>Tempo de parceria</span>
+              <input
+                maxLength={120}
+                value={dados.recorrencia}
+                onChange={(e) => atualizar('recorrencia', e.target.value)}
+              />
+            </label>
+          </div>
+        )}
+
+        {financas && (
+          <div className="linha-campos-pessoal financas">
+            <label className="campo-pessoal">
+              <span>Categoria</span>
+              <input
+                maxLength={120}
+                value={dados.categoria}
+                onChange={(e) => atualizar('categoria', e.target.value)}
+              />
+            </label>
+            <label className="campo-pessoal">
+              <span>Valor</span>
+              <input
+                maxLength={80}
+                value={dados.valor}
+                onChange={(e) => atualizar('valor', e.target.value)}
+              />
+            </label>
+            <label className="campo-pessoal">
+              <span>Parcelas</span>
+              <input
+                maxLength={80}
+                value={dados.parcelas}
+                onChange={(e) => atualizar('parcelas', e.target.value)}
+              />
+            </label>
+            <label className="campo-pessoal">
+              <span>Recorrencia</span>
+              <input
+                maxLength={120}
+                value={dados.recorrencia}
+                onChange={(e) => atualizar('recorrencia', e.target.value)}
+              />
+            </label>
           </div>
         )}
 
@@ -183,10 +246,55 @@ function EditorDeItem({ tipo, item, aoSalvar, aoFechar }: EditorProps) {
   );
 }
 
+function HistoricoPessoal({
+  tipo,
+  quadro,
+}: {
+  tipo: TipoQuadroPessoal;
+  quadro: QuadroPessoalTipo;
+}) {
+  const totalAno = quadro.periodos
+    .filter((periodo) => periodo.inicio.startsWith(String(new Date().getFullYear())))
+    .reduce((total, periodo) => total + periodo.total, 0);
+  const pendentesAno = quadro.periodos
+    .filter((periodo) => periodo.inicio.startsWith(String(new Date().getFullYear())))
+    .reduce((total, periodo) => total + periodo.pendentes, 0);
+
+  return (
+    <main className="historico-pessoal">
+      {tipo === 'financas' && (
+        <section className="resumo-financas">
+          <span>Ano atual</span>
+          <strong>{totalAno} lancamentos</strong>
+          <small>{pendentesAno} ainda em aberto</small>
+        </section>
+      )}
+
+      <div className="lista-periodos-pessoais">
+        {periodoOrdenado(quadro.periodos).map((periodo) => (
+          <Link className="cartao-periodo-pessoal" to={`/p/${tipo}/${periodo.id}`} key={periodo.id}>
+            <div>
+              <strong>{periodo.nome}</strong>
+              <span>
+                {dataCurta(periodo.inicio)} a {dataCurta(periodo.fim)}
+              </span>
+            </div>
+            <div className="metricas-periodo-pessoal">
+              <span>{periodo.total} cards</span>
+              <span>{periodo.pendentes} pendentes</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </main>
+  );
+}
+
 export function QuadroPessoal() {
   const navegar = useNavigate();
   const params = useParams();
   const tipo = tipoValido(params.tipo);
+  const periodo = params.periodo || '';
   const [quadro, setQuadro] = useState<QuadroPessoalTipo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [editando, setEditando] = useState<ItemPessoal | null>(null);
@@ -194,14 +302,14 @@ export function QuadroPessoal() {
 
   const carregar = useCallback(async () => {
     try {
-      const r = await api.quadroPessoal(tipo);
+      const r = await api.quadroPessoal(tipo, periodo);
       setQuadro(r.quadro);
       setErro(null);
-      document.title = `${r.quadro.titulo} · Mural`;
+      document.title = `${r.quadro.titulo} - Agente Lucas`;
     } catch (e) {
       setErro((e as Error).message);
     }
-  }, [tipo]);
+  }, [periodo, tipo]);
 
   useEffect(() => {
     void carregar();
@@ -230,8 +338,8 @@ export function QuadroPessoal() {
   async function salvar(dados: DadosItemPessoal) {
     try {
       const r = editando
-        ? await api.atualizarItemPessoal(tipo, editando.id, dados)
-        : await api.criarItemPessoal(tipo, dados);
+        ? await api.atualizarItemPessoal(tipo, editando.id, dados, periodo)
+        : await api.criarItemPessoal(tipo, dados, periodo);
       setQuadro(r.quadro);
       setEditando(null);
       setCriando(false);
@@ -244,7 +352,7 @@ export function QuadroPessoal() {
   async function apagar(item: ItemPessoal) {
     if (!window.confirm(`Apagar "${item.titulo}"?`)) return;
     try {
-      const r = await api.apagarItemPessoal(tipo, item.id);
+      const r = await api.apagarItemPessoal(tipo, item.id, periodo);
       setQuadro(r.quadro);
       setErro(null);
     } catch (e) {
@@ -257,7 +365,7 @@ export function QuadroPessoal() {
     const destino = resultado.destination.droppableId;
     if (destino === resultado.source.droppableId) return;
     try {
-      const r = await api.moverItemPessoal(tipo, resultado.draggableId, destino);
+      const r = await api.moverItemPessoal(tipo, resultado.draggableId, destino, periodo);
       setQuadro(r.quadro);
       setErro(null);
     } catch (e) {
@@ -266,7 +374,14 @@ export function QuadroPessoal() {
   }
 
   const total = quadro?.itens.length ?? 0;
-  const vencendo = (quadro?.itens ?? []).filter((item) => item.prazo && item.coluna !== 'feito' && item.coluna !== 'encerrado').length;
+  const vencendo = (quadro?.itens ?? []).filter(
+    (item) => item.prazo && item.coluna !== 'feito' && item.coluna !== 'pago',
+  ).length;
+  const noHistorico = !periodo;
+  const somaFinancas = (quadro?.itens ?? []).reduce((totalAtual, item) => {
+    if (item.coluna === 'pago') return totalAtual;
+    return totalAtual + moedaParaNumero(item.valor);
+  }, 0);
 
   return (
     <>
@@ -278,114 +393,149 @@ export function QuadroPessoal() {
           <span className="ponto-marca" />
           <h1>{quadro?.titulo ?? 'Quadro pessoal'}</h1>
         </span>
-        <span className="info">{quadro?.subtitulo ?? ''}</span>
+        <span className="info">
+          {noHistorico
+            ? quadro?.subtitulo ?? ''
+            : quadro?.periodoAtual
+              ? `${quadro.periodoAtual.nome} - ${dataCurta(quadro.periodoAtual.inicio)} a ${dataCurta(quadro.periodoAtual.fim)}`
+              : ''}
+        </span>
         <span className="espaco" />
-        <span className="gasto">{total} cards</span>
-        {vencendo > 0 && <span className="sprint">{vencendo} com prazo</span>}
-        <button className="primario novo-pessoal" onClick={() => setCriando(true)}>
-          <IconeMais tamanho={15} />
-          Novo card
-        </button>
+        {!noHistorico && (
+          <>
+            {tipo === 'financas' && somaFinancas > 0 && (
+              <span className="sprint">R$ {somaFinancas.toLocaleString('pt-BR')}</span>
+            )}
+            <span className="gasto">{total} cards</span>
+            {vencendo > 0 && <span className="sprint">{vencendo} com prazo</span>}
+            <button className="primario novo-pessoal" onClick={() => setCriando(true)}>
+              <IconeMais tamanho={15} />
+              Novo card
+            </button>
+          </>
+        )}
       </header>
 
       {erro && <p className="aviso erro faixa">{erro}</p>}
 
-      <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
-        <main className="kanban-pessoal">
-          {quadro?.colunas.map((coluna) => {
-            const itens = itensPorColuna.get(coluna.id) ?? [];
-            return (
-              <section className="coluna-pessoal" key={coluna.id}>
-                <header>
-                  <span className="selo-pessoal">
-                    <span className="ponto" style={{ background: coluna.cor }} />
-                    {coluna.nome}
-                  </span>
-                  <span className="contagem">{itens.length}</span>
-                </header>
+      {quadro && noHistorico && <HistoricoPessoal tipo={tipo} quadro={quadro} />}
 
-                <Droppable droppableId={coluna.id}>
-                  {(fornecido, estado) => (
-                    <div
-                      className={'lista-pessoal' + (estado.isDraggingOver ? ' recebendo' : '')}
-                      ref={fornecido.innerRef}
-                      {...fornecido.droppableProps}
-                    >
-                      {itens.length === 0 && <p className="vazio-pessoal">Nada aqui</p>}
-                      {itens.map((item, indice) => (
-                        <Draggable draggableId={item.id} index={indice} key={item.id}>
-                          {(cardFornecido, cardEstado) => (
-                            <article
-                              className={[
-                                'card-pessoal',
-                                `prioridade-${item.prioridade}`,
-                                cardEstado.isDragging ? 'arrastando' : '',
-                              ].filter(Boolean).join(' ')}
-                              ref={cardFornecido.innerRef}
-                              {...cardFornecido.draggableProps}
-                              {...cardFornecido.dragHandleProps}
-                            >
-                              <div className="cabeca-card-pessoal">
-                                <strong>{item.titulo}</strong>
-                                <span>{rotuloPrioridade(item.prioridade)}</span>
-                              </div>
-                              {item.descricao && <p>{item.descricao}</p>}
-                              {tipo === 'publicidade' && (item.parceiro || item.valor || item.canal) && (
-                                <dl className="meta-publicidade">
-                                  {item.parceiro && (
-                                    <>
-                                      <dt>Parceiro</dt>
-                                      <dd>{item.parceiro}</dd>
-                                    </>
-                                  )}
-                                  {item.valor && (
-                                    <>
-                                      <dt>Valor</dt>
-                                      <dd>{item.valor}</dd>
-                                    </>
-                                  )}
-                                  {item.canal && (
-                                    <>
-                                      <dt>Canal</dt>
-                                      <dd>{item.canal}</dd>
-                                    </>
-                                  )}
-                                </dl>
-                              )}
-                              <footer>
-                                <span>{item.prazo ? `Prazo ${dataCurta(item.prazo)}` : 'Sem prazo'}</span>
-                                <span className="acoes-card-pessoal">
-                                  <button
-                                    className="icone"
-                                    onClick={() => setEditando(item)}
-                                    title="Editar card"
-                                    aria-label="Editar card"
-                                  >
-                                    <IconeEditar />
-                                  </button>
-                                  <button
-                                    className="icone perigo"
-                                    onClick={() => void apagar(item)}
-                                    title="Apagar card"
-                                    aria-label="Apagar card"
-                                  >
-                                    <IconeApagar />
-                                  </button>
-                                </span>
-                              </footer>
-                            </article>
-                          )}
-                        </Draggable>
-                      ))}
-                      {fornecido.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </section>
-            );
-          })}
-        </main>
-      </DragDropContext>
+      {quadro && !noHistorico && (
+        <DragDropContext onDragEnd={(r) => void aoSoltar(r)}>
+          <main className="kanban-pessoal">
+            {quadro.colunas.map((coluna) => {
+              const itens = itensPorColuna.get(coluna.id) ?? [];
+              return (
+                <section className="coluna-pessoal" key={coluna.id}>
+                  <header>
+                    <span className="selo-pessoal">
+                      <span className="ponto" style={{ background: coluna.cor }} />
+                      {coluna.nome}
+                    </span>
+                    <span className="contagem">{itens.length}</span>
+                  </header>
+
+                  <Droppable droppableId={coluna.id}>
+                    {(fornecido, estado) => (
+                      <div
+                        className={'lista-pessoal' + (estado.isDraggingOver ? ' recebendo' : '')}
+                        ref={fornecido.innerRef}
+                        {...fornecido.droppableProps}
+                      >
+                        {itens.length === 0 && <p className="vazio-pessoal">Nada aqui</p>}
+                        {itens.map((item, indice) => (
+                          <Draggable draggableId={item.id} index={indice} key={item.id}>
+                            {(cardFornecido, cardEstado) => (
+                              <article
+                                className={[
+                                  'card-pessoal',
+                                  `prioridade-${item.prioridade}`,
+                                  cardEstado.isDragging ? 'arrastando' : '',
+                                ].filter(Boolean).join(' ')}
+                                ref={cardFornecido.innerRef}
+                                {...cardFornecido.draggableProps}
+                                {...cardFornecido.dragHandleProps}
+                              >
+                                <div className="cabeca-card-pessoal">
+                                  <strong>{item.titulo}</strong>
+                                  <span>{rotuloPrioridade(item.prioridade)}</span>
+                                </div>
+                                {item.descricao && <p>{item.descricao}</p>}
+                                {(tipo === 'publicidade' || tipo === 'financas') && (
+                                  <dl className="meta-publicidade">
+                                    {item.parceiro && (
+                                      <>
+                                        <dt>Parceiro</dt>
+                                        <dd>{item.parceiro}</dd>
+                                      </>
+                                    )}
+                                    {item.categoria && (
+                                      <>
+                                        <dt>Categoria</dt>
+                                        <dd>{item.categoria}</dd>
+                                      </>
+                                    )}
+                                    {item.valor && (
+                                      <>
+                                        <dt>Valor</dt>
+                                        <dd>{item.valor}</dd>
+                                      </>
+                                    )}
+                                    {item.canal && (
+                                      <>
+                                        <dt>Canal</dt>
+                                        <dd>{item.canal}</dd>
+                                      </>
+                                    )}
+                                    {item.parcelas && (
+                                      <>
+                                        <dt>Parcelas</dt>
+                                        <dd>{item.parcelas}</dd>
+                                      </>
+                                    )}
+                                    {item.recorrencia && (
+                                      <>
+                                        <dt>{tipo === 'publicidade' ? 'Tempo' : 'Recorrencia'}</dt>
+                                        <dd>{item.recorrencia}</dd>
+                                      </>
+                                    )}
+                                  </dl>
+                                )}
+                                <footer>
+                                  <span>{item.prazo ? `Prazo ${dataCurta(item.prazo)}` : 'Sem prazo'}</span>
+                                  <span className="acoes-card-pessoal">
+                                    <button
+                                      className="icone"
+                                      onClick={() => setEditando(item)}
+                                      title="Editar card"
+                                      aria-label="Editar card"
+                                    >
+                                      <IconeEditar />
+                                    </button>
+                                    <button
+                                      className="icone perigo"
+                                      onClick={() => void apagar(item)}
+                                      title="Apagar card"
+                                      aria-label="Apagar card"
+                                    >
+                                      <IconeApagar />
+                                    </button>
+                                  </span>
+                                </footer>
+                              </article>
+                            )}
+                          </Draggable>
+                        ))}
+                        {fornecido.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </section>
+              );
+            })}
+          </main>
+        </DragDropContext>
+      )}
 
       {(criando || editando) && (
         <EditorDeItem

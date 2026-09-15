@@ -1,4 +1,4 @@
-// Mural — kanbans montados a partir das reacoes de conversas do Microsoft Teams.
+﻿// Mural — kanbans montados a partir das reacoes de conversas do Microsoft Teams.
 //
 // Cada mural aponta para uma conversa (canal ou chat) e tem historico proprio.
 // O botao "Atualizar" roda o AGENTE ESCOLHIDO em modo headless — Claude Code,
@@ -116,29 +116,90 @@ const QUADROS_PESSOAIS = {
   diarias: {
     id: 'diarias',
     titulo: 'Tarefas diarias',
-    subtitulo: 'Seu fluxo pessoal do dia a dia',
+    subtitulo: 'TODO semanal do Lucas',
     arquivo: 'tarefas-diarias.json',
+    periodo: 'semanal',
     colunas: [
       { id: 'entrada', nome: 'Entrada', cor: 'var(--marca-interagido)' },
-      { id: 'hoje', nome: 'Hoje', cor: 'var(--marca-fazendo)' },
+      { id: 'semana', nome: 'Esta semana', cor: 'var(--marca-fazendo)' },
       { id: 'fazendo', nome: 'Fazendo', cor: 'var(--marca-meu)' },
+      { id: 'bloqueado', nome: 'Bloqueado', cor: 'var(--text-danger)' },
       { id: 'feito', nome: 'Feito', cor: 'var(--marca-feito)' },
     ],
   },
   publicidade: {
     id: 'publicidade',
-    titulo: 'Parcerias de publicidade',
-    subtitulo: 'Prospecção, negociação e entregas de mídia',
+    titulo: 'Publicidade',
+    subtitulo: 'Kanban mensal de marcas, briefings e pagamentos',
     arquivo: 'parcerias-publicidade.json',
+    periodo: 'mensal',
     colunas: [
-      { id: 'prospectar', nome: 'Prospectar', cor: 'var(--marca-interagido)' },
-      { id: 'contato', nome: 'Contato feito', cor: 'var(--coluna-ciano)' },
-      { id: 'negociando', nome: 'Negociando', cor: 'var(--marca-fazendo)' },
-      { id: 'ativo', nome: 'Ativo', cor: 'var(--marca-meu)' },
-      { id: 'encerrado', nome: 'Encerrado', cor: 'var(--marca-feito)' },
+      { id: 'contato', nome: 'Entraram em contato', cor: 'var(--marca-interagido)' },
+      { id: 'iniciado', nome: 'Iniciado', cor: 'var(--coluna-ciano)' },
+      { id: 'briefing', nome: 'Briefing enviado', cor: 'var(--marca-fazendo)' },
+      { id: 'avaliando', nome: 'Avaliando', cor: 'var(--coluna-roxo)' },
+      { id: 'feito', nome: 'Feito', cor: 'var(--marca-meu)' },
+      { id: 'pago', nome: 'Pago', cor: 'var(--marca-feito)' },
+      { id: 'parceria', nome: 'Tempo de parceria', cor: 'var(--coluna-lima)' },
+    ],
+  },
+  financas: {
+    id: 'financas',
+    titulo: 'Financas',
+    subtitulo: 'Controle mensal e anual para sair da crise',
+    arquivo: 'financas.json',
+    periodo: 'mensal',
+    colunas: [
+      { id: 'mapear', nome: 'Mapear', cor: 'var(--marca-interagido)' },
+      { id: 'negociar', nome: 'Negociar', cor: 'var(--marca-fazendo)' },
+      { id: 'parcelado', nome: 'Parcelado', cor: 'var(--coluna-ciano)' },
+      { id: 'pagar_mes', nome: 'Pagar no mes', cor: 'var(--text-danger)' },
+      { id: 'pago', nome: 'Pago', cor: 'var(--marca-feito)' },
+      { id: 'acompanhar', nome: 'Acompanhar', cor: 'var(--marca-meu)' },
     ],
   },
 };
+
+function diaIsoLocal(data) {
+  const d = data instanceof Date ? data : new Date(data);
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function inicioDaSemana(data) {
+  const d = new Date(data);
+  const dia = d.getDay();
+  const distancia = dia === 0 ? -6 : 1 - dia;
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + distancia);
+  return d;
+}
+
+function periodoAtualPessoal(config, base = new Date()) {
+  if (config.periodo === 'semanal') {
+    const inicio = inicioDaSemana(base);
+    const fim = new Date(inicio);
+    fim.setDate(inicio.getDate() + 6);
+    return {
+      id: diaIsoLocal(inicio),
+      nome: `Semana de ${diaIsoLocal(inicio)}`,
+      inicio: diaIsoLocal(inicio),
+      fim: diaIsoLocal(fim),
+      tipo: 'semanal',
+    };
+  }
+  const ano = base.getFullYear();
+  const mes = String(base.getMonth() + 1).padStart(2, '0');
+  return {
+    id: `${ano}-${mes}`,
+    nome: `${mes}/${ano}`,
+    inicio: `${ano}-${mes}-01`,
+    fim: diaIsoLocal(new Date(ano, base.getMonth() + 1, 0, 12)),
+    tipo: 'mensal',
+  };
+}
 
 function configQuadroPessoal(tipo) {
   const id = String(tipo || '').trim();
@@ -152,39 +213,106 @@ function arquivoQuadroPessoal(tipo) {
 }
 
 function novoQuadroPessoal(config) {
+  const atual = periodoAtualPessoal(config);
   return {
     id: config.id,
     titulo: config.titulo,
     subtitulo: config.subtitulo,
+    tipoPeriodo: config.periodo,
     colunas: config.colunas,
-    itens: [],
+    periodos: [{ ...atual, aberto: true, itens: [] }],
     atualizadoEm: null,
   };
 }
 
-function lerQuadroPessoal(tipo) {
+function normalizarItemPessoal(item, primeira) {
+  return {
+    id: String(item.id || ''),
+    titulo: String(item.titulo || '').trim(),
+    descricao: String(item.descricao || '').trim(),
+    coluna: item.coluna || primeira,
+    prioridade: ['baixa', 'media', 'alta'].includes(item.prioridade) ? item.prioridade : 'media',
+    prazo: /^\d{4}-\d{2}-\d{2}$/.test(String(item.prazo || '')) ? item.prazo : '',
+    parceiro: String(item.parceiro || '').trim(),
+    valor: String(item.valor || '').trim(),
+    canal: String(item.canal || '').trim(),
+    categoria: String(item.categoria || '').trim(),
+    parcelas: String(item.parcelas || '').trim(),
+    recorrencia: String(item.recorrencia || '').trim(),
+    criadoEm: item.criadoEm || new Date().toISOString(),
+    atualizadoEm: item.atualizadoEm || item.criadoEm || new Date().toISOString(),
+  };
+}
+
+function lerBancoPessoal(tipo) {
   const config = configQuadroPessoal(tipo);
   const db = lerJson(arquivoQuadroPessoal(tipo), novoQuadroPessoal(config));
+  const atual = periodoAtualPessoal(config);
   const colunasValidas = new Set(config.colunas.map((c) => c.id));
   const primeira = config.colunas[0].id;
-  return {
-    ...novoQuadroPessoal(config),
-    atualizadoEm: db.atualizadoEm || null,
-    itens: Array.isArray(db.itens)
-      ? db.itens.map((item) => ({
-          id: String(item.id || ''),
-          titulo: String(item.titulo || '').trim(),
-          descricao: String(item.descricao || '').trim(),
-          coluna: colunasValidas.has(item.coluna) ? item.coluna : primeira,
-          prioridade: ['baixa', 'media', 'alta'].includes(item.prioridade) ? item.prioridade : 'media',
-          prazo: /^\d{4}-\d{2}-\d{2}$/.test(String(item.prazo || '')) ? item.prazo : '',
-          parceiro: String(item.parceiro || '').trim(),
-          valor: String(item.valor || '').trim(),
-          canal: String(item.canal || '').trim(),
-          criadoEm: item.criadoEm || new Date().toISOString(),
-          atualizadoEm: item.atualizadoEm || item.criadoEm || new Date().toISOString(),
-        })).filter((item) => item.id && item.titulo)
+  let periodos = Array.isArray(db.periodos) ? db.periodos : [];
+  if (!periodos.length && Array.isArray(db.itens)) {
+    periodos = [{ ...atual, aberto: true, itens: db.itens }];
+  }
+  if (!periodos.some((p) => p.id === atual.id)) {
+    periodos.unshift({ ...atual, aberto: true, itens: [] });
+  }
+  periodos = periodos.map((periodo) => ({
+    id: String(periodo.id || atual.id),
+    nome: String(periodo.nome || periodo.id || atual.nome),
+    inicio: String(periodo.inicio || atual.inicio),
+    fim: String(periodo.fim || atual.fim),
+    tipo: periodo.tipo === 'semanal' ? 'semanal' : 'mensal',
+    aberto: periodo.aberto !== false,
+    itens: Array.isArray(periodo.itens)
+      ? periodo.itens
+          .map((item) => normalizarItemPessoal(item, primeira))
+          .map((item) => ({ ...item, coluna: colunasValidas.has(item.coluna) ? item.coluna : primeira }))
+          .filter((item) => item.id && item.titulo)
       : [],
+  }));
+  return {
+    id: config.id,
+    titulo: config.titulo,
+    subtitulo: config.subtitulo,
+    tipoPeriodo: config.periodo,
+    colunas: config.colunas,
+    periodos,
+    atualizadoEm: db.atualizadoEm || null,
+  };
+}
+
+function selecionarPeriodo(db, periodoId) {
+  const id = String(periodoId || db.periodos[0]?.id || '');
+  return db.periodos.find((p) => p.id === id) || db.periodos[0];
+}
+
+function resumoDePeriodoPessoal(periodo) {
+  return {
+    id: periodo.id,
+    nome: periodo.nome,
+    inicio: periodo.inicio,
+    fim: periodo.fim,
+    tipo: periodo.tipo,
+    aberto: periodo.aberto,
+    total: periodo.itens.length,
+    pendentes: periodo.itens.filter((i) => i.coluna !== 'feito' && i.coluna !== 'pago').length,
+  };
+}
+
+function lerQuadroPessoal(tipo, periodoId = '') {
+  const db = lerBancoPessoal(tipo);
+  const periodo = selecionarPeriodo(db, periodoId);
+  return {
+    id: db.id,
+    titulo: db.titulo,
+    subtitulo: db.subtitulo,
+    tipoPeriodo: db.tipoPeriodo,
+    colunas: db.colunas,
+    periodos: db.periodos.map(resumoDePeriodoPessoal),
+    periodoAtual: periodo ? resumoDePeriodoPessoal(periodo) : null,
+    itens: periodo?.itens || [],
+    atualizadoEm: db.atualizadoEm,
   };
 }
 
@@ -194,15 +322,16 @@ function gravarQuadroPessoal(tipo, db) {
     id: config.id,
     titulo: config.titulo,
     subtitulo: config.subtitulo,
+    tipoPeriodo: config.periodo,
     colunas: config.colunas,
-    itens: db.itens,
+    periodos: db.periodos,
     atualizadoEm: new Date().toISOString(),
   });
 }
 
 function validarItemPessoal(corpo, atual = {}) {
   const titulo = String(corpo.titulo ?? atual.titulo ?? '').trim().slice(0, 180);
-  if (!titulo) throw new Error('Dê um título para o card.');
+  if (!titulo) throw new Error('De um titulo para o card.');
   const prioridade = ['baixa', 'media', 'alta'].includes(corpo.prioridade)
     ? corpo.prioridade
     : atual.prioridade || 'media';
@@ -216,12 +345,17 @@ function validarItemPessoal(corpo, atual = {}) {
     parceiro: String(corpo.parceiro ?? atual.parceiro ?? '').trim().slice(0, 120),
     valor: String(corpo.valor ?? atual.valor ?? '').trim().slice(0, 80),
     canal: String(corpo.canal ?? atual.canal ?? '').trim().slice(0, 120),
+    categoria: String(corpo.categoria ?? atual.categoria ?? '').trim().slice(0, 120),
+    parcelas: String(corpo.parcelas ?? atual.parcelas ?? '').trim().slice(0, 80),
+    recorrencia: String(corpo.recorrencia ?? atual.recorrencia ?? '').trim().slice(0, 120),
   };
 }
 
-function criarItemPessoal(tipo, corpo) {
+function criarItemPessoal(tipo, periodoId, corpo) {
   const config = configQuadroPessoal(tipo);
-  const db = lerQuadroPessoal(tipo);
+  const db = lerBancoPessoal(tipo);
+  const periodo = selecionarPeriodo(db, periodoId);
+  if (!periodo) throw new Error('Periodo desconhecido.');
   const agora = new Date().toISOString();
   const item = {
     id: `pessoal-${crypto.randomUUID()}`,
@@ -230,42 +364,47 @@ function criarItemPessoal(tipo, corpo) {
     atualizadoEm: agora,
     ...validarItemPessoal(corpo),
   };
-  db.itens.unshift(item);
+  periodo.itens.unshift(item);
   gravarQuadroPessoal(tipo, db);
-  return lerQuadroPessoal(tipo);
+  return lerQuadroPessoal(tipo, periodo.id);
 }
 
-function atualizarItemPessoal(tipo, corpo) {
-  const db = lerQuadroPessoal(tipo);
-  const item = db.itens.find((i) => i.id === String(corpo.id || ''));
+function atualizarItemPessoal(tipo, periodoId, corpo) {
+  const db = lerBancoPessoal(tipo);
+  const periodo = selecionarPeriodo(db, periodoId);
+  if (!periodo) throw new Error('Periodo desconhecido.');
+  const item = periodo.itens.find((i) => i.id === String(corpo.id || ''));
   if (!item) throw new Error('Card desconhecido.');
   Object.assign(item, validarItemPessoal(corpo, item), { atualizadoEm: new Date().toISOString() });
   gravarQuadroPessoal(tipo, db);
-  return lerQuadroPessoal(tipo);
+  return lerQuadroPessoal(tipo, periodo.id);
 }
 
-function moverItemPessoal(tipo, corpo) {
+function moverItemPessoal(tipo, periodoId, corpo) {
   const config = configQuadroPessoal(tipo);
-  const db = lerQuadroPessoal(tipo);
-  const item = db.itens.find((i) => i.id === String(corpo.id || ''));
+  const db = lerBancoPessoal(tipo);
+  const periodo = selecionarPeriodo(db, periodoId);
+  if (!periodo) throw new Error('Periodo desconhecido.');
+  const item = periodo.itens.find((i) => i.id === String(corpo.id || ''));
   if (!item) throw new Error('Card desconhecido.');
   const coluna = String(corpo.coluna || '');
   if (!config.colunas.some((c) => c.id === coluna)) throw new Error('Coluna desconhecida.');
   item.coluna = coluna;
   item.atualizadoEm = new Date().toISOString();
   gravarQuadroPessoal(tipo, db);
-  return lerQuadroPessoal(tipo);
+  return lerQuadroPessoal(tipo, periodo.id);
 }
 
-function apagarItemPessoal(tipo, id) {
-  const db = lerQuadroPessoal(tipo);
-  const antes = db.itens.length;
-  db.itens = db.itens.filter((i) => i.id !== String(id || ''));
-  if (db.itens.length === antes) throw new Error('Card desconhecido.');
+function apagarItemPessoal(tipo, periodoId, id) {
+  const db = lerBancoPessoal(tipo);
+  const periodo = selecionarPeriodo(db, periodoId);
+  if (!periodo) throw new Error('Periodo desconhecido.');
+  const antes = periodo.itens.length;
+  periodo.itens = periodo.itens.filter((i) => i.id !== String(id || ''));
+  if (periodo.itens.length === antes) throw new Error('Card desconhecido.');
   gravarQuadroPessoal(tipo, db);
-  return lerQuadroPessoal(tipo);
+  return lerQuadroPessoal(tipo, periodo.id);
 }
-
 // ------------------------------------------------------------------ indice
 
 // Um mural por conversa: o id vem da propria fonte, entao mapear a mesma
@@ -2541,7 +2680,11 @@ async function rotear(req, res) {
 
   if (p === '/api/pessoal' && req.method === 'GET') {
     try {
-      return json(res, 200, { ok: true, quadro: lerQuadroPessoal(url.searchParams.get('tipo')) });
+      const quadro = lerQuadroPessoal(
+        url.searchParams.get('tipo'),
+        url.searchParams.get('periodo') || '',
+      );
+      return json(res, 200, { ok: true, quadro });
     } catch (e) {
       return json(res, 404, { ok: false, erro: e.message });
     }
@@ -2549,7 +2692,11 @@ async function rotear(req, res) {
 
   if (p === '/api/pessoal/item' && req.method === 'POST') {
     try {
-      const quadro = criarItemPessoal(url.searchParams.get('tipo'), await lerCorpoJson(req));
+      const quadro = criarItemPessoal(
+        url.searchParams.get('tipo'),
+        url.searchParams.get('periodo') || '',
+        await lerCorpoJson(req),
+      );
       return json(res, 200, { ok: true, quadro });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
@@ -2558,7 +2705,11 @@ async function rotear(req, res) {
 
   if (p === '/api/pessoal/item' && req.method === 'PUT') {
     try {
-      const quadro = atualizarItemPessoal(url.searchParams.get('tipo'), await lerCorpoJson(req));
+      const quadro = atualizarItemPessoal(
+        url.searchParams.get('tipo'),
+        url.searchParams.get('periodo') || '',
+        await lerCorpoJson(req),
+      );
       return json(res, 200, { ok: true, quadro });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });
@@ -2569,6 +2720,7 @@ async function rotear(req, res) {
     try {
       const quadro = apagarItemPessoal(
         url.searchParams.get('tipo'),
+        url.searchParams.get('periodo') || '',
         url.searchParams.get('id') || '',
       );
       return json(res, 200, { ok: true, quadro });
@@ -2579,7 +2731,11 @@ async function rotear(req, res) {
 
   if (p === '/api/pessoal/mover' && req.method === 'POST') {
     try {
-      const quadro = moverItemPessoal(url.searchParams.get('tipo'), await lerCorpoJson(req));
+      const quadro = moverItemPessoal(
+        url.searchParams.get('tipo'),
+        url.searchParams.get('periodo') || '',
+        await lerCorpoJson(req),
+      );
       return json(res, 200, { ok: true, quadro });
     } catch (e) {
       return json(res, 400, { ok: false, erro: e.message });

@@ -8,6 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "start": "node server.js",
+    "whatsapp": "node whatsapp-bot.js",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
     "setup": "npm install && npm run build"
   },
   "engines": {
@@ -23,15 +26,25 @@
   "license": "MIT",
   "private": false,
   "dependencies": {
+    "@hapi/boom": "^10.0.1",
     "@hello-pangea/dnd": "^17.0.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "pino": "^10.3.1",
+    "postgres": "^3.4.9",
+    "qrcode-terminal": "^0.12.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^6.28.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/node": "^26.5.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   }
